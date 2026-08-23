@@ -1,0 +1,6 @@
+{
+  "name": "RENTOURA.LK",
+  "description": "Sri Lanka's all-in-one platform for Rentals, Jobs, and Professional Services.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
