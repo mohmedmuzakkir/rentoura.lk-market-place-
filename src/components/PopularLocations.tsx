@@ -31,7 +31,7 @@ export const PopularLocations: React.FC<PopularLocationsProps> = ({
           </p>
         </div>
         <button
-          onClick={() => onNavigate('/rentals')}
+          onClick={() => onNavigate('/select-location')}
           className="text-[12.5px] lg:text-sm font-bold text-[#1464F4] hover:text-[#0c4cc2] flex items-center gap-0.5 tap-bounce"
         >
           View All <ChevronRight className="w-3.5 h-3.5 stroke-[2.5]" />

@@ -35,6 +35,15 @@ export interface FetchCategoriesResult {
   error: string | null;
 }
 
+export interface CategorySearchResult {
+  category: CategoryRecord;
+  pathString: string;
+  pathRecords: CategoryRecord[];
+  mainCategory?: CategoryRecord;
+  subCategory?: CategoryRecord;
+  thirdLevel?: CategoryRecord;
+}
+
 export interface FlatCategoryItem {
   id: string;
   module: ModuleType;
@@ -87,12 +96,8 @@ export interface AddCategoryPayload {
 
 const isDev = typeof import.meta !== 'undefined' && import.meta.env ? Boolean(import.meta.env.DEV) : (typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production');
 
-const GUEST_READER_EMAIL = 'guest_reader@rentoura.lk';
-const GUEST_READER_PASS = 'RentouraGuest123!';
-
 export class CategoryService {
   private static cache: Map<string, CategoryRecord[]> = new Map();
-  private static isEnsuringAuth = false;
 
   /**
    * Normalizes any module string to valid DB module 'rental' | 'job' | 'service'
@@ -116,45 +121,8 @@ export class CategoryService {
   }
 
   /**
-   * Ensures public reader session if anon role encounters 42501 (permission denied for is_staff)
-   */
-  private static async ensureReaderSession(): Promise<boolean> {
-    if (this.isEnsuringAuth) return false;
-    this.isEnsuringAuth = true;
-
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (sessionData?.session) {
-        this.isEnsuringAuth = false;
-        return true;
-      }
-
-      // Sign in with public guest reader account
-      const { error: signInErr } = await supabase.auth.signInWithPassword({
-        email: GUEST_READER_EMAIL,
-        password: GUEST_READER_PASS,
-      });
-
-      if (signInErr) {
-        // If account does not exist yet, create it
-        const { error: signUpErr } = await supabase.auth.signUp({
-          email: GUEST_READER_EMAIL,
-          password: GUEST_READER_PASS,
-        });
-        this.isEnsuringAuth = false;
-        return !signUpErr;
-      }
-
-      this.isEnsuringAuth = false;
-      return true;
-    } catch {
-      this.isEnsuringAuth = false;
-      return false;
-    }
-  }
-
-  /**
    * Fetches active categories from public.categories in Supabase
+   * Relies on standard public SELECT RLS policies (anon & authenticated allowed)
    */
   static async getCategories(
     moduleInput?: FrontendModule | string,
@@ -186,40 +154,7 @@ export class CategoryService {
         query = query.eq('module', normalizedModule);
       }
 
-      let { data, error } = await query;
-
-      // If anon hits permission error 42501 (e.g. permission denied for function is_staff), recover session & retry
-      if (error && (error.code === '42501' || error.message?.includes('is_staff'))) {
-        if (isDev) {
-          console.warn('[CategoryService Diagnostics] Anon query encountered RLS is_staff restriction. Recovering reader session...', {
-            query: 'getCategories',
-            module: normalizedModule || 'all',
-            code: error.code,
-            message: error.message,
-          });
-        }
-
-        const recovered = await this.ensureReaderSession();
-        if (recovered) {
-          let retryQuery = supabase
-            .from('categories')
-            .select('*')
-            .order('sort_order', { ascending: true })
-            .order('name', { ascending: true });
-
-          if (!options.includeInactive) {
-            retryQuery = retryQuery.eq('status', 'active');
-          }
-
-          if (normalizedModule) {
-            retryQuery = retryQuery.eq('module', normalizedModule);
-          }
-
-          const retryResult = await retryQuery;
-          data = retryResult.data;
-          error = retryResult.error;
-        }
-      }
+      const { data, error } = await query;
 
       if (error) {
         if (isDev) {
@@ -254,34 +189,15 @@ export class CategoryService {
         updated_at: row.updated_at,
       }));
 
-      const checkModuleComplete = (modRows: CategoryRecord[], mod: CategoryModule) => {
-        const l1 = modRows.filter((r) => r.level === 1).length;
-        const l2 = modRows.filter((r) => r.level === 2).length;
-        const l3 = modRows.filter((r) => r.level === 3).length;
-
-        if (mod === 'rental') return l1 >= 27 && l2 >= 189 && l3 >= 65;
-        if (mod === 'job') return l1 >= 30 && l2 >= 157;
-        if (mod === 'service') return l1 >= 30 && l2 >= 141;
-        return false;
-      };
-
-      let isComplete = false;
-      if (normalizedModule) {
-        isComplete = checkModuleComplete(rows, normalizedModule);
-      } else {
-        isComplete = 
-          checkModuleComplete(rows.filter((r) => r.module === 'rental'), 'rental') &&
-          checkModuleComplete(rows.filter((r) => r.module === 'job'), 'job') &&
-          checkModuleComplete(rows.filter((r) => r.module === 'service'), 'service');
-      }
-
-      const finalRows = isComplete ? rows : this.getFallbackCategories(normalizedModule);
+      // Use database rows directly if available; otherwise fall back to static taxonomy
+      const finalRows = rows.length > 0 ? rows : this.getFallbackCategories(normalizedModule);
 
       if (isDev) {
         console.log('[CategoryService Diagnostics] Categories loaded successfully:', {
           query: 'getCategories',
           module: normalizedModule || 'all',
           rowCount: finalRows.length,
+          source: rows.length > 0 ? 'supabase' : 'static_fallback',
         });
       }
 
@@ -466,6 +382,77 @@ export class CategoryService {
         ...main,
         children,
       };
+    });
+  }
+
+  /**
+   * Searches categories across all 3 levels for a given query string,
+   * reconstructing full parent path information for each result.
+   */
+  static async searchCategories(
+    query: string,
+    moduleInput?: FrontendModule | string
+  ): Promise<CategorySearchResult[]> {
+    const term = query.trim().toLowerCase();
+    if (!term) return [];
+
+    const res = await this.getCategories(moduleInput);
+    if (!res.success || !res.data) return [];
+
+    const allCats = res.data;
+    const catMap = new Map<string, CategoryRecord>(allCats.map((c) => [c.id, c]));
+
+    const matches = allCats.filter((c) => {
+      const nameMatch = c.name.toLowerCase().includes(term);
+      const slugMatch = c.slug.toLowerCase().includes(term);
+      const descMatch = c.description ? c.description.toLowerCase().includes(term) : false;
+      const iconMatch = c.icon_key ? c.icon_key.toLowerCase().includes(term) : false;
+      return nameMatch || slugMatch || descMatch || iconMatch;
+    });
+
+    const results: CategorySearchResult[] = matches.map((cat) => {
+      const pathRecords: CategoryRecord[] = [cat];
+      let curr: CategoryRecord | undefined = cat;
+
+      while (curr?.parent_id) {
+        const parent = catMap.get(curr.parent_id);
+        if (parent) {
+          pathRecords.unshift(parent);
+          curr = parent;
+        } else {
+          break;
+        }
+      }
+
+      const pathString = pathRecords.map((r) => r.name).join(' › ');
+      const mainCategory = pathRecords.find((r) => r.level === 1 || !r.parent_id);
+      const subCategory = pathRecords.find((r) => r.level === 2);
+      const thirdLevel = pathRecords.find((r) => r.level === 3);
+
+      return {
+        category: cat,
+        pathString,
+        pathRecords,
+        mainCategory,
+        subCategory,
+        thirdLevel,
+      };
+    });
+
+    // Rank results: exact name match first, prefix match second, level 1 -> 2 -> 3
+    return results.sort((a, b) => {
+      const aName = a.category.name.toLowerCase();
+      const bName = b.category.name.toLowerCase();
+
+      if (aName === term && bName !== term) return -1;
+      if (bName === term && aName !== term) return 1;
+
+      const aStarts = aName.startsWith(term);
+      const bStarts = bName.startsWith(term);
+      if (aStarts && !bStarts) return -1;
+      if (bStarts && !aStarts) return 1;
+
+      return a.category.level - b.category.level;
     });
   }
 

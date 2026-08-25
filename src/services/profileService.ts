@@ -1,4 +1,5 @@
 import { UserProfile, UserListingItem, UserReviewItem, UserReportItem } from '../types/profileTypes';
+import { supabase } from '../lib/supabase';
 import { INITIAL_USER_PROFILE, INITIAL_USER_LISTINGS, INITIAL_USER_REVIEWS, INITIAL_USER_REPORTS } from '../data/profileData';
 
 const PROFILE_STORAGE_KEY = 'rentoura_user_profile';
@@ -92,6 +93,12 @@ export class ProfileService {
       return item;
     });
     this.saveUserListings(updated);
+
+    const dbStatus = newStatus === 'active' ? 'published' : newStatus === 'rejected' ? 'rejected' : newStatus === 'pending' ? 'submitted' : newStatus;
+    supabase.from('listings').update({ status: dbStatus, updated_at: new Date().toISOString() }).eq('id', listingId).then(({ error }) => {
+      if (error) console.warn('Error updating Supabase listing status:', error.message);
+    });
+
     return updated;
   }
 
@@ -99,6 +106,11 @@ export class ProfileService {
     const current = this.getUserListings();
     const updated = current.filter(item => item.id !== listingId);
     this.saveUserListings(updated);
+
+    supabase.from('listings').delete().eq('id', listingId).then(({ error }) => {
+      if (error) console.warn('Error deleting Supabase listing:', error.message);
+    });
+
     return updated;
   }
 

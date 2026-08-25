@@ -7,12 +7,8 @@ import {
   ChevronRight,
   SlidersHorizontal, 
   Home, 
-  BedDouble, 
-  Car, 
-  Tent, 
-  Drill, 
   Briefcase, 
-  Armchair, 
+  Drill, 
   LayoutGrid, 
   Heart, 
   MapPin, 
@@ -29,13 +25,13 @@ import {
   Filter,
   Loader2,
   CheckCircle2,
-  Check
+  Car
 } from 'lucide-react';
 import { CATEGORIES_DATA } from '../data/mockData';
 import { AppRoute, FeaturedListingItem } from '../types';
 import { RENTAL_HERO_SLIDES, RentalHeroSlide } from '../data/rentalHeroSlidesData';
-import { RENTALS_CATEGORIES } from '../data/categories/rentalsData';
 import { GlobalLocationModal } from '../components/common/GlobalLocationModal';
+import { RentalCategoryModal } from '../components/RentalCategoryModal';
 import { RentalService, RentalCategoryRecord } from '../services/rentalService';
 import { SavedListingService } from '../services/savedListingService';
 
@@ -56,20 +52,14 @@ export const RentalsPage: React.FC<RentalsPageProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLocation, setSelectedLocation] = useState('All Sri Lanka');
   const [selectedCategory, setSelectedCategory] = useState('All Categories');
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | undefined>(undefined);
+  const [selectedCategorySlug, setSelectedCategorySlug] = useState<string | undefined>(undefined);
   const [selectedPrice, setSelectedPrice] = useState('Any Price');
   const [selectedPeriod, setSelectedPeriod] = useState('Any Period');
 
   // UI Modal States
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
-  const [modalSearch, setModalSearch] = useState('');
-  const [draftRentalCategory, setDraftRentalCategory] = useState(selectedCategory || 'All Categories');
-
-  useEffect(() => {
-    if (isCategoryModalOpen) {
-      setDraftRentalCategory(selectedCategory || 'All Categories');
-    }
-  }, [isCategoryModalOpen, selectedCategory]);
   const [isPriceModalOpen, setIsPriceModalOpen] = useState(false);
   const [isPeriodModalOpen, setIsPeriodModalOpen] = useState(false);
 
@@ -78,7 +68,6 @@ export const RentalsPage: React.FC<RentalsPageProps> = ({
   const [featuredRentals, setFeaturedRentals] = useState<FeaturedListingItem[]>([]);
   const [nearYouRentals, setNearYouRentals] = useState<FeaturedListingItem[]>([]);
   const [rentalFeed, setRentalFeed] = useState<FeaturedListingItem[]>([]);
-  const [dbCategories, setDbCategories] = useState<RentalCategoryRecord[]>([]);
   const [localSavedListings, setLocalSavedListings] = useState<string[]>(parentSavedListings || []);
 
   const [totalCount, setTotalCount] = useState(0);
@@ -106,19 +95,17 @@ export const RentalsPage: React.FC<RentalsPageProps> = ({
     return () => { isMounted = false; };
   }, []);
 
-  // Fetch Hero Slides & Categories on Mount
+  // Fetch Hero Slides & Featured Rentals on Mount
   useEffect(() => {
     let isMounted = true;
     async function loadInitialData() {
-      const [slidesData, categoriesData, featuredData] = await Promise.all([
+      const [slidesData, featuredData] = await Promise.all([
         RentalService.getRentalHeroSlides(),
-        RentalService.getRentalCategories(),
         RentalService.getFeaturedRentals()
       ]);
 
       if (isMounted) {
         if (slidesData && slidesData.length > 0) setHeroSlides(slidesData);
-        if (categoriesData && categoriesData.length > 0) setDbCategories(categoriesData);
         setFeaturedRentals(featuredData);
       }
     }
@@ -148,6 +135,8 @@ export const RentalsPage: React.FC<RentalsPageProps> = ({
       searchQuery,
       selectedLocation,
       selectedCategory,
+      selectedCategoryId,
+      selectedCategorySlug,
       selectedPrice,
       selectedPeriod,
       offset: 0,
@@ -162,7 +151,7 @@ export const RentalsPage: React.FC<RentalsPageProps> = ({
     });
 
     return () => { isMounted = false; };
-  }, [searchQuery, selectedLocation, selectedCategory, selectedPrice, selectedPeriod]);
+  }, [searchQuery, selectedLocation, selectedCategory, selectedCategoryId, selectedCategorySlug, selectedPrice, selectedPeriod]);
 
   // Handle Load More
   const handleLoadMore = async () => {
@@ -173,6 +162,8 @@ export const RentalsPage: React.FC<RentalsPageProps> = ({
       searchQuery,
       selectedLocation,
       selectedCategory,
+      selectedCategoryId,
+      selectedCategorySlug,
       selectedPrice,
       selectedPeriod,
       offset: rentalFeed.length,
@@ -199,6 +190,15 @@ export const RentalsPage: React.FC<RentalsPageProps> = ({
       setLocalSavedListings(prev => prev.filter(id => id !== listingId));
     }
     parentOnToggleSave(listingId);
+  };
+
+  // Open Detail Page
+  const handleCardClick = (id: string) => {
+    if (onOpenListingDetail) {
+      onOpenListingDetail(id, 'rentals');
+    } else {
+      onNavigate(`/rentals/${id}` as AppRoute);
+    }
   };
 
   // Active Slides
@@ -241,13 +241,19 @@ export const RentalsPage: React.FC<RentalsPageProps> = ({
     if (slide.ctaAction === 'post' || slide.ctaRoute === '/post/rental') {
       onNavigate('/post/rental');
     } else if (slide.ctaAction === 'category_property') {
-      setSelectedCategory('Property');
+      setSelectedCategory('Property Rentals');
+      setSelectedCategoryId(undefined);
+      setSelectedCategorySlug('property-rentals');
       scrollToFeed();
     } else if (slide.ctaAction === 'category_vehicles') {
       setSelectedCategory('Vehicles');
+      setSelectedCategoryId(undefined);
+      setSelectedCategorySlug('vehicles');
       scrollToFeed();
     } else if (slide.ctaAction === 'category_equipment') {
-      setSelectedCategory('Equipment');
+      setSelectedCategory('Construction & Tools');
+      setSelectedCategoryId(undefined);
+      setSelectedCategorySlug('construction-tools');
       scrollToFeed();
     } else if (slide.ctaAction === 'explore') {
       clearAllFilters();
@@ -267,6 +273,8 @@ export const RentalsPage: React.FC<RentalsPageProps> = ({
     setSearchQuery('');
     setSelectedLocation('All Sri Lanka');
     setSelectedCategory('All Categories');
+    setSelectedCategoryId(undefined);
+    setSelectedCategorySlug(undefined);
     setSelectedPrice('Any Price');
     setSelectedPeriod('Any Period');
   };
@@ -293,27 +301,6 @@ export const RentalsPage: React.FC<RentalsPageProps> = ({
       default: return null;
     }
   };
-
-  // Categories list for modal
-  const modalCategoriesList = dbCategories.length > 0 
-    ? dbCategories.map(c => ({
-        id: c.id,
-        name: c.name,
-        icon: c.iconKey ? getCategoryIcon(c.iconKey) : '📦',
-        description: c.description || `${c.name} rental listings`
-      }))
-    : RENTALS_CATEGORIES.map(c => ({
-        id: c.id,
-        name: c.name,
-        icon: c.icon,
-        description: c.description
-      }));
-
-  const modalCategoriesFiltered = modalCategoriesList.filter(c => 
-    !modalSearch.trim() || 
-    c.name.toLowerCase().includes(modalSearch.toLowerCase()) ||
-    (c.description && c.description.toLowerCase().includes(modalSearch.toLowerCase()))
-  );
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 pb-28 overflow-x-hidden selection:bg-[#1464F4] selection:text-white">
@@ -549,7 +536,7 @@ export const RentalsPage: React.FC<RentalsPageProps> = ({
             {searchQuery && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white border border-blue-200 text-[#1464F4] font-bold text-[11px] shadow-xs">
                 Search: "{searchQuery}"
-                <button onClick={() => setSearchQuery('')} className="hover:text-red-600 ml-0.5">
+                <button onClick={() => setSearchQuery('')} className="hover:text-red-600 ml-0.5 cursor-pointer">
                   <X className="w-3 h-3" />
                 </button>
               </span>
@@ -558,7 +545,7 @@ export const RentalsPage: React.FC<RentalsPageProps> = ({
             {selectedLocation !== 'All Sri Lanka' && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white border border-blue-200 text-[#1464F4] font-bold text-[11px] shadow-xs">
                 Location: {selectedLocation}
-                <button onClick={() => setSelectedLocation('All Sri Lanka')} className="hover:text-red-600 ml-0.5">
+                <button onClick={() => setSelectedLocation('All Sri Lanka')} className="hover:text-red-600 ml-0.5 cursor-pointer">
                   <X className="w-3 h-3" />
                 </button>
               </span>
@@ -567,7 +554,14 @@ export const RentalsPage: React.FC<RentalsPageProps> = ({
             {selectedCategory !== 'All Categories' && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white border border-blue-200 text-[#1464F4] font-bold text-[11px] shadow-xs">
                 Category: {selectedCategory}
-                <button onClick={() => setSelectedCategory('All Categories')} className="hover:text-red-600 ml-0.5">
+                <button 
+                  onClick={() => {
+                    setSelectedCategory('All Categories');
+                    setSelectedCategoryId(undefined);
+                    setSelectedCategorySlug(undefined);
+                  }} 
+                  className="hover:text-red-600 ml-0.5 cursor-pointer"
+                >
                   <X className="w-3 h-3" />
                 </button>
               </span>
@@ -576,7 +570,7 @@ export const RentalsPage: React.FC<RentalsPageProps> = ({
             {selectedPrice !== 'Any Price' && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white border border-blue-200 text-[#1464F4] font-bold text-[11px] shadow-xs">
                 Price: {selectedPrice}
-                <button onClick={() => setSelectedPrice('Any Price')} className="hover:text-red-600 ml-0.5">
+                <button onClick={() => setSelectedPrice('Any Price')} className="hover:text-red-600 ml-0.5 cursor-pointer">
                   <X className="w-3 h-3" />
                 </button>
               </span>
@@ -585,7 +579,7 @@ export const RentalsPage: React.FC<RentalsPageProps> = ({
             {selectedPeriod !== 'Any Period' && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white border border-blue-200 text-[#1464F4] font-bold text-[11px] shadow-xs">
                 Period: {selectedPeriod}
-                <button onClick={() => setSelectedPeriod('Any Period')} className="hover:text-red-600 ml-0.5">
+                <button onClick={() => setSelectedPeriod('Any Period')} className="hover:text-red-600 ml-0.5 cursor-pointer">
                   <X className="w-3 h-3" />
                 </button>
               </span>
@@ -644,6 +638,8 @@ export const RentalsPage: React.FC<RentalsPageProps> = ({
                     setIsCategoryModalOpen(true);
                   } else {
                     setSelectedCategory(cat.name);
+                    setSelectedCategoryId(undefined);
+                    setSelectedCategorySlug(undefined);
                     scrollToFeed();
                   }
                 }}
@@ -685,13 +681,7 @@ export const RentalsPage: React.FC<RentalsPageProps> = ({
                 return (
                   <div
                     key={rental.id}
-                    onClick={() => {
-                      if (onOpenListingDetail) {
-                        onOpenListingDetail(rental.id, 'rentals');
-                      } else {
-                        onNavigate('/rental-detail');
-                      }
-                    }}
+                    onClick={() => handleCardClick(rental.id)}
                     className="w-64 shrink-0 bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-sm flex flex-col cursor-pointer hover:shadow-md transition-shadow group"
                   >
                     <div className="relative h-36 w-full bg-slate-100 overflow-hidden">
@@ -764,13 +754,7 @@ export const RentalsPage: React.FC<RentalsPageProps> = ({
                 return (
                   <div
                     key={item.id}
-                    onClick={() => {
-                      if (onOpenListingDetail) {
-                        onOpenListingDetail(item.id, 'rentals');
-                      } else {
-                        onNavigate('/rental-detail');
-                      }
-                    }}
+                    onClick={() => handleCardClick(item.id)}
                     className="w-40 shrink-0 bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-xs flex flex-col cursor-pointer hover:shadow-md transition-shadow group"
                   >
                     <div className="relative h-28 w-full bg-slate-100 overflow-hidden">
@@ -852,13 +836,7 @@ export const RentalsPage: React.FC<RentalsPageProps> = ({
                   return (
                     <div
                       key={rental.id}
-                      onClick={() => {
-                        if (onOpenListingDetail) {
-                          onOpenListingDetail(rental.id, 'rentals');
-                        } else {
-                          onNavigate('/rental-detail');
-                        }
-                      }}
+                      onClick={() => handleCardClick(rental.id)}
                       className="bg-white rounded-2xl overflow-hidden border border-slate-200/90 shadow-xs hover:shadow-md transition-all cursor-pointer flex flex-col group"
                     >
                       <div className="relative h-44 w-full bg-slate-100 overflow-hidden">
@@ -867,11 +845,13 @@ export const RentalsPage: React.FC<RentalsPageProps> = ({
                           alt={rental.title}
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                         />
-                        <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5">
-                          <span className="px-2 py-0.5 rounded-md bg-[#1464F4] text-white text-[9.5px] font-black uppercase tracking-wider shadow-sm">
-                            {rental.badgeType || 'RENTAL'}
-                          </span>
-                        </div>
+                        {rental.badgeType && (
+                          <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5">
+                            <span className="px-2 py-0.5 rounded-md bg-[#1464F4] text-white text-[9.5px] font-black uppercase tracking-wider shadow-sm">
+                              {rental.badgeType}
+                            </span>
+                          </div>
+                        )}
 
                         <button
                           onClick={(e) => {
@@ -984,126 +964,18 @@ export const RentalsPage: React.FC<RentalsPageProps> = ({
       </div>
 
       {/* RENTAL CATEGORY SELECTOR MODAL */}
-      {isCategoryModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl w-full max-w-lg max-h-[85vh] flex flex-col shadow-2xl overflow-hidden border border-slate-100">
-            <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
-              <div>
-                <h3 className="text-base font-bold text-slate-900 font-heading flex items-center gap-2">
-                  <LayoutGrid className="w-4 h-4 text-[#1464F4]" />
-                  <span>Select Rental Category</span>
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Showing approved rental categories only
-                </p>
-              </div>
-              <button
-                onClick={() => setIsCategoryModalOpen(false)}
-                className="w-8 h-8 rounded-full bg-slate-200/80 hover:bg-slate-300 text-slate-600 flex items-center justify-center cursor-pointer tap-bounce"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="p-3 border-b border-slate-100 bg-white">
-              <div className="flex items-center gap-2 bg-slate-50 rounded-xl px-3 py-1.5 border border-slate-200">
-                <Search className="w-4 h-4 text-slate-400 shrink-0" />
-                <input
-                  type="text"
-                  value={modalSearch}
-                  onChange={(e) => setModalSearch(e.target.value)}
-                  placeholder="Search rental categories..."
-                  className="w-full bg-transparent text-xs text-slate-800 focus:outline-none py-1"
-                />
-              </div>
-            </div>
-
-            <div className="p-3 overflow-y-auto flex-1 space-y-1.5 max-h-[50vh]">
-              <button
-                onClick={() => setDraftRentalCategory('All Categories')}
-                className={`w-full p-3 rounded-2xl border text-left flex items-center justify-between transition-colors cursor-pointer ${
-                  draftRentalCategory === 'All Categories'
-                    ? 'border-[#1464F4] bg-blue-50/80 text-[#1464F4] font-bold'
-                    : 'border-slate-100 hover:bg-slate-50 text-slate-800'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <span className="text-lg">📦</span>
-                  <div>
-                    <p className="text-xs font-bold">All Rental Categories</p>
-                    <p className="text-[10px] text-slate-500">Show all rental listings</p>
-                  </div>
-                </div>
-                {draftRentalCategory === 'All Categories' && <span className="text-[#1464F4] font-bold">✓</span>}
-              </button>
-
-              {modalCategoriesFiltered.map((cat) => {
-                const isSelected = draftRentalCategory === cat.name;
-                return (
-                  <button
-                    key={cat.id}
-                    onClick={() => setDraftRentalCategory(cat.name)}
-                    className={`w-full p-3 rounded-2xl border text-left flex items-center justify-between transition-colors cursor-pointer ${
-                      isSelected
-                        ? 'border-[#1464F4] bg-blue-50/80 text-[#1464F4] font-bold'
-                        : 'border-slate-100 hover:bg-slate-50 text-slate-800'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="text-xl flex items-center justify-center">{cat.icon}</span>
-                      <div>
-                        <p className="text-xs font-bold text-slate-900">{cat.name}</p>
-                        <p className="text-[10px] text-slate-500 line-clamp-1">{cat.description}</p>
-                      </div>
-                    </div>
-                    {isSelected && <span className="text-[#1464F4] font-bold">✓</span>}
-                  </button>
-                );
-              })}
-
-              {modalCategoriesFiltered.length === 0 && (
-                <div className="p-6 text-center text-xs text-slate-500">
-                  No rental categories matching &quot;{modalSearch}&quot;.
-                </div>
-              )}
-            </div>
-
-            {/* Modal Sticky Footer with Apply Category */}
-            <div className="p-3.5 border-t border-slate-200/90 bg-white flex flex-col sm:flex-row items-center justify-between gap-3 shadow-lg shrink-0">
-              <div className="min-w-0 flex-1 w-full sm:w-auto">
-                <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400 block mb-0.5">
-                  SELECTED CATEGORY
-                </span>
-                <p className="text-xs sm:text-sm font-black text-slate-900 truncate">
-                  {draftRentalCategory}
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
-                <button
-                  type="button"
-                  onClick={() => setIsCategoryModalOpen(false)}
-                  className="px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors cursor-pointer shrink-0"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedCategory(draftRentalCategory);
-                    setIsCategoryModalOpen(false);
-                    scrollToFeed();
-                  }}
-                  className="flex-1 sm:flex-none py-2.5 px-5 rounded-xl text-white text-xs sm:text-sm font-black flex items-center justify-center gap-2 shadow-lg transition-all cursor-pointer bg-[#1464F4] hover:bg-[#0F4EC4] active:scale-[0.99]"
-                >
-                  <CheckCircle2 className="w-4 h-4 stroke-[2.5]" />
-                  <span className="truncate">Apply Category</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <RentalCategoryModal
+        isOpen={isCategoryModalOpen}
+        onClose={() => setIsCategoryModalOpen(false)}
+        selectedCategory={selectedCategory}
+        selectedCategoryId={selectedCategoryId}
+        onSelectCategory={(catName, catId, catSlug) => {
+          setSelectedCategory(catName);
+          setSelectedCategoryId(catId);
+          setSelectedCategorySlug(catSlug);
+          scrollToFeed();
+        }}
+      />
 
       {/* LOCATION SELECTOR MODAL */}
       <GlobalLocationModal

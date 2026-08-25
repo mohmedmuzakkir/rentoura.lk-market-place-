@@ -82,7 +82,6 @@ export interface ServiceFilterData {
   advanceBooking?: boolean;
   remoteService?: boolean;
   onSiteService?: boolean;
-  verifiedOnly?: boolean;
 }
 
 export interface AdvancedFilterState {
@@ -101,7 +100,6 @@ export interface AdvancedFilterState {
   service: ServiceFilterData;
   
   // Common flags
-  verifiedOnly: boolean;
   featuredOnly: boolean;
   negotiableOnly: boolean;
   deliveryAvailable: boolean;
@@ -154,7 +152,6 @@ export const INITIAL_ADVANCED_FILTER_STATE: AdvancedFilterState = {
     pricingType: ['Fixed'],
     availability: 'today'
   },
-  verifiedOnly: false,
   featuredOnly: false,
   negotiableOnly: false,
   deliveryAvailable: false,

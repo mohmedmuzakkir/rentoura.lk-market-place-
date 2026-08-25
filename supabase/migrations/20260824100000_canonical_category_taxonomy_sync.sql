@@ -8,11 +8,11 @@ BEGIN;
 
 -- 1. TEMPORARY CANONICAL TAXONOMY STAGING TABLE
 CREATE TEMP TABLE temp_canonical_categories (
-  module listing_module NOT NULL,
+  module text NOT NULL CHECK (module IN ('rental', 'job', 'service')),
   level integer NOT NULL,
   name text NOT NULL,
   slug text NOT NULL,
-  parent_module listing_module,
+  parent_module text CHECK (parent_module IN ('rental', 'job', 'service')),
   parent_slug text,
   parent_level integer,
   sort_order integer NOT NULL DEFAULT 0,
@@ -755,5 +755,52 @@ WITH active_canonical_ids AS (
 UPDATE public.categories
 SET status = 'inactive', updated_at = now()
 WHERE id NOT IN (SELECT id FROM active_canonical_ids);
+
+-- 7. TRANSACTIONAL VALIDATION ASSERTIONS
+DO $$
+DECLARE
+  rental_l1 int;
+  rental_l2 int;
+  rental_l3 int;
+  dup_siblings int;
+  cross_module_parents int;
+BEGIN
+  SELECT count(*) INTO rental_l1 FROM public.categories WHERE module = 'rental' AND level = 1 AND status = 'active';
+  SELECT count(*) INTO rental_l2 FROM public.categories WHERE module = 'rental' AND level = 2 AND status = 'active';
+  SELECT count(*) INTO rental_l3 FROM public.categories WHERE module = 'rental' AND level = 3 AND status = 'active';
+
+  SELECT count(*) INTO dup_siblings 
+  FROM (
+    SELECT module, COALESCE(parent_id, '00000000-0000-0000-0000-000000000000'::uuid), slug 
+    FROM public.categories 
+    WHERE status = 'active' 
+    GROUP BY 1, 2, 3 HAVING count(*) > 1
+  ) dups;
+
+  SELECT count(*) INTO cross_module_parents
+  FROM public.categories c
+  JOIN public.categories p ON c.parent_id = p.id
+  WHERE c.module <> p.module;
+
+  IF rental_l1 < 27 THEN
+    RAISE EXCEPTION 'Category sync failed: Rental Level 1 count % is less than expected 27', rental_l1;
+  END IF;
+
+  IF rental_l2 < 189 THEN
+    RAISE EXCEPTION 'Category sync failed: Rental Level 2 count % is less than expected 189', rental_l2;
+  END IF;
+
+  IF rental_l3 < 65 THEN
+    RAISE EXCEPTION 'Category sync failed: Rental Level 3 count % is less than expected 65', rental_l3;
+  END IF;
+
+  IF dup_siblings > 0 THEN
+    RAISE EXCEPTION 'Category sync failed: Duplicate sibling slugs detected (%)', dup_siblings;
+  END IF;
+
+  IF cross_module_parents > 0 THEN
+    RAISE EXCEPTION 'Category sync failed: Cross-module parent hierarchy detected (%)', cross_module_parents;
+  END IF;
+END $$;
 
 COMMIT;

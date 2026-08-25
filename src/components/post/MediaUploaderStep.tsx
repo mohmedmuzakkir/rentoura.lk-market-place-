@@ -43,6 +43,7 @@ export const MediaUploaderStep: React.FC<MediaUploaderStepProps> = ({
         url: tempUrl,
         name: file.name,
         size: file.size,
+        file: file,
         isCover: images.length === 0 && validFiles.length === 0
       });
     }

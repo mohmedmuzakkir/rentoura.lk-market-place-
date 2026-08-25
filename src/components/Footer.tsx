@@ -25,7 +25,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
               </span>
               <span className="flex items-center gap-1.5 bg-white/5 px-3 py-1.5 rounded-lg border border-white/10">
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                Verified Marketplace
+                Safety Guidance Available
               </span>
             </div>
           </div>
@@ -35,27 +35,27 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
             <h4 className="text-white text-sm font-bold tracking-wide uppercase font-heading">Marketplace</h4>
             <ul className="space-y-2 text-sm text-slate-400 font-medium">
               <li>
-                <button onClick={() => onNavigate('/rentals')} className="hover:text-white transition-colors">
+                <button onClick={() => onNavigate('/rentals')} className="hover:text-white transition-colors cursor-pointer">
                   Rentals & Properties
                 </button>
               </li>
               <li>
-                <button onClick={() => onNavigate('/jobs')} className="hover:text-white transition-colors">
+                <button onClick={() => onNavigate('/jobs')} className="hover:text-white transition-colors cursor-pointer">
                   Job Openings
                 </button>
               </li>
               <li>
-                <button onClick={() => onNavigate('/services')} className="hover:text-white transition-colors">
+                <button onClick={() => onNavigate('/services')} className="hover:text-white transition-colors cursor-pointer">
                   Services & Experts
                 </button>
               </li>
               <li>
-                <button onClick={() => onNavigate('/search')} className="hover:text-white transition-colors">
+                <button onClick={() => onNavigate('/search')} className="hover:text-white transition-colors cursor-pointer">
                   Search All Listings
                 </button>
               </li>
               <li>
-                <button onClick={() => onNavigate('/post')} className="text-[#1464F4] hover:text-blue-400 font-semibold flex items-center gap-1">
+                <button onClick={() => onNavigate('/post')} className="text-[#1464F4] hover:text-blue-400 font-semibold flex items-center gap-1 cursor-pointer">
                   <Plus className="w-3.5 h-3.5 stroke-[3]" /> Post an Ad
                 </button>
               </li>
@@ -67,22 +67,22 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
             <h4 className="text-white text-sm font-bold tracking-wide uppercase font-heading">Safety & Help</h4>
             <ul className="space-y-2 text-sm text-slate-400 font-medium">
               <li>
-                <button onClick={() => onNavigate('/safety')} className="hover:text-white transition-colors flex items-center gap-1.5">
+                <button onClick={() => onNavigate('/safety')} className="hover:text-white transition-colors flex items-center gap-1.5 cursor-pointer">
                   <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> Safety Center
                 </button>
               </li>
               <li>
-                <button onClick={() => onNavigate('/help')} className="hover:text-white transition-colors flex items-center gap-1.5">
+                <button onClick={() => onNavigate('/help')} className="hover:text-white transition-colors flex items-center gap-1.5 cursor-pointer">
                   <HelpCircle className="w-3.5 h-3.5 text-blue-400" /> Help & Support
                 </button>
               </li>
               <li>
-                <button onClick={() => onNavigate('/agreement')} className="hover:text-white transition-colors flex items-center gap-1.5">
+                <button onClick={() => onNavigate('/user-agreement')} className="hover:text-white transition-colors flex items-center gap-1.5 cursor-pointer">
                   <FileText className="w-3.5 h-3.5 text-slate-400" /> Terms & User Agreement
                 </button>
               </li>
               <li>
-                <button onClick={() => onNavigate('/agreement')} className="hover:text-white transition-colors">
+                <button onClick={() => onNavigate('/privacy-policy')} className="hover:text-white transition-colors cursor-pointer">
                   Privacy Policy
                 </button>
               </li>
@@ -121,9 +121,9 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate }) => {
         <div className="pt-6 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-400 gap-4">
           <p>© 2026 RENTOURA.LK. All rights reserved. Sri Lanka Marketplace.</p>
           <div className="flex items-center gap-6">
-            <button onClick={() => onNavigate('/agreement')} className="hover:text-slate-300">Terms of Use</button>
-            <button onClick={() => onNavigate('/agreement')} className="hover:text-slate-300">Privacy Policy</button>
-            <button onClick={() => onNavigate('/safety')} className="hover:text-slate-300">Safety Guidelines</button>
+            <button onClick={() => onNavigate('/user-agreement')} className="hover:text-slate-300 cursor-pointer">Terms of Use</button>
+            <button onClick={() => onNavigate('/privacy-policy')} className="hover:text-slate-300 cursor-pointer">Privacy Policy</button>
+            <button onClick={() => onNavigate('/safety')} className="hover:text-slate-300 cursor-pointer">Safety Guidelines</button>
           </div>
         </div>
       </div>

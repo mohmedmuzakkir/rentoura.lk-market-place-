@@ -138,7 +138,7 @@ export const HomePage: React.FC<HomePageProps> = ({
 
   const handleSelectCategory = (categoryName: string) => {
     setFilterState(prev => ({ ...prev, selectedCategory: categoryName }));
-    onNavigate('/rentals');
+    onNavigate('/search');
   };
 
   const handleSelectLocation = (locationName: string) => {

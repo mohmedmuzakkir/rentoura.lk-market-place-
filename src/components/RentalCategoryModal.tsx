@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { X, Search, ChevronRight, ChevronLeft, Briefcase, CheckCircle2, RefreshCw, Sparkles } from 'lucide-react';
+import { X, Search, ChevronRight, ChevronLeft, LayoutGrid, CheckCircle2, RefreshCw } from 'lucide-react';
 import { CategoryService, CategoryRecord } from '../services/categoryService';
 import { getCategoryIconComponent } from './CategoryIcon';
 
-interface JobCategoryModalProps {
+interface RentalCategoryModalProps {
   isOpen: boolean;
   onClose: () => void;
   selectedCategory: string;
@@ -11,7 +11,7 @@ interface JobCategoryModalProps {
   onSelectCategory: (categoryName: string, categoryId?: string, categorySlug?: string) => void;
 }
 
-export const JobCategoryModal: React.FC<JobCategoryModalProps> = ({
+export const RentalCategoryModal: React.FC<RentalCategoryModalProps> = ({
   isOpen,
   onClose,
   selectedCategory,
@@ -45,7 +45,7 @@ export const JobCategoryModal: React.FC<JobCategoryModalProps> = ({
     let isMounted = true;
     setLoading(true);
 
-    CategoryService.getCategories('job').then((res) => {
+    CategoryService.getCategories('rental').then((res) => {
       if (!isMounted) return;
       if (res.success && res.data) {
         setAllCategories(res.data);
@@ -77,7 +77,7 @@ export const JobCategoryModal: React.FC<JobCategoryModalProps> = ({
   };
 
   const getIcon = (iconKey: string | null) => {
-    return getCategoryIconComponent({ iconKey, module: 'job', className: 'w-5 h-5 text-[#08A34F]' });
+    return getCategoryIconComponent({ iconKey, module: 'rental', className: 'w-5 h-5 text-[#1464F4]' });
   };
 
   // Category filtering & drilldown helpers
@@ -87,10 +87,7 @@ export const JobCategoryModal: React.FC<JobCategoryModalProps> = ({
 
   // Search filter across all levels
   const searchResults = searchTerm.trim()
-    ? allCategories.filter((c) => 
-        c.name.toLowerCase().includes(searchTerm.toLowerCase().trim()) ||
-        (c.description && c.description.toLowerCase().includes(searchTerm.toLowerCase().trim()))
-      )
+    ? allCategories.filter((c) => c.name.toLowerCase().includes(searchTerm.toLowerCase().trim()))
     : [];
 
   const getCategoryPathString = (cat: CategoryRecord): string => {
@@ -116,7 +113,7 @@ export const JobCategoryModal: React.FC<JobCategoryModalProps> = ({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="px-5 py-3.5 bg-gradient-to-r from-[#021A12] to-[#0A3D29] text-white flex items-center justify-between border-b border-emerald-900 shrink-0">
+        <div className="px-5 py-3.5 bg-gradient-to-r from-[#041C43] to-[#0A2E6B] text-white flex items-center justify-between border-b border-blue-900 shrink-0">
           <div className="flex items-center gap-2.5 min-w-0">
             {activeLevel > 1 && !searchTerm ? (
               <button
@@ -134,22 +131,22 @@ export const JobCategoryModal: React.FC<JobCategoryModalProps> = ({
                 <ChevronLeft className="w-4 h-4 stroke-[2.5]" />
               </button>
             ) : (
-              <div className="w-8 h-8 rounded-xl bg-[#08A34F] text-white flex items-center justify-center shadow-sm shrink-0">
-                <Briefcase className="w-4 h-4 stroke-[2.5]" />
+              <div className="w-8 h-8 rounded-xl bg-[#1464F4] text-white flex items-center justify-center shadow-sm shrink-0">
+                <LayoutGrid className="w-4 h-4 stroke-[2.5]" />
               </div>
             )}
             <div className="min-w-0">
               <h3 className="text-sm sm:text-base font-bold font-heading truncate">
-                {activeLevel === 1 || searchTerm ? 'Job Categories' : activeLevel === 2 ? selectedL1?.name : selectedL2?.name}
+                {activeLevel === 1 || searchTerm ? 'Rental Categories' : activeLevel === 2 ? selectedL1?.name : selectedL2?.name}
               </h3>
-              <p className="text-[10.5px] text-emerald-200 truncate">
+              <p className="text-[10.5px] text-blue-200 truncate">
                 {searchTerm
                   ? 'Search results across taxonomy'
                   : activeLevel === 1
-                  ? 'Level 1: Main Sector'
+                  ? 'Level 1: Main Category'
                   : activeLevel === 2
-                  ? `Level 2: Role Groups of ${selectedL1?.name}`
-                  : `Level 3: Specific Roles for ${selectedL2?.name}`}
+                  ? `Level 2: Subcategories of ${selectedL1?.name}`
+                  : `Level 3: Options for ${selectedL2?.name}`}
               </p>
             </div>
           </div>
@@ -171,7 +168,7 @@ export const JobCategoryModal: React.FC<JobCategoryModalProps> = ({
                 setSelectedL1(null);
                 setSelectedL2(null);
               }}
-              className="text-[#08A34F] font-bold hover:underline shrink-0"
+              className="text-[#1464F4] font-bold hover:underline shrink-0"
             >
               All
             </button>
@@ -183,7 +180,7 @@ export const JobCategoryModal: React.FC<JobCategoryModalProps> = ({
                     setActiveLevel(2);
                     setSelectedL2(null);
                   }}
-                  className={`shrink-0 font-semibold ${activeLevel === 2 ? 'text-slate-900 font-bold' : 'text-[#08A34F] hover:underline'}`}
+                  className={`shrink-0 font-semibold ${activeLevel === 2 ? 'text-slate-900 font-bold' : 'text-[#1464F4] hover:underline'}`}
                 >
                   {selectedL1.name}
                 </button>
@@ -206,8 +203,8 @@ export const JobCategoryModal: React.FC<JobCategoryModalProps> = ({
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search job categories (e.g. IT, Software, Driver, Accountant)..."
-              className="w-full pl-9 pr-8 py-2 text-xs bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-[#08A34F] focus:ring-1 focus:ring-[#08A34F] transition-colors font-medium text-slate-800"
+              placeholder="Search 280+ rental categories (e.g. House, Car, Generator)..."
+              className="w-full pl-9 pr-8 py-2 text-xs bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-[#1464F4] transition-colors font-medium text-slate-800"
             />
             {searchTerm && (
               <button
@@ -224,8 +221,8 @@ export const JobCategoryModal: React.FC<JobCategoryModalProps> = ({
         <div className="p-3 overflow-y-auto flex-1 space-y-1.5 min-h-[220px]">
           {loading ? (
             <div className="py-12 text-center text-slate-400 space-y-2">
-              <RefreshCw className="w-6 h-6 animate-spin text-[#08A34F] mx-auto" />
-              <p className="text-xs font-medium">Loading job categories...</p>
+              <RefreshCw className="w-6 h-6 animate-spin text-[#1464F4] mx-auto" />
+              <p className="text-xs font-medium">Loading rental categories...</p>
             </div>
           ) : searchTerm.trim() ? (
             /* SEARCH RESULTS MODE */
@@ -244,7 +241,7 @@ export const JobCategoryModal: React.FC<JobCategoryModalProps> = ({
                     }}
                     className={`w-full p-3 rounded-2xl border text-left flex items-center justify-between text-xs transition-all cursor-pointer ${
                       isSelected
-                        ? 'border-[#08A34F] bg-emerald-50/80 text-[#08A34F] font-bold shadow-xs'
+                        ? 'border-[#1464F4] bg-blue-50/80 text-[#1464F4] font-bold shadow-xs'
                         : 'border-slate-100 hover:bg-slate-50 text-slate-800'
                     }`}
                   >
@@ -255,13 +252,13 @@ export const JobCategoryModal: React.FC<JobCategoryModalProps> = ({
                         <p className="text-[10px] text-slate-500 truncate">{pathStr}</p>
                       </div>
                     </div>
-                    {isSelected && <CheckCircle2 className="w-4 h-4 text-[#08A34F] shrink-0 stroke-[2.5]" />}
+                    {isSelected && <CheckCircle2 className="w-4 h-4 text-[#1464F4] shrink-0 stroke-[2.5]" />}
                   </button>
                 );
               })
             ) : (
               <div className="p-8 text-center text-xs text-slate-500">
-                No job categories matching &quot;{searchTerm}&quot;.
+                No rental categories matching &quot;{searchTerm}&quot;.
               </div>
             )
           ) : (
@@ -272,19 +269,19 @@ export const JobCategoryModal: React.FC<JobCategoryModalProps> = ({
                   onClick={handleSelectAllCategories}
                   className={`w-full p-3 rounded-2xl border text-left flex items-center justify-between text-xs transition-all cursor-pointer mb-2 ${
                     draftName === 'All Categories' && !draftId
-                      ? 'border-[#08A34F] bg-emerald-50/90 text-[#08A34F] font-bold shadow-xs'
+                      ? 'border-[#1464F4] bg-blue-50/90 text-[#1464F4] font-bold shadow-xs'
                       : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-800 font-semibold'
                   }`}
                 >
                   <div className="flex items-center gap-2.5">
-                    <Sparkles className="w-4 h-4 text-[#08A34F]" />
+                    <span className="text-base">🌐</span>
                     <div>
-                      <p className="text-xs font-bold text-slate-900">All Job Categories</p>
-                      <p className="text-[10px] text-slate-500">Show all available job vacancies</p>
+                      <p className="text-xs font-bold text-slate-900">All Categories</p>
+                      <p className="text-[10px] text-slate-500">Show all rental listings</p>
                     </div>
                   </div>
                   {draftName === 'All Categories' && !draftId && (
-                    <CheckCircle2 className="w-4 h-4 text-[#08A34F] shrink-0 stroke-[2.5]" />
+                    <CheckCircle2 className="w-4 h-4 text-[#1464F4] shrink-0 stroke-[2.5]" />
                   )}
                 </button>
               )}
@@ -308,7 +305,7 @@ export const JobCategoryModal: React.FC<JobCategoryModalProps> = ({
                       }}
                       className={`w-full p-3 rounded-2xl border text-left flex items-center justify-between text-xs transition-all cursor-pointer ${
                         isSelected
-                          ? 'border-[#08A34F] bg-emerald-50/80 text-[#08A34F] font-bold shadow-xs'
+                          ? 'border-[#1464F4] bg-blue-50/80 text-[#1464F4] font-bold shadow-xs'
                           : 'border-slate-100 hover:bg-slate-50 text-slate-800'
                       }`}
                     >
@@ -322,7 +319,7 @@ export const JobCategoryModal: React.FC<JobCategoryModalProps> = ({
                         </div>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
-                        {isSelected && <CheckCircle2 className="w-4 h-4 text-[#08A34F] stroke-[2.5]" />}
+                        {isSelected && <CheckCircle2 className="w-4 h-4 text-[#1464F4] stroke-[2.5]" />}
                         {hasChildren && <ChevronRight className="w-4 h-4 text-slate-400 stroke-[2]" />}
                       </div>
                     </button>
@@ -348,7 +345,7 @@ export const JobCategoryModal: React.FC<JobCategoryModalProps> = ({
                       }}
                       className={`w-full p-3 rounded-2xl border text-left flex items-center justify-between text-xs transition-all cursor-pointer ${
                         isSelected
-                          ? 'border-[#08A34F] bg-emerald-50/80 text-[#08A34F] font-bold shadow-xs'
+                          ? 'border-[#1464F4] bg-blue-50/80 text-[#1464F4] font-bold shadow-xs'
                           : 'border-slate-100 hover:bg-slate-50 text-slate-800'
                       }`}
                     >
@@ -362,7 +359,7 @@ export const JobCategoryModal: React.FC<JobCategoryModalProps> = ({
                         </div>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
-                        {isSelected && <CheckCircle2 className="w-4 h-4 text-[#08A34F] stroke-[2.5]" />}
+                        {isSelected && <CheckCircle2 className="w-4 h-4 text-[#1464F4] stroke-[2.5]" />}
                         {hasChildren && <ChevronRight className="w-4 h-4 text-slate-400 stroke-[2]" />}
                       </div>
                     </button>
@@ -383,7 +380,7 @@ export const JobCategoryModal: React.FC<JobCategoryModalProps> = ({
                       }}
                       className={`w-full p-3 rounded-2xl border text-left flex items-center justify-between text-xs transition-all cursor-pointer ${
                         isSelected
-                          ? 'border-[#08A34F] bg-emerald-50/80 text-[#08A34F] font-bold shadow-xs'
+                          ? 'border-[#1464F4] bg-blue-50/80 text-[#1464F4] font-bold shadow-xs'
                           : 'border-slate-100 hover:bg-slate-50 text-slate-800'
                       }`}
                     >
@@ -396,7 +393,7 @@ export const JobCategoryModal: React.FC<JobCategoryModalProps> = ({
                           )}
                         </div>
                       </div>
-                      {isSelected && <CheckCircle2 className="w-4 h-4 text-[#08A34F] shrink-0 stroke-[2.5]" />}
+                      {isSelected && <CheckCircle2 className="w-4 h-4 text-[#1464F4] shrink-0 stroke-[2.5]" />}
                     </button>
                   );
                 })}
@@ -426,7 +423,7 @@ export const JobCategoryModal: React.FC<JobCategoryModalProps> = ({
             <button
               type="button"
               onClick={handleApply}
-              className="flex-1 sm:flex-none py-2.5 px-5 rounded-xl text-white text-xs sm:text-sm font-black flex items-center justify-center gap-2 shadow-lg transition-all cursor-pointer bg-[#08A34F] hover:bg-emerald-600 active:scale-[0.99]"
+              className="flex-1 sm:flex-none py-2.5 px-5 rounded-xl text-white text-xs sm:text-sm font-black flex items-center justify-center gap-2 shadow-lg transition-all cursor-pointer bg-[#1464F4] hover:bg-[#0F4EC4] active:scale-[0.99]"
             >
               <CheckCircle2 className="w-4 h-4 stroke-[2.5]" />
               <span className="truncate">Apply Category</span>

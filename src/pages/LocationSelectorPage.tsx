@@ -26,6 +26,7 @@ export interface LocationSelectorPageProps {
   onApplyLocation?: (locationModel: LocationValueModel, displayName: string) => void;
   onCancel?: () => void;
   initialLocation?: string;
+  initialLocationModel?: LocationValueModel;
   savedCount?: number;
 }
 
@@ -36,6 +37,7 @@ export const LocationSelectorPage: React.FC<LocationSelectorPageProps> = ({
   onApplyLocation,
   onCancel,
   initialLocation = '',
+  initialLocationModel,
   savedCount = 0
 }) => {
   // DB Locations State (loaded from Supabase public.locations)
@@ -72,16 +74,39 @@ export const LocationSelectorPage: React.FC<LocationSelectorPageProps> = ({
     }
   };
 
-  // Load Provinces on Mount
+  // Load Provinces on Mount & Initialize Draft Selection from initialLocation / model
   useEffect(() => {
     let isMounted = true;
     async function loadData() {
       setIsLoadingLocations(true);
       const provs = await LocationService.getProvinces();
-      if (isMounted) {
-        setProvinces(provs);
-        setIsLoadingLocations(false);
+      if (!isMounted) return;
+      setProvinces(provs);
+
+      // Resolve initial location model if provided
+      const targetInput = initialLocationModel?.displayName || initialLocation;
+      if (targetInput && targetInput !== 'All Sri Lanka') {
+        const resolved = await LocationService.resolveLocationValueModel(targetInput);
+        if (isMounted && resolved) {
+          if (resolved.provinceId) {
+            const p = provs.find(pr => pr.id === resolved.provinceId) || await LocationService.getLocationByIdOrCode(resolved.provinceId);
+            if (p) setSelectedProvince(p);
+          }
+          if (resolved.districtId) {
+            const d = await LocationService.getLocationByIdOrCode(resolved.districtId);
+            if (d) setSelectedDistrict(d);
+          }
+          if (resolved.cityId) {
+            const c = await LocationService.getLocationByIdOrCode(resolved.cityId);
+            if (c) setSelectedCity(c);
+          }
+          if (resolved.areaId) {
+            const a = await LocationService.getLocationByIdOrCode(resolved.areaId);
+            if (a) setSelectedArea(a);
+          }
+        }
       }
+      if (isMounted) setIsLoadingLocations(false);
     }
     loadData();
     return () => { isMounted = false; };
@@ -282,6 +307,9 @@ export const LocationSelectorPage: React.FC<LocationSelectorPageProps> = ({
       type: selectedArea ? 'area' : selectedCity ? 'city' : selectedDistrict ? 'district' : selectedProvince ? 'province' : 'country'
     };
 
+    // Log explicit location search/filter event in DB
+    LocationService.logLocationApplyEvent(valueModel, searchQuery);
+
     if (onApplyLocation) {
       onApplyLocation(valueModel, formatted);
     } else if (onSelectLocation) {
@@ -307,15 +335,25 @@ export const LocationSelectorPage: React.FC<LocationSelectorPageProps> = ({
 
     setIsLocating(true);
     navigator.geolocation.getCurrentPosition(
-      async () => {
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        const { matchedLocation, distanceKm } = await LocationService.findNearestLocation(latitude, longitude);
+
         setIsLocating(false);
-        setGeoNotice('GPS position detected. Exact neighborhood reverse geocoding is not mapped yet — please choose your district or city from the list below.');
+
+        if (matchedLocation && distanceKm !== null) {
+          // Auto-select the matched location in draft state
+          handleSelectSearchResult(matchedLocation);
+          setGeoNotice(`GPS position detected: ${matchedLocation.name} (${distanceKm} km away).`);
+        } else {
+          setGeoNotice(`GPS coordinates detected (${latitude.toFixed(4)}, ${longitude.toFixed(4)}). No exact neighborhood match found within 25 km — please choose your city or district from the list below.`);
+        }
       },
       () => {
         setIsLocating(false);
-        setGeoNotice('Location access was not granted. Please select your location from the Sri Lankan provinces below.');
+        setGeoNotice('Location permission was denied. Please select your location from the Sri Lankan provinces below.');
       },
-      { timeout: 8000 }
+      { timeout: 8000, enableHighAccuracy: true }
     );
   };
 

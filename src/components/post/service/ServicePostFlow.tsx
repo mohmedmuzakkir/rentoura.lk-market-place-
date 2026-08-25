@@ -199,7 +199,7 @@ export const ServicePostFlow: React.FC<ServicePostFlowProps> = ({
 
     setIsSubmitting(true);
     try {
-      const result = ListingSubmissionService.submitListing(draft);
+      const result = await ListingSubmissionService.submitListing(draft);
       if (result.success) {
         setCreatedListing(result.listing);
         if (onSuccess) onSuccess(result.listing.id);

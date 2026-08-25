@@ -216,12 +216,12 @@ export const PostFlowContainer: React.FC<PostFlowContainerProps> = ({
   };
 
   // Handle Final Submission
-  const handleSubmitListing = () => {
+  const handleSubmitListing = async () => {
     if (isSubmitting) return; // Prevent double-tap
     setIsSubmitting(true);
 
-    setTimeout(() => {
-      const result = ListingSubmissionService.submitListing(draft);
+    try {
+      const result = await ListingSubmissionService.submitListing(draft);
       setIsSubmitting(false);
 
       if (result.success) {
@@ -232,7 +232,10 @@ export const PostFlowContainer: React.FC<PostFlowContainerProps> = ({
       } else {
         setErrors({ submit: result.error || 'Failed to submit listing.' });
       }
-    }, 600);
+    } catch (err: any) {
+      setIsSubmitting(false);
+      setErrors({ submit: err?.message || 'Failed to submit listing.' });
+    }
   };
 
   return (

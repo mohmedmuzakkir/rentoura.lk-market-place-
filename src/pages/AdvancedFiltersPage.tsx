@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   ArrowLeft, 
   RotateCcw, 
@@ -8,7 +8,6 @@ import {
   SlidersHorizontal, 
   ChevronDown, 
   ChevronUp, 
-  Check, 
   MapPin, 
   LayoutGrid, 
   Tag, 
@@ -18,10 +17,10 @@ import {
   Briefcase, 
   Wrench, 
   Sparkles, 
-  ShieldCheck, 
   Truck, 
   ArrowUpDown,
-  Search
+  Search,
+  Loader2
 } from 'lucide-react';
 import { RentouraLogo } from '../components/RentouraLogo';
 import { AppRoute } from '../types';
@@ -31,13 +30,10 @@ import {
 } from '../types/filterTypes';
 import { 
   getActiveFilterChips, 
-  calculateMatchingListings, 
   isPropertyCategory, 
-  isVehicleCategory,
-  RENTAL_PERIOD_OPTIONS
+  isVehicleCategory
 } from '../data/advancedFilterConfig';
-import { SEARCH_RESULTS_DEMO } from '../data/searchResultsData';
-import { CATEGORY_SYSTEM_DATA, ModuleType } from '../data/categorySelectorData';
+import { ModuleType } from '../data/categorySelectorData';
 import { ActiveFilterSummary } from '../components/filters/ActiveFilterSummary';
 import { LocationFilterSection } from '../components/filters/LocationFilterSection';
 import { CategoryFilterSection } from '../components/filters/CategoryFilterSection';
@@ -47,6 +43,7 @@ import { PropertyFiltersSection } from '../components/filters/PropertyFiltersSec
 import { VehicleFiltersSection } from '../components/filters/VehicleFiltersSection';
 import { JobFilterDetailsSection } from '../components/filters/JobFilterDetailsSection';
 import { ServiceFilterDetailsSection } from '../components/filters/ServiceFilterDetailsSection';
+import { SearchService } from '../services/searchService';
 
 interface AdvancedFiltersPageProps {
   onNavigate: (route: AppRoute) => void;
@@ -64,7 +61,13 @@ export const AdvancedFiltersPage: React.FC<AdvancedFiltersPageProps> = ({
   // Centralized filter state initialized from previous context
   const [filterState, setFilterState] = useState<AdvancedFilterState>(initialFilterState);
 
-  // Active accordion section states (default open first 4)
+  // Real backend matching listings count state
+  const [matchingCount, setMatchingCount] = useState<number | null>(null);
+  const [isCalculating, setIsCalculating] = useState<boolean>(true);
+  const [calculationError, setCalculationError] = useState<boolean>(false);
+  const requestCounterRef = useRef<number>(0);
+
+  // Active accordion section states (default open)
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     location: true,
     category: true,
@@ -77,9 +80,6 @@ export const AdvancedFiltersPage: React.FC<AdvancedFiltersPageProps> = ({
     others: true
   });
 
-  // Desktop active tab
-  const [activeDesktopSection, setActiveDesktopSection] = useState<string>('location');
-
   const toggleSection = (sectionId: string) => {
     setOpenSections(prev => ({ ...prev, [sectionId]: !prev[sectionId] }));
   };
@@ -90,19 +90,63 @@ export const AdvancedFiltersPage: React.FC<AdvancedFiltersPageProps> = ({
   const isServices = filterState.module === 'services';
 
   const primaryColor = isRentals ? '#1464F4' : isJobs ? '#08A34F' : '#FF650A';
-  const lightBgColor = isRentals ? '#EFF6FF' : isJobs ? '#ECFDF5' : '#FFF7ED';
 
-  // Dynamic filter chips list & count
+  // Dynamic filter chips list
   const activeChips = useMemo(() => {
     return getActiveFilterChips(filterState, setFilterState);
   }, [filterState]);
 
-  // Real matching listings count calculated from the dataset
-  const matchingListings = useMemo(() => {
-    return calculateMatchingListings(filterState, SEARCH_RESULTS_DEMO);
-  }, [filterState]);
+  // Real matching listings count calculated from the backend via SearchService
+  useEffect(() => {
+    setIsCalculating(true);
+    setCalculationError(false);
+    const currentReq = ++requestCounterRef.current;
 
-  const matchingCount = matchingListings.length;
+    const timer = setTimeout(async () => {
+      try {
+        const targetCategoryId =
+          filterState.category.thirdLevelId ||
+          filterState.category.subCatId ||
+          filterState.category.mainCatId ||
+          null;
+
+        const res = await SearchService.search({
+          query: filterState.keyword.trim() || null,
+          module: filterState.module,
+          categoryId: targetCategoryId,
+          provinceId: filterState.location.provinceId || null,
+          districtId: filterState.location.districtId || null,
+          cityId: filterState.location.cityId || null,
+          areaId: filterState.location.areaId || null,
+          minPrice: filterState.price.min > 0 ? filterState.price.min : null,
+          maxPrice: filterState.price.max < 1000000 ? filterState.price.max : null,
+          rentalPeriod: filterState.module === 'rentals' ? filterState.rentalPeriod : null,
+          jobType: filterState.module === 'jobs' && filterState.job.employmentType?.length ? filterState.job.employmentType[0] : null,
+          workMode: filterState.module === 'jobs' && filterState.job.workArrangement?.length ? filterState.job.workArrangement[0] : null,
+          pricingType: filterState.module === 'services' && filterState.service.pricingType?.length ? filterState.service.pricingType[0] : null,
+          emergencyService: filterState.module === 'services' ? filterState.service.emergencyService : null,
+          deliveryAvailable: filterState.deliveryAvailable || null,
+          sort: filterState.sortBy === 'price_asc' ? 'price_low' : filterState.sortBy === 'price_desc' ? 'price_high' : filterState.sortBy === 'newest' ? 'newest' : 'relevant',
+          limit: 1,
+          offset: 0
+        });
+
+        if (currentReq !== requestCounterRef.current) return;
+
+        setMatchingCount(res.selected_total);
+        setIsCalculating(false);
+      } catch (err) {
+        if (currentReq !== requestCounterRef.current) return;
+        console.warn('Error fetching matching listings count from backend:', err);
+        setCalculationError(true);
+        setIsCalculating(false);
+      }
+    }, 300);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [filterState]);
 
   // Clear All: resets every active filter refinement while keeping current module
   const handleClearAll = () => {
@@ -126,7 +170,7 @@ export const AdvancedFiltersPage: React.FC<AdvancedFiltersPageProps> = ({
     });
   };
 
-  // Reset Filters: resets back to clean baseline for current module
+  // Reset Filters: resets back to clean baseline
   const handleResetFilters = () => {
     handleClearAll();
   };
@@ -146,6 +190,7 @@ export const AdvancedFiltersPage: React.FC<AdvancedFiltersPageProps> = ({
       category: {}, // clear incompatible category
       property: {}, // clear module-specific filters
       vehicle: {},
+      equipment: {},
       job: {},
       service: {}
     }));
@@ -154,6 +199,12 @@ export const AdvancedFiltersPage: React.FC<AdvancedFiltersPageProps> = ({
   // Check category type
   const isProperty = isRentals && isPropertyCategory(filterState.category.mainCatName || '');
   const isVehicle = isRentals && isVehicleCategory(filterState.category.mainCatName || '');
+
+  const countDisplay = isCalculating
+    ? 'Calculating...'
+    : calculationError
+    ? 'Unable to calculate'
+    : (matchingCount ?? 0);
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col pb-28 md:pb-16 selection:bg-[#1464F4] selection:text-white">
@@ -194,19 +245,14 @@ export const AdvancedFiltersPage: React.FC<AdvancedFiltersPageProps> = ({
               title="Messages"
             >
               <MessageSquare className="w-5 h-5" />
-              <span className="absolute top-1 right-1 w-4 h-4 bg-[#1464F4] text-white text-[9px] font-bold rounded-full flex items-center justify-center">
-                3
-              </span>
             </button>
 
             <button
+              onClick={() => onNavigate('/notifications')}
               className="relative p-2 text-slate-600 hover:text-[#1464F4] transition-colors cursor-pointer"
               title="Notifications"
             >
               <Bell className="w-5 h-5" />
-              <span className="absolute top-1 right-1 w-4 h-4 bg-[#1464F4] text-white text-[9px] font-bold rounded-full flex items-center justify-center">
-                7
-              </span>
             </button>
           </div>
         </div>
@@ -275,7 +321,7 @@ export const AdvancedFiltersPage: React.FC<AdvancedFiltersPageProps> = ({
       <div className="px-4 pt-3.5 pb-1">
         <ActiveFilterSummary
           chips={activeChips}
-          totalCount={matchingCount}
+          totalCount={typeof countDisplay === 'number' ? countDisplay : 0}
           onClearAll={handleClearAll}
           onViewResults={handleApply}
           primaryColor={primaryColor}
@@ -283,7 +329,7 @@ export const AdvancedFiltersPage: React.FC<AdvancedFiltersPageProps> = ({
       </div>
 
       {/* ========================================================================= */}
-      {/* 3. MAIN FILTER SECTIONS CONTAINER (Mobile Accordion / Desktop 2-Col) */}
+      {/* 3. MAIN FILTER SECTIONS CONTAINER */}
       {/* ========================================================================= */}
       <div className="px-4 pt-2.5 space-y-3">
         {/* SECTION 1: LOCATION */}
@@ -679,21 +725,8 @@ export const AdvancedFiltersPage: React.FC<AdvancedFiltersPageProps> = ({
                 </div>
               </div>
 
-              {/* Toggles */}
+              {/* Delivery Toggle */}
               <div className="space-y-2 pt-1">
-                <label className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 cursor-pointer">
-                  <div className="flex items-center gap-2">
-                    <ShieldCheck className="w-4 h-4 text-blue-600" />
-                    <span className="text-xs font-semibold text-slate-700">Verified Providers Only</span>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={filterState.verifiedOnly}
-                    onChange={(e) => setFilterState(prev => ({ ...prev, verifiedOnly: e.target.checked }))}
-                    className="w-4 h-4 rounded text-[#1464F4] focus:ring-[#1464F4] cursor-pointer"
-                  />
-                </label>
-
                 <label className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 cursor-pointer">
                   <div className="flex items-center gap-2">
                     <Truck className="w-4 h-4 text-emerald-600" />
@@ -729,11 +762,18 @@ export const AdvancedFiltersPage: React.FC<AdvancedFiltersPageProps> = ({
           <button
             type="button"
             onClick={handleApply}
-            className="flex-2 py-3 px-4 rounded-xl text-white text-xs font-black flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md hover:brightness-105 active:scale-[0.99]"
+            disabled={isCalculating}
+            className="flex-2 py-3 px-4 rounded-xl text-white text-xs font-black flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-md hover:brightness-105 active:scale-[0.99] disabled:opacity-80"
             style={{ backgroundColor: primaryColor }}
           >
-            <Search className="w-3.5 h-3.5" />
-            <span>View Results ({matchingCount})</span>
+            {isCalculating ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
+            ) : (
+              <Search className="w-3.5 h-3.5" />
+            )}
+            <span>
+              View Results ({countDisplay})
+            </span>
           </button>
         </div>
       </div>

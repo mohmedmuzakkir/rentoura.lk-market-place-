@@ -15,9 +15,27 @@ export const MediaGallery: React.FC<MediaGalleryProps> = ({
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
 
-  const validImages = images.length > 0 
-    ? images 
-    : ['https://images.unsplash.com/photo-1590362891991-f776e747a588?auto=format&fit=crop&w=1200&q=80'];
+  if (!images || images.length === 0) {
+    return (
+      <div className="relative w-full aspect-16/10 bg-slate-900 flex flex-col items-center justify-center text-slate-400 gap-2 p-4 select-none rounded-3xl">
+        <div className="w-12 h-12 rounded-2xl bg-slate-800 flex items-center justify-center text-slate-500 mb-1">
+          <ImageIcon className="w-6 h-6" />
+        </div>
+        <span className="text-xs font-semibold text-slate-300">No photos available</span>
+        <span className="text-[10px] text-slate-500">The owner hasn't uploaded photos for this listing</span>
+        {badgeLabel && (
+          <div
+            className="absolute top-3.5 left-3.5 px-2.5 py-1 rounded-lg text-white text-[11px] font-black uppercase tracking-wider shadow-md z-10"
+            style={{ backgroundColor: badgeBgColor }}
+          >
+            {badgeLabel}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  const validImages = images;
 
   const handlePrev = (e: React.MouseEvent) => {
     e.stopPropagation();

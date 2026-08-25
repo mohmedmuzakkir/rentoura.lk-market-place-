@@ -23,6 +23,21 @@ import { SearchService, SearchResultItemRaw, SearchCounts } from '../services/se
 import { SearchResultCard } from '../components/SearchResultCard';
 import { SearchFilterModal } from '../components/SearchFilterModal';
 
+export interface SearchState {
+  q: string;
+  module: 'all' | 'rentals' | 'jobs' | 'services';
+  categoryId: string | null;
+  categoryName?: string;
+  provinceId: string | null;
+  districtId: string | null;
+  cityId: string | null;
+  areaId: string | null;
+  locationName?: string;
+  minPrice: number | null;
+  maxPrice: number | null;
+  sort: 'relevant' | 'newest' | 'price_low' | 'price_high';
+}
+
 interface SearchResultsPageProps {
   onNavigate: (route: AppRoute) => void;
   savedListings: string[];
@@ -35,6 +50,76 @@ interface SearchResultsPageProps {
   onOpenCategorySelector?: () => void;
   onOpenFilterModal?: () => void;
   onOpenListingDetail?: (id: string, type: 'rental' | 'job' | 'service') => void;
+}
+
+function parseUrlSearchParams(initialFilterState?: FilterState, propLoc?: string, propCat?: string): SearchState {
+  const searchParams = new URLSearchParams(window.location.search);
+  const qParam = searchParams.get('q');
+  const modParam = searchParams.get('module');
+  const catIdParam = searchParams.get('catId');
+  const catNameParam = searchParams.get('catName');
+  const provIdParam = searchParams.get('provId');
+  const distIdParam = searchParams.get('distId');
+  const cityIdParam = searchParams.get('cityId');
+  const areaIdParam = searchParams.get('areaId');
+  const locNameParam = searchParams.get('locName');
+  const minPriceParam = searchParams.get('minPrice');
+  const maxPriceParam = searchParams.get('maxPrice');
+  const sortParam = searchParams.get('sort');
+
+  const q = qParam !== null ? qParam : (initialFilterState?.searchQuery || '');
+  const module = ['all', 'rentals', 'jobs', 'services'].includes(modParam || '') ? (modParam as any) : 'all';
+  const categoryId = catIdParam || null;
+  const categoryName = catNameParam || propCat || initialFilterState?.selectedCategory || '';
+  const provinceId = provIdParam || null;
+  const districtId = distIdParam || null;
+  const cityId = cityIdParam || null;
+  const areaId = areaIdParam || null;
+  const locationName = locNameParam || propLoc || initialFilterState?.selectedLocation || '';
+  const minPrice = minPriceParam ? parseInt(minPriceParam, 10) || null : null;
+  const maxPrice = maxPriceParam ? parseInt(maxPriceParam, 10) || null : null;
+  const sort = ['relevant', 'newest', 'price_low', 'price_high'].includes(sortParam || '') ? (sortParam as any) : 'relevant';
+
+  return {
+    q,
+    module,
+    categoryId,
+    categoryName,
+    provinceId,
+    districtId,
+    cityId,
+    areaId,
+    locationName,
+    minPrice,
+    maxPrice,
+    sort
+  };
+}
+
+function updateUrlSearchParams(state: SearchState) {
+  const params = new URLSearchParams();
+  if (state.q.trim()) params.set('q', state.q.trim());
+  if (state.module && state.module !== 'all') params.set('module', state.module);
+  if (state.categoryId) params.set('catId', state.categoryId);
+  if (state.categoryName && state.categoryName !== 'All Categories' && state.categoryName !== 'All') {
+    params.set('catName', state.categoryName);
+  }
+  if (state.provinceId) params.set('provId', state.provinceId);
+  if (state.districtId) params.set('distId', state.districtId);
+  if (state.cityId) params.set('cityId', state.cityId);
+  if (state.areaId) params.set('areaId', state.areaId);
+  if (state.locationName && state.locationName !== 'All Sri Lanka' && state.locationName !== 'All') {
+    params.set('locName', state.locationName);
+  }
+  if (state.minPrice !== null && state.minPrice !== undefined) params.set('minPrice', String(state.minPrice));
+  if (state.maxPrice !== null && state.maxPrice !== undefined) params.set('maxPrice', String(state.maxPrice));
+  if (state.sort && state.sort !== 'relevant') params.set('sort', state.sort);
+
+  const queryString = params.toString();
+  const targetUrl = queryString ? `/search?${queryString}` : '/search';
+  if (window.location.pathname + window.location.search !== targetUrl) {
+    window.history.replaceState(null, '', targetUrl);
+  }
 }
 
 export const SearchResultsPage: React.FC<SearchResultsPageProps> = ({
@@ -50,33 +135,18 @@ export const SearchResultsPage: React.FC<SearchResultsPageProps> = ({
   onOpenFilterModal,
   onOpenListingDetail
 }) => {
-  // Search query state
-  const [query, setQuery] = useState(() => filterState?.searchQuery || '');
-  
-  // Active module tab: 'all' | 'rentals' | 'jobs' | 'services'
-  const [activeModule, setActiveModule] = useState<'all' | 'rentals' | 'jobs' | 'services'>('all');
-
-  // Selected filters
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
-  const [selectedCategoryName, setSelectedCategoryName] = useState<string>(
-    selectedCategoryPath || filterState?.selectedCategory || ''
-  );
-  const [selectedLocationName, setSelectedLocationName] = useState<string>(
-    selectedLocation || filterState?.selectedLocation || ''
+  // Master SearchState initialized from URL query string
+  const [searchState, setSearchState] = useState<SearchState>(() => 
+    parseUrlSearchParams(filterState, selectedLocation, selectedCategoryPath)
   );
 
-  const [minPrice, setMinPrice] = useState<number | null>(
-    filterState?.priceRange?.[0] && filterState.priceRange[0] > 0 ? filterState.priceRange[0] : null
-  );
-  const [maxPrice, setMaxPrice] = useState<number | null>(
-    filterState?.priceRange?.[1] && filterState.priceRange[1] < 500000 ? filterState.priceRange[1] : null
-  );
+  // Sync state to URL search parameters on change
+  useEffect(() => {
+    updateUrlSearchParams(searchState);
+  }, [searchState]);
 
-  // Sort state
-  const [sortBy, setSortBy] = useState<'relevant' | 'newest' | 'price_low' | 'price_high'>('relevant');
+  // Dropdown & Filter Modal visibility
   const [isSortOpen, setIsSortOpen] = useState(false);
-
-  // Filter modal
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
 
   // Results state
@@ -90,29 +160,24 @@ export const SearchResultsPage: React.FC<SearchResultsPageProps> = ({
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
 
-  // Request counter for race protection
+  // Request counter for race condition protection
   const requestCounterRef = useRef(0);
 
-  // Sync external filterState search query when changed
+  // Sync external location prop if updated
   useEffect(() => {
-    if (filterState?.searchQuery !== undefined && filterState.searchQuery !== query) {
-      setQuery(filterState.searchQuery);
-    }
-  }, [filterState?.searchQuery]);
-
-  useEffect(() => {
-    if (selectedLocation !== undefined && selectedLocation !== selectedLocationName) {
-      setSelectedLocationName(selectedLocation);
+    if (selectedLocation !== undefined && selectedLocation !== searchState.locationName) {
+      setSearchState(prev => ({ ...prev, locationName: selectedLocation }));
     }
   }, [selectedLocation]);
 
+  // Sync external category prop if updated
   useEffect(() => {
-    if (selectedCategoryPath !== undefined && selectedCategoryPath !== selectedCategoryName) {
-      setSelectedCategoryName(selectedCategoryPath);
+    if (selectedCategoryPath !== undefined && selectedCategoryPath !== searchState.categoryName) {
+      setSearchState(prev => ({ ...prev, categoryName: selectedCategoryPath }));
     }
   }, [selectedCategoryPath]);
 
-  // Execute RPC search
+  // Execute RPC Search
   const performSearch = useCallback(async (opts?: { append?: boolean; overrideOffset?: number }) => {
     const isAppend = Boolean(opts?.append);
     const targetOffset = opts?.overrideOffset !== undefined ? opts.overrideOffset : (isAppend ? results.length : 0);
@@ -128,17 +193,21 @@ export const SearchResultsPage: React.FC<SearchResultsPageProps> = ({
 
     try {
       const response = await SearchService.search({
-        query: query.trim(),
-        module: activeModule,
-        categoryId: selectedCategoryId,
-        minPrice,
-        maxPrice,
-        sort: sortBy,
+        query: searchState.q.trim(),
+        module: searchState.module,
+        categoryId: searchState.categoryId,
+        provinceId: searchState.provinceId,
+        districtId: searchState.districtId,
+        cityId: searchState.cityId,
+        areaId: searchState.areaId,
+        minPrice: searchState.minPrice,
+        maxPrice: searchState.maxPrice,
+        sort: searchState.sort,
         limit: 12,
         offset: targetOffset
       });
 
-      // Ignore stale response if a newer query was issued
+      // Race protection: ignore stale responses
       if (currentRequestId !== requestCounterRef.current) {
         return;
       }
@@ -148,13 +217,17 @@ export const SearchResultsPage: React.FC<SearchResultsPageProps> = ({
       setHasMore(response.has_more);
 
       if (isAppend) {
-        setResults(prev => [...prev, ...response.results]);
+        setResults(prev => {
+          const existingIds = new Set(prev.map(p => p.id));
+          const fresh = response.results.filter(r => !existingIds.has(r.id));
+          return [...prev, ...fresh];
+        });
       } else {
         setResults(response.results);
       }
     } catch (err) {
       if (currentRequestId === requestCounterRef.current) {
-        console.error('Error in search execution:', err);
+        console.error('Error executing search:', err);
         setSearchError('Unable to complete search. Please check your connection and try again.');
         if (!isAppend) {
           setResults([]);
@@ -166,28 +239,40 @@ export const SearchResultsPage: React.FC<SearchResultsPageProps> = ({
         setIsLoadingMore(false);
       }
     }
-  }, [query, activeModule, selectedCategoryId, minPrice, maxPrice, sortBy, results.length]);
+  }, [searchState, results.length]);
 
-  // Trigger search on parameter changes
+  // Re-run search whenever any SearchState parameter changes
   useEffect(() => {
     performSearch({ append: false, overrideOffset: 0 });
-  }, [query, activeModule, selectedCategoryId, selectedLocationName, minPrice, maxPrice, sortBy]);
+  }, [
+    searchState.q,
+    searchState.module,
+    searchState.categoryId,
+    searchState.provinceId,
+    searchState.districtId,
+    searchState.cityId,
+    searchState.areaId,
+    searchState.locationName,
+    searchState.minPrice,
+    searchState.maxPrice,
+    searchState.sort
+  ]);
 
-  // Active filter chips calculation
+  // Compute active chips for current filter state
   const activeChips = useMemo(() => {
     const chips: { id: string; label: string; icon: string; category: string }[] = [];
 
-    if (selectedLocationName && selectedLocationName.toLowerCase() !== 'all sri lanka') {
-      chips.push({ id: 'loc', label: selectedLocationName, icon: '📍', category: 'location' });
+    if (searchState.locationName && searchState.locationName.toLowerCase() !== 'all sri lanka' && searchState.locationName !== 'All') {
+      chips.push({ id: 'loc', label: searchState.locationName, icon: '📍', category: 'location' });
     }
 
-    if (selectedCategoryName && selectedCategoryName.toLowerCase() !== 'all categories') {
-      chips.push({ id: 'cat', label: selectedCategoryName, icon: '🏷️', category: 'category' });
+    if (searchState.categoryName && searchState.categoryName.toLowerCase() !== 'all categories' && searchState.categoryName !== 'All') {
+      chips.push({ id: 'cat', label: searchState.categoryName, icon: '🏷️', category: 'category' });
     }
 
-    if (minPrice !== null || maxPrice !== null) {
-      const minStr = minPrice !== null ? `Rs. ${minPrice.toLocaleString()}` : 'Rs. 0';
-      const maxStr = maxPrice !== null ? `Rs. ${maxPrice.toLocaleString()}` : 'Any';
+    if (searchState.minPrice !== null || searchState.maxPrice !== null) {
+      const minStr = searchState.minPrice !== null ? `Rs. ${searchState.minPrice.toLocaleString()}` : 'Rs. 0';
+      const maxStr = searchState.maxPrice !== null ? `Rs. ${searchState.maxPrice.toLocaleString()}` : 'Any';
       chips.push({
         id: 'price',
         label: `Price: ${minStr} - ${maxStr}`,
@@ -197,32 +282,52 @@ export const SearchResultsPage: React.FC<SearchResultsPageProps> = ({
     }
 
     return chips;
-  }, [selectedLocationName, selectedCategoryName, minPrice, maxPrice]);
+  }, [searchState.locationName, searchState.categoryName, searchState.minPrice, searchState.maxPrice]);
 
-  // Single chip removal
+  // Remove single filter chip
   const handleRemoveChip = (chipId: string) => {
     if (chipId === 'loc') {
-      setSelectedLocationName('');
+      setSearchState(prev => ({
+        ...prev,
+        provinceId: null,
+        districtId: null,
+        cityId: null,
+        areaId: null,
+        locationName: ''
+      }));
       onUpdateFilterState?.({ selectedLocation: '' });
     } else if (chipId === 'cat') {
-      setSelectedCategoryId(null);
-      setSelectedCategoryName('');
+      setSearchState(prev => ({
+        ...prev,
+        categoryId: null,
+        categoryName: ''
+      }));
       onUpdateFilterState?.({ selectedCategory: '' });
     } else if (chipId === 'price') {
-      setMinPrice(null);
-      setMaxPrice(null);
+      setSearchState(prev => ({
+        ...prev,
+        minPrice: null,
+        maxPrice: null
+      }));
       onUpdateFilterState?.({ priceRange: [0, 500000] });
     }
   };
 
-  // Clear all explicit filters
+  // Clear all filters completely
   const handleClearAllFilters = () => {
-    setSelectedLocationName('');
-    setSelectedCategoryId(null);
-    setSelectedCategoryName('');
-    setMinPrice(null);
-    setMaxPrice(null);
-    setActiveModule('all');
+    setSearchState(prev => ({
+      ...prev,
+      module: 'all',
+      categoryId: null,
+      categoryName: '',
+      provinceId: null,
+      districtId: null,
+      cityId: null,
+      areaId: null,
+      locationName: '',
+      minPrice: null,
+      maxPrice: null
+    }));
     onUpdateFilterState?.({
       selectedLocation: '',
       selectedCategory: '',
@@ -230,20 +335,20 @@ export const SearchResultsPage: React.FC<SearchResultsPageProps> = ({
     });
   };
 
-  // Handle Search Input submit
+  // Handle Query Submission
   const handleSearchSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    onUpdateFilterState?.({ searchQuery: query });
+    onUpdateFilterState?.({ searchQuery: searchState.q });
     performSearch({ append: false, overrideOffset: 0 });
   };
 
   // Clear Query Input
   const handleClearQuery = () => {
-    setQuery('');
+    setSearchState(prev => ({ ...prev, q: '' }));
     onUpdateFilterState?.({ searchQuery: '' });
   };
 
-  // Handle Detail navigation
+  // Open Listing Detail with route path
   const handleOpenDetail = (id: string, module: 'rental' | 'job' | 'service') => {
     if (onOpenListingDetail) {
       onOpenListingDetail(id, module);
@@ -258,19 +363,18 @@ export const SearchResultsPage: React.FC<SearchResultsPageProps> = ({
     }
   };
 
-  // Grammar formatting for results count text
+  // Grammar count formatting
   const formatResultsCountText = () => {
     if (isLoading) return 'Searching listings...';
-    if (selectedTotal === 0) return 'No results found';
-    if (selectedTotal === 1) return '1 result found';
-    return `${selectedTotal.toLocaleString()} results found`;
+    if (selectedTotal === 0) return 'No active listings found';
+    if (selectedTotal === 1) return '1 active listing found';
+    return `${selectedTotal.toLocaleString()} active listings found`;
   };
 
   return (
     <div className="bg-[#F8FAFC] min-h-screen flex flex-col pb-32">
-      {/* Single Top Navigation Header */}
+      {/* Top Navigation Header */}
       <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-md px-4 pt-3 pb-3 border-b border-slate-100 flex items-center justify-between shadow-2xs">
-        {/* Left Back Arrow */}
         <button
           type="button"
           onClick={() => onNavigate('/')}
@@ -280,12 +384,10 @@ export const SearchResultsPage: React.FC<SearchResultsPageProps> = ({
           <ArrowLeft className="w-5 h-5 stroke-[2.4]" />
         </button>
 
-        {/* Center: Rentoura Logo */}
         <button type="button" onClick={() => onNavigate('/')} className="focus:outline-none cursor-pointer">
           <RentouraLogo variant="header" theme="light" />
         </button>
 
-        {/* Right Actions: Heart, Messages */}
         <div className="flex items-center gap-2 -mr-1">
           <button
             type="button"
@@ -300,18 +402,18 @@ export const SearchResultsPage: React.FC<SearchResultsPageProps> = ({
 
       {/* Main Container */}
       <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 pt-4">
-        {/* Search Input Bar & Filter Trigger */}
+        {/* Search Bar & Filter Trigger */}
         <form onSubmit={handleSearchSubmit} className="flex items-center gap-2.5 mb-4">
           <div className="relative flex-1 bg-white rounded-2xl border border-slate-200/90 shadow-2xs flex items-center px-3.5 py-2.5 focus-within:border-[#1464F4] focus-within:ring-2 focus-within:ring-blue-100 transition-all">
             <Search className="w-4 h-4 text-slate-400 shrink-0 mr-2.5" />
             <input
               type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              value={searchState.q}
+              onChange={(e) => setSearchState(prev => ({ ...prev, q: e.target.value }))}
               placeholder="Search rentals, jobs, services in Sri Lanka..."
               className="w-full text-xs sm:text-sm text-slate-800 placeholder-slate-400 focus:outline-none bg-transparent"
             />
-            {query && (
+            {searchState.q && (
               <button
                 type="button"
                 onClick={handleClearQuery}
@@ -349,14 +451,14 @@ export const SearchResultsPage: React.FC<SearchResultsPageProps> = ({
             { id: 'jobs', label: 'Jobs', count: counts.jobs, icon: Briefcase },
             { id: 'services', label: 'Services', count: counts.services, icon: Wrench },
           ].map((tab) => {
-            const isActive = activeModule === tab.id;
+            const isActive = searchState.module === tab.id;
             const Icon = tab.icon;
             return (
               <button
                 key={tab.id}
                 type="button"
                 onClick={() => {
-                  setActiveModule(tab.id as any);
+                  setSearchState(prev => ({ ...prev, module: tab.id as any }));
                 }}
                 className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer tap-bounce ${
                   isActive
@@ -378,7 +480,7 @@ export const SearchResultsPage: React.FC<SearchResultsPageProps> = ({
           })}
         </div>
 
-        {/* Active Filters Bar & Count Row */}
+        {/* Active Filters Bar & Sort */}
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
           {/* Active Chips */}
           <div className="flex items-center flex-wrap gap-2">
@@ -422,11 +524,11 @@ export const SearchResultsPage: React.FC<SearchResultsPageProps> = ({
             >
               <span className="text-slate-500 font-normal">Sort by:</span>
               <span>
-                {sortBy === 'relevant'
+                {searchState.sort === 'relevant'
                   ? 'Most Relevant'
-                  : sortBy === 'newest'
+                  : searchState.sort === 'newest'
                   ? 'Newest First'
-                  : sortBy === 'price_low'
+                  : searchState.sort === 'price_low'
                   ? 'Price: Low to High'
                   : 'Price: High to Low'}
               </span>
@@ -445,11 +547,11 @@ export const SearchResultsPage: React.FC<SearchResultsPageProps> = ({
                     key={s.id}
                     type="button"
                     onClick={() => {
-                      setSortBy(s.id as any);
+                      setSearchState(prev => ({ ...prev, sort: s.id as any }));
                       setIsSortOpen(false);
                     }}
                     className={`w-full text-left px-3 py-2 rounded-xl text-xs font-semibold cursor-pointer transition-colors ${
-                      sortBy === s.id
+                      searchState.sort === s.id
                         ? 'bg-blue-50 text-[#1464F4] font-bold'
                         : 'text-slate-700 hover:bg-slate-50'
                     }`}
@@ -505,7 +607,7 @@ export const SearchResultsPage: React.FC<SearchResultsPageProps> = ({
               No results found
             </h3>
             <p className="text-xs text-slate-500 mb-6 leading-relaxed">
-              We couldn't find any active listings matching your criteria. Try adjusting your search query or clearing filters.
+              We couldn&apos;t find any active listings matching your criteria. Try adjusting your search query or clearing filters.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5">
               {activeChips.length > 0 && (
@@ -574,21 +676,27 @@ export const SearchResultsPage: React.FC<SearchResultsPageProps> = ({
       <SearchFilterModal
         isOpen={isFilterModalOpen}
         onClose={() => setIsFilterModalOpen(false)}
-        activeModule={activeModule}
-        selectedModule={activeModule}
-        onSelectModule={(mod) => setActiveModule(mod)}
-        selectedCategoryId={selectedCategoryId}
-        selectedCategoryName={selectedCategoryName}
+        activeModule={searchState.module}
+        selectedModule={searchState.module}
+        onSelectModule={(mod) => setSearchState(prev => ({ ...prev, module: mod }))}
+        selectedCategoryId={searchState.categoryId}
+        selectedCategoryName={searchState.categoryName}
         onSelectCategory={(catId, catName) => {
-          setSelectedCategoryId(catId);
-          setSelectedCategoryName(catName || '');
+          setSearchState(prev => ({
+            ...prev,
+            categoryId: catId,
+            categoryName: catName || ''
+          }));
         }}
-        selectedLocationName={selectedLocationName}
-        minPrice={minPrice}
-        maxPrice={maxPrice}
+        selectedLocationName={searchState.locationName}
+        minPrice={searchState.minPrice}
+        maxPrice={searchState.maxPrice}
         onPriceChange={(min, max) => {
-          setMinPrice(min);
-          setMaxPrice(max);
+          setSearchState(prev => ({
+            ...prev,
+            minPrice: min,
+            maxPrice: max
+          }));
         }}
         onApply={() => {
           performSearch({ append: false, overrideOffset: 0 });

@@ -1,8 +1,11 @@
 export type AppRoute = 
   | '/'
   | '/rentals'
+  | `/rentals/${string}`
   | '/jobs'
+  | `/jobs/${string}`
   | '/services'
+  | `/services/${string}`
   | '/saved'
   | '/post'
   | '/post/rental'
@@ -140,10 +143,10 @@ export interface CompanyPartner {
 export interface FilterState {
   searchQuery: string;
   selectedLocation: string;
+  selectedLocationModel?: any;
   selectedCategory: string;
   selectedFilter: string;
   priceRange: [number, number];
-  verifiedOnly: boolean;
   sortBy: 'featured' | 'newest' | 'price_low' | 'price_high';
 }
 

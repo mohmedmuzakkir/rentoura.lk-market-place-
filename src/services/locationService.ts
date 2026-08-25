@@ -36,6 +36,8 @@ export interface LocationValueModel {
   areaId?: string;
   areaName?: string;
   type?: LocationType;
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface CanonicalLocation {
@@ -189,53 +191,63 @@ export class LocationService {
 
   /**
    * Ensures complete canonical hierarchy (Provinces -> Districts -> Cities -> Areas)
-   * by dynamically binding seed Cities and Areas to live DB District/Province UUIDs.
+   * DB records are primary. Static canonical dataset is ONLY used as fallback if DB has no records.
    */
   private static hydrateCanonicalHierarchy(dbRecords: LocationRecord[]): LocationRecord[] {
-    const recordsMap = new Map<string, LocationRecord>();
+    // Primary DB path: if DB records are present, use them directly without static merging
+    if (dbRecords && dbRecords.length > 0) {
+      return dbRecords;
+    }
 
-    // 1. Add DB records to map
-    dbRecords.forEach(r => {
-      recordsMap.set(r.id, r);
-      if (r.code) {
-        recordsMap.set(`code:${r.code}`, r);
-      }
-    });
+    console.warn('[LocationService] DB locations table unavailable or empty. Using static bootstrap locations dataset as fallback.');
+
+    const recordsMap = new Map<string, LocationRecord>();
 
     // Lookup districts from DB records
     const districtMap = new Map<string, LocationRecord>();
-    dbRecords.filter(r => r.type === 'district').forEach(d => {
-      if (d.code) {
-        districtMap.set(d.code, d);
-        districtMap.set(d.code.replace(/_/g, '-'), d);
-        districtMap.set(d.code.replace(/-/g, '_'), d);
-      }
-    });
 
-    // 2. Hydrate Cities and Areas from canonical dataset if not already in DB
+    // Hydrate Cities and Areas from canonical dataset
     for (const citySeed of CANONICAL_CITIES_AND_AREAS) {
       const parentDistrict = districtMap.get(citySeed.districtCode);
-      if (!parentDistrict) continue;
+      const provinceId = parentDistrict?.province_id || parentDistrict?.parent_id || null;
+      const districtId = parentDistrict?.id || null;
 
-      const provinceId = parentDistrict.province_id || parentDistrict.parent_id;
-      const districtId = parentDistrict.id;
+      const cityId = `city-${citySeed.code}`;
+      const cityRecord: LocationRecord = {
+        id: cityId,
+        code: citySeed.code,
+        name: citySeed.name,
+        type: 'city',
+        parent_id: districtId,
+        province_id: provinceId,
+        district_id: districtId,
+        city_id: null,
+        latitude: null,
+        longitude: null,
+        postal_code: citySeed.postalCode || null,
+        name_si: null,
+        name_ta: null,
+        status: 'active',
+        sort_order: 10,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      recordsMap.set(cityId, cityRecord);
 
-      // Check if city exists in DB
-      let cityRecord = recordsMap.get(`code:${citySeed.code}`);
-      if (!cityRecord) {
-        const cityId = `city-${citySeed.code}`;
-        cityRecord = {
-          id: cityId,
-          code: citySeed.code,
-          name: citySeed.name,
-          type: 'city',
-          parent_id: districtId,
+      for (const areaSeed of citySeed.areas) {
+        const areaId = `area-${areaSeed.code}`;
+        const areaRecord: LocationRecord = {
+          id: areaId,
+          code: areaSeed.code,
+          name: areaSeed.name,
+          type: 'area',
+          parent_id: cityRecord.id,
           province_id: provinceId,
           district_id: districtId,
-          city_id: null,
+          city_id: cityRecord.id,
           latitude: null,
           longitude: null,
-          postal_code: citySeed.postalCode || null,
+          postal_code: areaSeed.postalCode || citySeed.postalCode || null,
           name_si: null,
           name_ta: null,
           status: 'active',
@@ -243,44 +255,11 @@ export class LocationService {
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         };
-        recordsMap.set(cityId, cityRecord);
-        recordsMap.set(`code:${citySeed.code}`, cityRecord);
-      }
-
-      // Process Areas
-      for (const areaSeed of citySeed.areas) {
-        let areaRecord = recordsMap.get(`code:${areaSeed.code}`);
-        if (!areaRecord) {
-          const areaId = `area-${areaSeed.code}`;
-          areaRecord = {
-            id: areaId,
-            code: areaSeed.code,
-            name: areaSeed.name,
-            type: 'area',
-            parent_id: cityRecord.id,
-            province_id: provinceId,
-            district_id: districtId,
-            city_id: cityRecord.id,
-            latitude: null,
-            longitude: null,
-            postal_code: areaSeed.postalCode || citySeed.postalCode || null,
-            name_si: null,
-            name_ta: null,
-            status: 'active',
-            sort_order: 10,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          };
-          recordsMap.set(areaId, areaRecord);
-          recordsMap.set(`code:${areaSeed.code}`, areaRecord);
-        }
+        recordsMap.set(areaId, areaRecord);
       }
     }
 
-    // Deduplicate and return array of records
-    const uniqueRecordsMap = new Map<string, LocationRecord>();
-    recordsMap.forEach(r => uniqueRecordsMap.set(r.id, r));
-    return Array.from(uniqueRecordsMap.values());
+    return Array.from(recordsMap.values());
   }
 
   /**
@@ -292,13 +271,32 @@ export class LocationService {
   }
 
   /**
-   * Converts DB LocationRecord into CanonicalLocation format
+   * Converts DB LocationRecord into CanonicalLocation format with full parent chain resolution
    */
   static transformToCanonical(rec: LocationRecord, allRecords: LocationRecord[]): CanonicalLocation {
     const parent = rec.parent_id ? allRecords.find(r => r.id === rec.parent_id) : undefined;
-    const province = rec.province_id ? allRecords.find(r => r.id === rec.province_id) : undefined;
-    const district = rec.district_id ? allRecords.find(r => r.id === rec.district_id) : undefined;
-    const city = rec.city_id ? allRecords.find(r => r.id === rec.city_id) : undefined;
+    
+    // Resolve ancestor hierarchy recursively
+    let city = rec.city_id ? allRecords.find(r => r.id === rec.city_id) : undefined;
+    if (!city && rec.type === 'area' && rec.parent_id) {
+      city = allRecords.find(r => r.id === rec.parent_id && r.type === 'city');
+    }
+
+    let district = rec.district_id ? allRecords.find(r => r.id === rec.district_id) : undefined;
+    if (!district && rec.type === 'city' && rec.parent_id) {
+      district = allRecords.find(r => r.id === rec.parent_id && r.type === 'district');
+    }
+    if (!district && city?.parent_id) {
+      district = allRecords.find(r => r.id === city.parent_id && r.type === 'district');
+    }
+
+    let province = rec.province_id ? allRecords.find(r => r.id === rec.province_id) : undefined;
+    if (!province && rec.type === 'district' && rec.parent_id) {
+      province = allRecords.find(r => r.id === rec.parent_id && r.type === 'province');
+    }
+    if (!province && district?.parent_id) {
+      province = allRecords.find(r => r.id === district.parent_id && r.type === 'province');
+    }
 
     // Counts
     const districtsCount = rec.type === 'province' ? allRecords.filter(r => r.type === 'district' && (r.parent_id === rec.id || r.province_id === rec.id)).length : undefined;
@@ -312,11 +310,11 @@ export class LocationService {
       code: rec.code || undefined,
       parentId: rec.parent_id || undefined,
       parentName: parent?.name,
-      provinceId: rec.province_id || (rec.type === 'province' ? rec.id : undefined),
+      provinceId: rec.province_id || (rec.type === 'province' ? rec.id : province?.id),
       provinceName: province?.name || (rec.type === 'province' ? rec.name : undefined),
-      districtId: rec.district_id || (rec.type === 'district' ? rec.id : undefined),
+      districtId: rec.district_id || (rec.type === 'district' ? rec.id : district?.id),
       districtName: district?.name || (rec.type === 'district' ? rec.name : undefined),
-      cityId: rec.city_id || (rec.type === 'city' ? rec.id : undefined),
+      cityId: rec.city_id || (rec.type === 'city' ? rec.id : city?.id),
       cityName: city?.name || (rec.type === 'city' ? rec.name : undefined),
       latitude: rec.latitude || undefined,
       longitude: rec.longitude || undefined,
@@ -330,7 +328,7 @@ export class LocationService {
       districtsCount,
       citiesCount,
       areasCount,
-      listingsCount: 0 // Truthful calculation from DB
+      listingsCount: 0
     };
   }
 
@@ -403,26 +401,185 @@ export class LocationService {
 
   /**
    * Searches locations by text query across name, code, postal code, and localized names
+   * Returns ranked search results (exact name matches & prefix matches prioritized)
    */
   static async searchLocations(query: string, options?: { limit?: number }): Promise<CanonicalLocation[]> {
     if (!query || !query.trim()) return [];
     const q = query.trim().toLowerCase();
     const records = await this.loadLocationsFromDB();
-    const matches = records.filter(r => 
-      r.status === 'active' && 
-      (
-        r.name.toLowerCase().includes(q) || 
-        (r.code && r.code.toLowerCase().includes(q)) ||
-        (r.postal_code && r.postal_code.toLowerCase().includes(q)) ||
-        (r.name_si && r.name_si.toLowerCase().includes(q)) ||
-        (r.name_ta && r.name_ta.toLowerCase().includes(q))
-      )
+    
+    const activeRecords = records.filter(r => r.status === 'active');
+    
+    const matches = activeRecords.filter(r => 
+      r.name.toLowerCase().includes(q) || 
+      (r.code && r.code.toLowerCase().includes(q)) ||
+      (r.postal_code && r.postal_code.toLowerCase().includes(q)) ||
+      (r.name_si && r.name_si.toLowerCase().includes(q)) ||
+      (r.name_ta && r.name_ta.toLowerCase().includes(q))
     );
+
+    // Rank results
+    matches.sort((a, b) => {
+      const aName = a.name.toLowerCase();
+      const bName = b.name.toLowerCase();
+
+      // 1. Exact match
+      if (aName === q && bName !== q) return -1;
+      if (bName === q && aName !== q) return 1;
+
+      // 2. Starts with query
+      const aStarts = aName.startsWith(q);
+      const bStarts = bName.startsWith(q);
+      if (aStarts && !bStarts) return -1;
+      if (bStarts && !aStarts) return 1;
+
+      // 3. Hierarchy level preference (cities/areas preferred over provinces for granular search)
+      const typeRank = { area: 1, city: 2, district: 3, province: 4 };
+      const aRank = typeRank[a.type] || 5;
+      const bRank = typeRank[b.type] || 5;
+      if (aRank !== bRank) return aRank - bRank;
+
+      return aName.localeCompare(bName);
+    });
+
     const results = matches.map(m => this.transformToCanonical(m, records));
     if (options?.limit && options.limit > 0) {
       return results.slice(0, options.limit);
     }
     return results;
+  }
+
+  /**
+   * Calculates Haversine distance in km between two geographical points
+   */
+  public static calculateDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    const R = 6371; // Earth radius in km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = 
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  }
+
+  /**
+   * Finds nearest location record with valid coordinates within threshold distance
+   */
+  public static async findNearestLocation(lat: number, lng: number): Promise<{
+    matchedLocation: CanonicalLocation | null;
+    distanceKm: number | null;
+  }> {
+    const records = await this.loadLocationsFromDB();
+    const recordsWithCoords = records.filter(r => r.latitude !== null && r.longitude !== null && r.status === 'active');
+
+    if (recordsWithCoords.length === 0) {
+      return { matchedLocation: null, distanceKm: null };
+    }
+
+    let closestRecord: LocationRecord | null = null;
+    let minDistance = Infinity;
+
+    for (const r of recordsWithCoords) {
+      const dist = this.calculateDistanceKm(lat, lng, r.latitude!, r.longitude!);
+      if (dist < minDistance) {
+        minDistance = dist;
+        closestRecord = r;
+      }
+    }
+
+    // Require reliable match threshold <= 25km
+    if (closestRecord && minDistance <= 25) {
+      const canonical = this.transformToCanonical(closestRecord, records);
+      return { matchedLocation: canonical, distanceKm: Math.round(minDistance * 10) / 10 };
+    }
+
+    return { matchedLocation: null, distanceKm: null };
+  }
+
+  /**
+   * Resolves a string name or ID into a full LocationValueModel object
+   */
+  public static async resolveLocationValueModel(idOrName?: string | null): Promise<LocationValueModel> {
+    if (!idOrName || idOrName === 'All Sri Lanka' || idOrName === 'Islandwide' || idOrName.trim() === '') {
+      return {
+        displayName: 'All Sri Lanka',
+        type: 'country'
+      };
+    }
+
+    const records = await this.loadLocationsFromDB();
+    const input = idOrName.trim();
+
+    // 1. Try by ID match
+    let foundRecord = records.find(r => r.id === input);
+
+    // 2. Try by exact name match or comma-split main segment
+    if (!foundRecord) {
+      const mainSegment = input.split(',')[0].trim().toLowerCase();
+      foundRecord = records.find(r => r.name.toLowerCase() === mainSegment || r.name.toLowerCase() === input.toLowerCase());
+    }
+
+    // 3. Try partial name match
+    if (!foundRecord) {
+      const mainSegment = input.split(',')[0].trim().toLowerCase();
+      foundRecord = records.find(r => r.name.toLowerCase().includes(mainSegment));
+    }
+
+    if (foundRecord) {
+      const canonical = this.transformToCanonical(foundRecord, records);
+      return {
+        displayName: input.includes(',') ? input : (
+          canonical.type === 'area' && canonical.cityName ? `${canonical.name}, ${canonical.cityName}` :
+          canonical.type === 'city' && canonical.districtName ? `${canonical.name}, ${canonical.districtName}` :
+          canonical.type === 'district' && canonical.provinceName ? `${canonical.name}, ${canonical.provinceName}` :
+          canonical.name
+        ),
+        provinceId: canonical.provinceId,
+        provinceName: canonical.provinceName,
+        districtId: canonical.districtId,
+        districtName: canonical.districtName,
+        cityId: canonical.cityId,
+        cityName: canonical.cityName,
+        areaId: canonical.type === 'area' ? canonical.id : undefined,
+        areaName: canonical.type === 'area' ? canonical.name : undefined,
+        type: canonical.type,
+        latitude: canonical.latitude,
+        longitude: canonical.longitude
+      };
+    }
+
+    return {
+      displayName: input
+    };
+  }
+
+  /**
+   * Logs explicit location apply events to public.location_search_events
+   */
+  public static async logLocationApplyEvent(
+    valueModel: LocationValueModel,
+    searchQuery?: string
+  ): Promise<void> {
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const userId = sessionData?.session?.user?.id || null;
+
+      const selectedLocId = valueModel.areaId || valueModel.cityId || valueModel.districtId || valueModel.provinceId || null;
+
+      await supabase.from('location_search_events').insert({
+        user_id: userId,
+        search_query: searchQuery?.trim() || null,
+        province_id: valueModel.provinceId || null,
+        district_id: valueModel.districtId || null,
+        city_id: valueModel.cityId || null,
+        area_id: valueModel.areaId || null,
+        location_id: selectedLocId
+      });
+    } catch (err) {
+      console.warn('Non-fatal: failed to log location apply event:', err);
+    }
   }
 
   /**

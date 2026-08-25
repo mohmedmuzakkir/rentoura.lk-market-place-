@@ -45,21 +45,24 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
   onSelect
 }) => {
   const [draftCategory, setDraftCategory] = useState(selectedCategory || '');
+  const [categories, setCategories] = useState<{ id: string; name: string; icon_key?: string | null }[]>([]);
 
   useEffect(() => {
     if (isOpen) {
       setDraftCategory(selectedCategory || '');
+      let isMounted = true;
+      CategoryService.getCategories().then((res) => {
+        if (!isMounted) return;
+        if (res.success && res.data) {
+          const l1s = res.data.filter((c) => c.level === 1 || !c.parent_id);
+          setCategories(l1s.map((c) => ({ id: c.id, name: c.name, icon_key: c.icon_key })));
+        }
+      });
+      return () => {
+        isMounted = false;
+      };
     }
   }, [isOpen, selectedCategory]);
-
-  const allMainCategories = useMemo(() => {
-    const sys = CategoryService.getCategorySystemData(false);
-    return [
-      ...sys.rentals.categories,
-      ...sys.jobs.categories,
-      ...sys.services.categories
-    ];
-  }, []);
 
   if (!isOpen) return null;
 
@@ -100,7 +103,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
             {!draftCategory && <Check className="w-4 h-4 text-[#08A34F]" />}
           </button>
 
-          {allMainCategories.map((cat) => {
+          {categories.map((cat) => {
             const isSelected = draftCategory === cat.name;
             return (
               <button
@@ -113,9 +116,7 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
                 }`}
               >
                 <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 rounded-lg flex items-center justify-center text-sm bg-slate-100 shrink-0">
-                    {cat.icon || '📦'}
-                  </div>
+                  <span className="text-sm">📦</span>
                   <span className="text-[13px] font-semibold text-slate-800">{cat.name}</span>
                 </div>
                 {isSelected && <Check className="w-4 h-4 text-[#08A34F]" />}
@@ -221,25 +222,7 @@ export const FilterModal: React.FC<FilterModalProps> = ({
             </div>
           </div>
 
-          {/* Verified Only Toggle */}
-          <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200/80">
-            <div>
-              <div className="text-xs font-bold text-slate-800">Verified Listings Only</div>
-              <div className="text-[10px] text-slate-500">Only show listings verified by RENTOURA.LK</div>
-            </div>
-            <button
-              onClick={() => onApplyFilters({ verifiedOnly: !filterState.verifiedOnly })}
-              className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${
-                filterState.verifiedOnly ? 'bg-[#08A34F]' : 'bg-slate-300'
-              }`}
-            >
-              <div
-                className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
-                  filterState.verifiedOnly ? 'translate-x-5' : 'translate-x-0'
-                }`}
-              />
-            </button>
-          </div>
+
         </div>
 
         {/* Modal Actions */}

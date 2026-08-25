@@ -458,7 +458,7 @@ export const SAMPLE_RENTAL_CAMERA: RentalListingDetail = {
 
 // ==================== RESOLUTION ENGINE ====================
 // Lookup dictionary
-const ALL_SAMPLE_LISTINGS: Record<string, AnyListingDetail> = {
+export const ALL_SAMPLE_LISTINGS: Record<string, AnyListingDetail> = {
   // Direct matches
   'rent-prius-2018': SAMPLE_RENTAL_PRIUS,
   'job-software-engineer': SAMPLE_JOB_SOFTWARE_ENGINEER,

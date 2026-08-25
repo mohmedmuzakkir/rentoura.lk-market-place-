@@ -48,7 +48,8 @@ export function normalizeServiceType(typeStr: string): string {
 
 export class ServiceService {
   /**
-   * Helper: Resolves image storage path in private bucket 'listing-images'
+   * Helper: Resolves image storage path in private bucket 'listing-images' using signed URLs.
+   * NEVER uses getPublicUrl() for private buckets.
    */
   public static async resolveMediaUrl(storagePath: string | null | undefined): Promise<string> {
     const fallbackImage = 'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?auto=format&fit=crop&w=600&q=80';
@@ -69,8 +70,7 @@ export class ServiceService {
       console.warn('Error signing service image URL:', e);
     }
 
-    const { data: pubData } = supabase.storage.from('listing-images').getPublicUrl(storagePath);
-    return pubData?.publicUrl || fallbackImage;
+    return fallbackImage;
   }
 
   /**
@@ -115,7 +115,7 @@ export class ServiceService {
 
   /**
    * 2. MAIN SERVICES FEED (Queries public.service_marketplace_view)
-   * Enforces status = 'active' AND module IN ('service', 'services')
+   * Enforces status = 'active'
    * Performs strict AND filtering across category, service type, price, location, search, emergency
    */
   static async getServicesFeed(params: ServiceFeedParams): Promise<ServiceFeedResult> {
@@ -238,14 +238,14 @@ export class ServiceService {
       const rawListings = data || [];
       const totalCount = count || 0;
 
-      // Fetch images for listings
+      // Fetch images for listings ordered by position ascending
       const listingIds = rawListings.map(l => l.id);
       let mediaMap: Record<string, string[]> = {};
 
       if (listingIds.length > 0) {
         const { data: mediaData } = await supabase
           .from('listing_media')
-          .select('listing_id, storage_path, position, is_cover')
+          .select('listing_id, storage_path, position')
           .in('listing_id', listingIds)
           .order('position', { ascending: true });
 
@@ -254,12 +254,14 @@ export class ServiceService {
             if (!mediaMap[item.listing_id]) {
               mediaMap[item.listing_id] = [];
             }
-            mediaMap[item.listing_id].push(item.storage_path);
+            if (item.storage_path) {
+              mediaMap[item.listing_id].push(item.storage_path);
+            }
           }
         }
       }
 
-      // Format listings to ServiceItem objects with resolved media signed URLs
+      // Format listings to ServiceItem objects with real database values
       const items: ServiceItem[] = await Promise.all(
         rawListings.map(async (row) => {
           const rawMediaPaths = mediaMap[row.id] || [];
@@ -283,22 +285,30 @@ export class ServiceService {
 
           let pricePeriod = row.pricing_period ? `/ ${row.pricing_period}` : (row.pricing_type ? `/ ${row.pricing_type}` : '/ service');
 
+          // Strict DB values only - NO fake defaults or forced ratings
+          const realProviderName = row.provider_name || row.module_data?.provider_name || 'Service Provider';
+          const realIsVerified = Boolean(row.is_verified || row.module_data?.is_verified);
+          const realRating = row.rating !== null && row.rating !== undefined ? Number(row.rating) : 0;
+          const realReviewsCount = row.reviews_count !== null && row.reviews_count !== undefined ? Number(row.reviews_count) : 0;
+          const realWhatsapp = row.whatsapp_number || row.module_data?.whatsapp_number || undefined;
+          const realPhone = row.phone_number || row.module_data?.phone_number || undefined;
+
           return {
             id: row.id,
             title: row.title || 'Untitled Service',
-            providerName: row.provider_name || 'Verified Service Provider',
-            isVerified: true,
+            providerName: realProviderName,
+            isVerified: realIsVerified,
             category: row.category_name || 'General Service',
             categoryTag: row.category_name || 'General Service',
-            location: row.exact_address || 'Sri Lanka',
-            rating: Number(row.rating) || 5.0,
-            reviewsCount: Number(row.reviews_count) || 0,
+            location: row.exact_address || row.city_name || row.district_name || 'Sri Lanka',
+            rating: realRating,
+            reviewsCount: realReviewsCount,
             price: formattedPrice,
             priceUnit: pricePeriod,
             imageUrl: coverUrl,
             isFeatured: Boolean(row.is_featured),
-            whatsappNumber: row.module_data?.whatsapp_number || '94770000000',
-            phone: row.module_data?.phone_number || '94770000000',
+            whatsappNumber: realWhatsapp,
+            phone: realPhone,
             description: row.description || row.short_summary || ''
           };
         })
@@ -324,7 +334,7 @@ export class ServiceService {
   }
 
   /**
-   * 4. SERVICES NEAR YOU (status = 'active', priority matched by profile location or locationObj)
+   * 4. SERVICES NEAR YOU (status = 'active', matched strictly by user location)
    */
   static async getServicesNearYou(locationObj?: LocationValueModel, limit = 6): Promise<ServiceItem[]> {
     if (!locationObj) {

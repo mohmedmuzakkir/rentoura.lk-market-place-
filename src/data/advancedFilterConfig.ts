@@ -1,5 +1,4 @@
 import { AdvancedFilterState, FilterChipItem } from '../types/filterTypes';
-import { SearchResultItem } from './searchResultsData';
 
 export interface FilterSectionNav {
   id: string;
@@ -395,57 +394,4 @@ export function isEquipmentCategory(catName: string): boolean {
   );
 }
 
-/**
- * Calculates the exact matching items from the dataset
- */
-export function calculateMatchingListings(
-  state: AdvancedFilterState,
-  listings: SearchResultItem[]
-): SearchResultItem[] {
-  return listings.filter(item => {
-    // 1. Module check
-    if (state.module === 'rentals' && item.type !== 'rental') return false;
-    if (state.module === 'jobs' && item.type !== 'job') return false;
-    if (state.module === 'services' && item.type !== 'service') return false;
 
-    // 2. Location matching
-    if (state.location.districtName && item.district) {
-      const matchDist = item.district.toLowerCase().includes(state.location.districtName.toLowerCase());
-      if (!matchDist) return false;
-    }
-    if (state.location.cityName && state.location.cityName !== 'All Sri Lanka' && item.city) {
-      const matchCity = item.city.toLowerCase().includes(state.location.cityName.toLowerCase());
-      if (!matchCity) return false;
-    }
-
-    // 3. Price range matching
-    if (state.price.max > 0) {
-      if (item.rawPrice > state.price.max) return false;
-      if (item.rawPrice < state.price.min) return false;
-    }
-
-    // 4. Property Bedrooms matching (if specified)
-    if (state.module === 'rentals' && state.property.bedrooms && state.property.bedrooms !== 'Any') {
-      const minBeds = parseInt(state.property.bedrooms, 10);
-      if (!isNaN(minBeds) && item.beds !== undefined && item.beds < minBeds) {
-        return false;
-      }
-    }
-
-    // 5. Job Employment Type matching
-    if (state.module === 'jobs' && state.job.employmentType && state.job.employmentType.length > 0) {
-      if (item.jobType && !state.job.employmentType.includes(item.jobType)) {
-        return false;
-      }
-    }
-
-    // 6. Job Work Arrangement matching
-    if (state.module === 'jobs' && state.job.workArrangement && state.job.workArrangement.length > 0) {
-      if (item.jobMode && !state.job.workArrangement.includes(item.jobMode)) {
-        return false;
-      }
-    }
-
-    return true;
-  });
-}

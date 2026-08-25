@@ -146,7 +146,7 @@ export class AdminService {
     try {
       const { data: profiles, error } = await supabase
         .from('profiles')
-        .select('id, full_name, display_name, email, role, account_status, phone_normalized, created_at, profile_photo_url')
+        .select('id, full_name, email, role, account_status, phone_normalized, created_at')
         .in('role', ['super_admin', 'admin', 'moderator']);
 
       if (error || !profiles) {
@@ -161,12 +161,12 @@ export class AdminService {
 
         return {
           id: p.id,
-          fullName: p.full_name || p.display_name || p.email || 'Staff Member',
-          displayName: p.display_name || p.full_name || 'Staff Member',
+          fullName: p.full_name || p.email || 'Staff Member',
+          displayName: p.full_name || 'Staff Member',
           email: p.email || '',
           role: staffRole,
           status: isSuspended ? 'Suspended' : 'Active',
-          avatarUrl: p.profile_photo_url || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
+          avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
           phone: p.phone_normalized || '',
           lastLogin: 'Active',
           createdAt: p.created_at || new Date().toISOString()

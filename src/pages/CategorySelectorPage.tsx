@@ -6,29 +6,23 @@ import {
   Check, 
   CheckCircle2, 
   ChevronRight, 
-  Heart, 
-  MessageCircle, 
-  Bell, 
   Home, 
   Briefcase, 
   Wrench, 
-  Edit3, 
   Sparkles,
   Layers,
-  HelpCircle,
-  RotateCcw
+  RefreshCw,
+  Globe
 } from 'lucide-react';
 import { RentouraLogo } from '../components/RentouraLogo';
-import { CategoryService } from '../services/categoryService';
 import { 
-  ModuleType, 
-  MainCategoryData, 
-  SubCategoryData, 
-  ThirdLevelOption, 
-  SelectedCategoryState,
-  formatSelectedCategoryPath,
-  searchModuleCategories
-} from '../data/categorySelectorData';
+  CategoryService, 
+  CategoryRecord, 
+  CategoryModule, 
+  FrontendModule, 
+  CategorySearchResult 
+} from '../services/categoryService';
+import { getCategoryIconComponent } from '../components/CategoryIcon';
 import { AppRoute } from '../types';
 
 export interface CategorySelectorPageProps {
@@ -37,7 +31,7 @@ export interface CategorySelectorPageProps {
   initialModule?: 'all' | 'rentals' | 'jobs' | 'services' | 'rental' | 'job' | 'service';
   initialCategoryPath?: string;
   savedCount?: number;
-  onApplyCategory: (categoryPath: string, categoryState: SelectedCategoryState) => void;
+  onApplyCategory: (categoryPath: string, categoryState: any) => void;
   onCancel?: () => void;
 }
 
@@ -50,8 +44,8 @@ export const CategorySelectorPage: React.FC<CategorySelectorPageProps> = ({
   onApplyCategory,
   onCancel
 }) => {
-  // Determine if module is locked from context
-  const normInitModule = useMemo<ModuleType | 'all'>(() => {
+  // Determine if module is locked from caller context
+  const normInitModule = useMemo<'rentals' | 'jobs' | 'services' | 'all'>(() => {
     if (!initialModule) return 'all';
     const lower = initialModule.toLowerCase();
     if (lower === 'rental' || lower === 'rentals') return 'rentals';
@@ -62,35 +56,106 @@ export const CategorySelectorPage: React.FC<CategorySelectorPageProps> = ({
 
   const isModuleLocked = normInitModule !== 'all';
 
-  // Active Module Tab: 'rentals' | 'jobs' | 'services'
-  const [activeModule, setActiveModule] = useState<ModuleType>(
-    isModuleLocked ? (normInitModule as ModuleType) : 'rentals'
+  // Active Module Tab
+  const [activeModule, setActiveModule] = useState<'rentals' | 'jobs' | 'services'>(
+    isModuleLocked ? (normInitModule as 'rentals' | 'jobs' | 'services') : 'rentals'
   );
 
   // Search input state
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<CategorySearchResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
 
-  // Mobile active column step: 1 (Main) | 2 (Sub) | 3 (Third)
+  // Mobile active step: 1 (Main) | 2 (Sub) | 3 (Third)
   const [mobileActiveStep, setMobileActiveStep] = useState<1 | 2 | 3>(1);
 
-  // Cascading Selection State
-  const categorySystemData = useMemo(() => CategoryService.getCategorySystemData(false), []);
-  const moduleSystem = categorySystemData[activeModule] || categorySystemData['rentals'];
+  // Loaded DB categories for active module
+  const [categories, setCategories] = useState<CategoryRecord[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Initialize with the first category of the active module
-  const [selectedMainCat, setSelectedMainCat] = useState<MainCategoryData | null>(() => {
-    return moduleSystem.categories[0] || null;
-  });
+  // Draft selection state (default null = All Categories)
+  const [selectedMainCat, setSelectedMainCat] = useState<CategoryRecord | null>(null);
+  const [selectedSubCat, setSelectedSubCat] = useState<CategoryRecord | null>(null);
+  const [selectedThirdLevel, setSelectedThirdLevel] = useState<CategoryRecord | null>(null);
 
-  const [selectedSubCat, setSelectedSubCat] = useState<SubCategoryData | null>(() => {
-    return moduleSystem.categories[0]?.subcategories[0] || null;
-  });
+  // Fetch categories when activeModule changes
+  useEffect(() => {
+    let isMounted = true;
+    setLoading(true);
 
-  const [selectedThirdLevel, setSelectedThirdLevel] = useState<ThirdLevelOption | null>(() => {
-    return moduleSystem.categories[0]?.subcategories[0]?.thirdLevelOptions?.[0] || null;
-  });
+    CategoryService.getCategories(activeModule).then((res) => {
+      if (!isMounted) return;
+      if (res.success && res.data) {
+        setCategories(res.data);
+      } else {
+        setCategories([]);
+      }
+      setLoading(false);
+    }).catch(() => {
+      if (!isMounted) return;
+      setLoading(false);
+    });
 
-  // Handle Cancel / Back / Close (X)
+    return () => {
+      isMounted = false;
+    };
+  }, [activeModule]);
+
+  // Sync initialCategoryPath on initial load once categories are loaded
+  useEffect(() => {
+    if (categories.length === 0 || !initialCategoryPath || initialCategoryPath === 'All Categories') {
+      return;
+    }
+
+    const parts = initialCategoryPath.split('›').map((p) => p.trim());
+    if (parts.length === 0) return;
+
+    const mainName = parts[0];
+    const subName = parts[1];
+    const thirdName = parts[2];
+
+    const main = categories.find((c) => (c.level === 1 || !c.parent_id) && c.name.toLowerCase() === mainName.toLowerCase());
+    if (main) {
+      setSelectedMainCat(main);
+      if (subName) {
+        const sub = categories.find((c) => c.parent_id === main.id && c.name.toLowerCase() === subName.toLowerCase());
+        if (sub) {
+          setSelectedSubCat(sub);
+          if (thirdName) {
+            const third = categories.find((c) => c.parent_id === sub.id && c.name.toLowerCase() === thirdName.toLowerCase());
+            if (third) {
+              setSelectedThirdLevel(third);
+            }
+          }
+        }
+      }
+    }
+  }, [categories, initialCategoryPath]);
+
+  // Handle Search Execution
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setSearchResults([]);
+      setIsSearching(false);
+      return;
+    }
+
+    let isMounted = true;
+    setIsSearching(true);
+
+    CategoryService.searchCategories(searchQuery, activeModule).then((results) => {
+      if (isMounted) {
+        setSearchResults(results);
+        setIsSearching(false);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [searchQuery, activeModule]);
+
+  // Handle Cancel / Back
   const handleCancel = () => {
     if (onCancel) {
       onCancel();
@@ -99,46 +164,50 @@ export const CategorySelectorPage: React.FC<CategorySelectorPageProps> = ({
     }
   };
 
-  // Switch Module Tab in Global Mode (clears hierarchy to prevent cross-contamination)
-  const handleSwitchModule = (mod: ModuleType) => {
+  // Switch Module Tab
+  const handleSwitchModule = (mod: 'rentals' | 'jobs' | 'services') => {
     if (mod === activeModule) return;
     setActiveModule(mod);
-    const newSystem = categorySystemData[mod];
-    const defaultMain = newSystem.categories[0] || null;
-    const defaultSub = defaultMain?.subcategories[0] || null;
-    const defaultThird = defaultSub?.thirdLevelOptions?.[0] || null;
-    
-    setSelectedMainCat(defaultMain);
-    setSelectedSubCat(defaultSub);
-    setSelectedThirdLevel(defaultThird);
+    setSelectedMainCat(null);
+    setSelectedSubCat(null);
+    setSelectedThirdLevel(null);
     setMobileActiveStep(1);
     setSearchQuery('');
   };
 
   // Select Main Category (Level 1)
-  const handleSelectMainCategory = (cat: MainCategoryData) => {
+  const handleSelectMainCategory = (cat: CategoryRecord | null) => {
+    if (!cat) {
+      // "All Categories" selected
+      setSelectedMainCat(null);
+      setSelectedSubCat(null);
+      setSelectedThirdLevel(null);
+      return;
+    }
+
     setSelectedMainCat(cat);
-    // Reset lower levels
-    const firstSub = cat.subcategories.length > 0 ? cat.subcategories[0] : null;
-    setSelectedSubCat(firstSub);
-    setSelectedThirdLevel(firstSub?.thirdLevelOptions?.[0] || null);
-    // Advance mobile step if on mobile
-    setMobileActiveStep(2);
+    setSelectedSubCat(null);
+    setSelectedThirdLevel(null);
+
+    const hasChildren = categories.some((c) => c.parent_id === cat.id);
+    if (hasChildren) {
+      setMobileActiveStep(2);
+    }
   };
 
   // Select Subcategory (Level 2)
-  const handleSelectSubCategory = (sub: SubCategoryData) => {
+  const handleSelectSubCategory = (sub: CategoryRecord) => {
     setSelectedSubCat(sub);
-    // Reset third level
-    const firstThird = sub.thirdLevelOptions && sub.thirdLevelOptions.length > 0 ? sub.thirdLevelOptions[0] : null;
-    setSelectedThirdLevel(firstThird);
-    if (sub.thirdLevelOptions && sub.thirdLevelOptions.length > 0) {
+    setSelectedThirdLevel(null);
+
+    const hasChildren = categories.some((c) => c.parent_id === sub.id);
+    if (hasChildren) {
       setMobileActiveStep(3);
     }
   };
 
-  // Select Third Level Option (Level 3 - Optional)
-  const handleSelectThirdLevel = (third: ThirdLevelOption) => {
+  // Select Third Level Option (Level 3)
+  const handleSelectThirdLevel = (third: CategoryRecord) => {
     if (selectedThirdLevel?.id === third.id) {
       setSelectedThirdLevel(null);
     } else {
@@ -146,75 +215,68 @@ export const CategorySelectorPage: React.FC<CategorySelectorPageProps> = ({
     }
   };
 
-  // Quick category shortcut click
-  const handleSelectQuickCategory = (item: { mainCatId: string; subCatId?: string; thirdLevelId?: string }) => {
-    const main = moduleSystem.categories.find(c => c.id === item.mainCatId);
-    if (main) {
-      setSelectedMainCat(main);
-      if (item.subCatId) {
-        const sub = main.subcategories.find(s => s.id === item.subCatId);
-        if (sub) {
-          setSelectedSubCat(sub);
-          if (item.thirdLevelId && sub.thirdLevelOptions) {
-            const third = sub.thirdLevelOptions.find(t => t.id === item.thirdLevelId);
-            setSelectedThirdLevel(third || null);
-          } else {
-            setSelectedThirdLevel(sub.thirdLevelOptions?.[0] || null);
-          }
-        } else {
-          setSelectedSubCat(main.subcategories[0] || null);
-          setSelectedThirdLevel(main.subcategories[0]?.thirdLevelOptions?.[0] || null);
-        }
-      } else {
-        setSelectedSubCat(main.subcategories[0] || null);
-        setSelectedThirdLevel(main.subcategories[0]?.thirdLevelOptions?.[0] || null);
-      }
-    }
+  // Select a search result item
+  const handleSelectSearchResult = (result: CategorySearchResult) => {
+    setSelectedMainCat(result.mainCategory || null);
+    setSelectedSubCat(result.subCategory || null);
+    setSelectedThirdLevel(result.thirdLevel || null);
+    setSearchQuery('');
   };
 
-  // Search Filtering using category search algorithm
-  const filteredMainCategories = useMemo(() => {
-    return searchModuleCategories(moduleSystem.categories, searchQuery);
-  }, [moduleSystem.categories, searchQuery]);
+  // Filter category hierarchy lists
+  const l1Categories = useMemo(() => {
+    return categories.filter((c) => c.level === 1 || !c.parent_id);
+  }, [categories]);
 
-  // Auto-sync selectedMainCat if current selection is filtered out by search
-  useEffect(() => {
-    if (filteredMainCategories.length > 0) {
-      const exists = filteredMainCategories.some(c => c.id === selectedMainCat?.id);
-      if (!exists) {
-        const first = filteredMainCategories[0];
-        setSelectedMainCat(first);
-        const firstSub = first.subcategories[0] || null;
-        setSelectedSubCat(firstSub);
-        setSelectedThirdLevel(firstSub?.thirdLevelOptions?.[0] || null);
-      }
-    }
-  }, [filteredMainCategories, selectedMainCat]);
+  const l2Categories = useMemo(() => {
+    if (!selectedMainCat) return [];
+    return categories.filter((c) => c.parent_id === selectedMainCat.id);
+  }, [categories, selectedMainCat]);
 
-  // Current category selection state
-  const currentSelectionState: SelectedCategoryState = {
-    module: activeModule,
-    mainCategory: selectedMainCat,
-    subCategory: selectedSubCat,
-    thirdLevel: selectedThirdLevel
-  };
+  const l3Categories = useMemo(() => {
+    if (!selectedSubCat) return [];
+    return categories.filter((c) => c.parent_id === selectedSubCat.id);
+  }, [categories, selectedSubCat]);
 
-  // Formatted category path
+  // Formatted selected category display string
   const formattedPath = useMemo(() => {
-    return formatSelectedCategoryPath(currentSelectionState);
-  }, [currentSelectionState]);
+    if (!selectedMainCat) return 'All Categories';
+    const parts = [selectedMainCat.name];
+    if (selectedSubCat) parts.push(selectedSubCat.name);
+    if (selectedThirdLevel) parts.push(selectedThirdLevel.name);
+    return parts.join(' › ');
+  }, [selectedMainCat, selectedSubCat, selectedThirdLevel]);
 
-  // Handle Apply Category
+  // Construct structured state payload for caller
+  const currentSelectionState = useMemo(() => {
+    return {
+      module: activeModule,
+      mainCategory: selectedMainCat ? { id: selectedMainCat.id, name: selectedMainCat.name, slug: selectedMainCat.slug } : null,
+      subCategory: selectedSubCat ? { id: selectedSubCat.id, name: selectedSubCat.name, slug: selectedSubCat.slug } : null,
+      thirdLevel: selectedThirdLevel ? { id: selectedThirdLevel.id, name: selectedThirdLevel.name, slug: selectedThirdLevel.slug } : null,
+      selectedMainCat,
+      selectedSubCat,
+      selectedThirdLevel
+    };
+  }, [activeModule, selectedMainCat, selectedSubCat, selectedThirdLevel]);
+
+  // Handle Apply
   const handleApply = () => {
     onApplyCategory(formattedPath, currentSelectionState);
-    onNavigate(returnTo || '/');
+    if (onCancel) {
+      // If modal or caller handles close
+    } else {
+      onNavigate(returnTo || '/');
+    }
   };
 
-  // Module color helpers
-  const primaryColor = moduleSystem.primaryColor;
-  const isRentals = activeModule === 'rentals';
-  const isJobs = activeModule === 'jobs';
-  const isServices = activeModule === 'services';
+  // Module color scheme
+  const primaryColor = activeModule === 'rentals' ? '#1464F4' : activeModule === 'jobs' ? '#08A34F' : '#FF650A';
+  const moduleDBName: CategoryModule = activeModule === 'rentals' ? 'rental' : activeModule === 'jobs' ? 'job' : 'service';
+
+  const renderIcon = (iconKey: string | null) => {
+    return getCategoryIconComponent({ iconKey, module: moduleDBName, className: 'w-4 h-4' });
+  };
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] pb-48 lg:pb-36 text-slate-800 antialiased font-sans flex flex-col relative select-none">
@@ -250,9 +312,9 @@ export const CategorySelectorPage: React.FC<CategorySelectorPageProps> = ({
         {!isModuleLocked ? (
           <div className="p-1 bg-slate-200/80 rounded-2xl flex items-center gap-1 shadow-inner">
             {[
-              { id: 'rentals' as ModuleType, label: 'Rentals', color: '#1464F4', icon: Home },
-              { id: 'jobs' as ModuleType, label: 'Jobs', color: '#08A34F', icon: Briefcase },
-              { id: 'services' as ModuleType, label: 'Services', color: '#FF650A', icon: Wrench },
+              { id: 'rentals' as const, label: 'Rentals', color: '#1464F4', icon: Home },
+              { id: 'jobs' as const, label: 'Jobs', color: '#08A34F', icon: Briefcase },
+              { id: 'services' as const, label: 'Services', color: '#FF650A', icon: Wrench },
             ].map((tab) => {
               const isActive = activeModule === tab.id;
               const Icon = tab.icon;
@@ -288,7 +350,7 @@ export const CategorySelectorPage: React.FC<CategorySelectorPageProps> = ({
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={`Search ${activeModule} categories...`}
+            placeholder={`Search ${activeModule} categories (e.g. House, Car, Driver, AC Repair)...`}
             className="w-full pl-9 pr-9 py-2.5 bg-white border border-slate-200/90 rounded-2xl text-xs sm:text-sm font-medium text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#1464F4] focus:ring-2 focus:ring-blue-100 transition-all shadow-2xs"
           />
           {searchQuery && (
@@ -302,182 +364,255 @@ export const CategorySelectorPage: React.FC<CategorySelectorPageProps> = ({
           )}
         </div>
 
-        {/* Quick Categories Section */}
-        {moduleSystem.popularSearches && moduleSystem.popularSearches.length > 0 && (
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-1.5 text-xs font-bold text-slate-600">
-              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-              <span>Quick Categories</span>
-            </div>
-
-            <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
-              {moduleSystem.popularSearches.map((pop, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => handleSelectQuickCategory(pop)}
-                  className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200/90 rounded-xl text-xs font-semibold text-slate-700 hover:border-slate-400 hover:bg-slate-50 transition-all shadow-2xs cursor-pointer"
-                >
-                  <span>{pop.icon}</span>
-                  <span>{pop.label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* 3-Column Cascading Hierarchy Desktop / Step View Mobile */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 min-h-[380px]">
-          {/* LEVEL 1: MAIN CATEGORIES */}
-          <div className={`bg-white rounded-2xl border border-slate-200/80 p-3 shadow-2xs flex flex-col ${
-            mobileActiveStep !== 1 ? 'hidden md:flex' : 'flex'
-          }`}>
-            <div className="pb-2 border-b border-slate-100 mb-2 flex items-center justify-between">
-              <span className="text-[11px] font-black uppercase text-slate-400 tracking-wider">
-                1. Main Category
+        {/* SEARCH RESULTS MODE */}
+        {searchQuery.trim() ? (
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-2xs min-h-[360px] flex flex-col space-y-2">
+            <div className="pb-2 border-b border-slate-100 flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-700">
+                Search Results for &quot;{searchQuery}&quot;
               </span>
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
-                {filteredMainCategories.length} available
+                {searchResults.length} found
               </span>
             </div>
 
-            <div className="space-y-1 overflow-y-auto max-h-[360px] no-scrollbar flex-1 pr-1">
-              {filteredMainCategories.map((cat) => {
-                const isSelected = selectedMainCat?.id === cat.id;
-                return (
-                  <button
-                    key={cat.id}
-                    type="button"
-                    onClick={() => handleSelectMainCategory(cat)}
-                    className={`w-full p-2.5 rounded-xl text-left font-bold text-xs flex items-center justify-between transition-all cursor-pointer ${
-                      isSelected
-                        ? 'bg-slate-900 text-white shadow-xs'
-                        : 'bg-slate-50/80 hover:bg-slate-100 text-slate-700'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-base">{cat.icon}</span>
-                      <span className="truncate">{cat.name}</span>
-                    </div>
-                    <ChevronRight className={`w-4 h-4 shrink-0 ${isSelected ? 'text-white' : 'text-slate-400'}`} />
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* LEVEL 2: SUBCATEGORIES */}
-          <div className={`bg-white rounded-2xl border border-slate-200/80 p-3 shadow-2xs flex flex-col ${
-            mobileActiveStep !== 2 ? 'hidden md:flex' : 'flex'
-          }`}>
-            <div className="pb-2 border-b border-slate-100 mb-2 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setMobileActiveStep(1)}
-                  className="md:hidden text-xs font-bold text-[#1464F4] flex items-center gap-0.5 cursor-pointer"
-                >
-                  <ArrowLeft className="w-3.5 h-3.5" />
-                  <span>Main</span>
-                </button>
-                <span className="text-[11px] font-black uppercase text-slate-400 tracking-wider truncate">
-                  2. Subcategory
-                </span>
+            {isSearching ? (
+              <div className="py-12 text-center text-slate-400 space-y-2">
+                <RefreshCw className="w-6 h-6 animate-spin text-[#1464F4] mx-auto" />
+                <p className="text-xs font-medium">Searching categories...</p>
               </div>
-              {selectedMainCat && (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 truncate max-w-[120px]">
-                  {selectedMainCat.name}
-                </span>
-              )}
-            </div>
+            ) : searchResults.length > 0 ? (
+              <div className="space-y-1.5 overflow-y-auto max-h-[420px] pr-1">
+                {searchResults.map((res) => {
+                  const isSelected = selectedMainCat?.id === res.mainCategory?.id &&
+                    (!res.subCategory || selectedSubCat?.id === res.subCategory.id) &&
+                    (!res.thirdLevel || selectedThirdLevel?.id === res.thirdLevel.id);
 
-            <div className="space-y-1 overflow-y-auto max-h-[360px] no-scrollbar flex-1 pr-1">
-              {!selectedMainCat || selectedMainCat.subcategories.length === 0 ? (
-                <div className="p-6 text-center text-slate-400 text-xs font-semibold">
-                  Select a main category to view subcategories.
-                </div>
-              ) : (
-                selectedMainCat.subcategories.map((sub) => {
-                  const isSelected = selectedSubCat?.id === sub.id;
                   return (
                     <button
-                      key={sub.id}
+                      key={res.category.id}
                       type="button"
-                      onClick={() => handleSelectSubCategory(sub)}
-                      className={`w-full p-2.5 rounded-xl text-left font-bold text-xs flex items-center justify-between transition-all cursor-pointer ${
+                      onClick={() => handleSelectSearchResult(res)}
+                      className={`w-full p-3 rounded-2xl border text-left flex items-center justify-between text-xs transition-all cursor-pointer ${
                         isSelected
-                          ? 'text-white shadow-xs'
-                          : 'bg-slate-50/80 hover:bg-slate-100 text-slate-700'
+                          ? 'border-[#1464F4] bg-blue-50/80 font-bold shadow-xs'
+                          : 'border-slate-100 hover:bg-slate-50 text-slate-800'
                       }`}
-                      style={{
-                        backgroundColor: isSelected ? primaryColor : undefined
-                      }}
                     >
-                      <div className="flex items-center gap-2 min-w-0">
-                        {sub.icon && <span className="text-base">{sub.icon}</span>}
-                        <span className="truncate">{sub.name}</span>
+                      <div className="flex items-center gap-3 min-w-0 pr-2">
+                        <span className="shrink-0">{renderIcon(res.category.icon_key)}</span>
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-slate-900 truncate">{res.category.name}</p>
+                          <p className="text-[10px] text-slate-500 truncate">{res.pathString}</p>
+                        </div>
                       </div>
-                      <ChevronRight className={`w-4 h-4 shrink-0 ${isSelected ? 'text-white' : 'text-slate-400'}`} />
+                      {isSelected && <CheckCircle2 className="w-4 h-4 text-[#1464F4] shrink-0 stroke-[2.5]" />}
                     </button>
                   );
-                })
-              )}
-            </div>
+                })}
+              </div>
+            ) : (
+              <div className="py-12 text-center text-slate-400 text-xs font-medium">
+                No categories matching &quot;{searchQuery}&quot;. Try a different keyword.
+              </div>
+            )}
           </div>
-
-          {/* LEVEL 3: THIRD LEVEL OPTIONS (OPTIONAL) */}
-          <div className={`bg-white rounded-2xl border border-slate-200/80 p-3 shadow-2xs flex flex-col ${
-            mobileActiveStep !== 3 ? 'hidden md:flex' : 'flex'
-          }`}>
-            <div className="pb-2 border-b border-slate-100 mb-2 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setMobileActiveStep(2)}
-                  className="md:hidden text-xs font-bold text-[#1464F4] flex items-center gap-0.5 cursor-pointer"
-                >
-                  <ArrowLeft className="w-3.5 h-3.5" />
-                  <span>Sub</span>
-                </button>
-                <span className="text-[11px] font-black uppercase text-slate-400 tracking-wider truncate">
-                  3. Option (Optional)
+        ) : loading ? (
+          <div className="py-20 text-center text-slate-400 space-y-2">
+            <RefreshCw className="w-8 h-8 animate-spin text-[#1464F4] mx-auto" />
+            <p className="text-xs font-medium">Loading {activeModule} categories...</p>
+          </div>
+        ) : (
+          /* CASCADING HIERARCHY (3-COLUMN DESKTOP / DRILLDOWN MOBILE) */
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 min-h-[380px]">
+            {/* LEVEL 1: MAIN CATEGORIES */}
+            <div className={`bg-white rounded-2xl border border-slate-200/80 p-3 shadow-2xs flex flex-col ${
+              mobileActiveStep !== 1 ? 'hidden md:flex' : 'flex'
+            }`}>
+              <div className="pb-2 border-b border-slate-100 mb-2 flex items-center justify-between">
+                <span className="text-[11px] font-black uppercase text-slate-400 tracking-wider">
+                  1. Main Category
+                </span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">
+                  {l1Categories.length} available
                 </span>
               </div>
-              {selectedSubCat && (
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 truncate max-w-[120px]">
-                  {selectedSubCat.name}
-                </span>
-              )}
-            </div>
 
-            <div className="space-y-1 overflow-y-auto max-h-[360px] no-scrollbar flex-1 pr-1">
-              {!selectedSubCat || !selectedSubCat.thirdLevelOptions || selectedSubCat.thirdLevelOptions.length === 0 ? (
-                <div className="p-6 text-center text-slate-400 text-xs font-semibold">
-                  No additional level 3 options. You can proceed directly with <strong>{selectedSubCat?.name || 'Subcategory'}</strong> selection.
-                </div>
-              ) : (
-                selectedSubCat.thirdLevelOptions.map((third) => {
-                  const isSelected = selectedThirdLevel?.id === third.id;
+              <div className="space-y-1 overflow-y-auto max-h-[380px] no-scrollbar flex-1 pr-1">
+                {/* Neutral "All Categories" Option */}
+                <button
+                  type="button"
+                  onClick={() => handleSelectMainCategory(null)}
+                  className={`w-full p-2.5 rounded-xl text-left font-bold text-xs flex items-center justify-between transition-all cursor-pointer mb-1.5 ${
+                    !selectedMainCat
+                      ? 'bg-slate-900 text-white shadow-xs'
+                      : 'bg-slate-50 hover:bg-slate-100 text-slate-800'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Globe className="w-4 h-4 shrink-0 text-amber-400" />
+                    <span className="truncate">All Categories</span>
+                  </div>
+                  {!selectedMainCat && <Check className="w-4 h-4 text-white stroke-[2.5] shrink-0" />}
+                </button>
+
+                {l1Categories.map((cat) => {
+                  const isSelected = selectedMainCat?.id === cat.id;
+                  const hasChildren = categories.some((c) => c.parent_id === cat.id);
+
                   return (
                     <button
-                      key={third.id}
+                      key={cat.id}
                       type="button"
-                      onClick={() => handleSelectThirdLevel(third)}
+                      onClick={() => handleSelectMainCategory(cat)}
                       className={`w-full p-2.5 rounded-xl text-left font-bold text-xs flex items-center justify-between transition-all cursor-pointer ${
                         isSelected
                           ? 'bg-slate-900 text-white shadow-xs'
                           : 'bg-slate-50/80 hover:bg-slate-100 text-slate-700'
                       }`}
                     >
-                      <span className="truncate">{third.name}</span>
-                      {isSelected && <Check className="w-4 h-4 text-white stroke-[2.5] shrink-0" />}
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span className="shrink-0">{renderIcon(cat.icon_key)}</span>
+                        <span className="truncate">{cat.name}</span>
+                      </div>
+                      {hasChildren ? (
+                        <ChevronRight className={`w-4 h-4 shrink-0 ${isSelected ? 'text-white' : 'text-slate-400'}`} />
+                      ) : isSelected ? (
+                        <Check className="w-4 h-4 text-white stroke-[2.5] shrink-0" />
+                      ) : null}
                     </button>
                   );
-                })
-              )}
+                })}
+              </div>
+            </div>
+
+            {/* LEVEL 2: SUBCATEGORIES */}
+            <div className={`bg-white rounded-2xl border border-slate-200/80 p-3 shadow-2xs flex flex-col ${
+              mobileActiveStep !== 2 ? 'hidden md:flex' : 'flex'
+            }`}>
+              <div className="pb-2 border-b border-slate-100 mb-2 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setMobileActiveStep(1)}
+                    className="md:hidden text-xs font-bold text-[#1464F4] flex items-center gap-0.5 cursor-pointer"
+                  >
+                    <ArrowLeft className="w-3.5 h-3.5" />
+                    <span>Main</span>
+                  </button>
+                  <span className="text-[11px] font-black uppercase text-slate-400 tracking-wider truncate">
+                    2. Subcategory
+                  </span>
+                </div>
+                {selectedMainCat && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 truncate max-w-[120px]">
+                    {selectedMainCat.name}
+                  </span>
+                )}
+              </div>
+
+              <div className="space-y-1 overflow-y-auto max-h-[380px] no-scrollbar flex-1 pr-1">
+                {!selectedMainCat ? (
+                  <div className="p-6 text-center text-slate-400 text-xs font-semibold">
+                    Select a main category to view subcategories.
+                  </div>
+                ) : l2Categories.length === 0 ? (
+                  <div className="p-6 text-center text-slate-400 text-xs font-semibold">
+                    No subcategories available for <strong>{selectedMainCat.name}</strong>.
+                  </div>
+                ) : (
+                  l2Categories.map((sub) => {
+                    const isSelected = selectedSubCat?.id === sub.id;
+                    const hasChildren = categories.some((c) => c.parent_id === sub.id);
+
+                    return (
+                      <button
+                        key={sub.id}
+                        type="button"
+                        onClick={() => handleSelectSubCategory(sub)}
+                        className={`w-full p-2.5 rounded-xl text-left font-bold text-xs flex items-center justify-between transition-all cursor-pointer ${
+                          isSelected
+                            ? 'text-white shadow-xs'
+                            : 'bg-slate-50/80 hover:bg-slate-100 text-slate-700'
+                        }`}
+                        style={{
+                          backgroundColor: isSelected ? primaryColor : undefined
+                        }}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <span className="shrink-0">{renderIcon(sub.icon_key)}</span>
+                          <span className="truncate">{sub.name}</span>
+                        </div>
+                        {hasChildren ? (
+                          <ChevronRight className={`w-4 h-4 shrink-0 ${isSelected ? 'text-white' : 'text-slate-400'}`} />
+                        ) : isSelected ? (
+                          <Check className="w-4 h-4 text-white stroke-[2.5] shrink-0" />
+                        ) : null}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            {/* LEVEL 3: THIRD LEVEL OPTIONS (OPTIONAL) */}
+            <div className={`bg-white rounded-2xl border border-slate-200/80 p-3 shadow-2xs flex flex-col ${
+              mobileActiveStep !== 3 ? 'hidden md:flex' : 'flex'
+            }`}>
+              <div className="pb-2 border-b border-slate-100 mb-2 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setMobileActiveStep(2)}
+                    className="md:hidden text-xs font-bold text-[#1464F4] flex items-center gap-0.5 cursor-pointer"
+                  >
+                    <ArrowLeft className="w-3.5 h-3.5" />
+                    <span>Sub</span>
+                  </button>
+                  <span className="text-[11px] font-black uppercase text-slate-400 tracking-wider truncate">
+                    3. Option (Optional)
+                  </span>
+                </div>
+                {selectedSubCat && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 truncate max-w-[120px]">
+                    {selectedSubCat.name}
+                  </span>
+                )}
+              </div>
+
+              <div className="space-y-1 overflow-y-auto max-h-[380px] no-scrollbar flex-1 pr-1">
+                {!selectedSubCat ? (
+                  <div className="p-6 text-center text-slate-400 text-xs font-semibold">
+                    Select a subcategory to view level 3 options.
+                  </div>
+                ) : l3Categories.length === 0 ? (
+                  <div className="p-6 text-center text-slate-400 text-xs font-semibold">
+                    No additional level 3 options for <strong>{selectedSubCat.name}</strong>. You can proceed directly.
+                  </div>
+                ) : (
+                  l3Categories.map((third) => {
+                    const isSelected = selectedThirdLevel?.id === third.id;
+                    return (
+                      <button
+                        key={third.id}
+                        type="button"
+                        onClick={() => handleSelectThirdLevel(third)}
+                        className={`w-full p-2.5 rounded-xl text-left font-bold text-xs flex items-center justify-between transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-slate-900 text-white shadow-xs'
+                            : 'bg-slate-50/80 hover:bg-slate-100 text-slate-700'
+                        }`}
+                      >
+                        <span className="truncate">{third.name}</span>
+                        {isSelected && <Check className="w-4 h-4 text-white stroke-[2.5] shrink-0" />}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </main>
 
       {/* STICKY BOTTOM APPLY FOOTER */}
@@ -486,7 +621,7 @@ export const CategorySelectorPage: React.FC<CategorySelectorPageProps> = ({
           <div className="flex items-center gap-2.5 min-w-0 w-full sm:w-auto">
             <div 
               className="w-8 h-8 rounded-full flex items-center justify-center text-white shrink-0 shadow-xs"
-              style={{ backgroundColor: selectedMainCat ? primaryColor : '#94A3B8' }}
+              style={{ backgroundColor: primaryColor }}
             >
               <Check className="w-4 h-4 stroke-[3]" />
             </div>
@@ -494,12 +629,12 @@ export const CategorySelectorPage: React.FC<CategorySelectorPageProps> = ({
             <div className="min-w-0 flex-1">
               <span 
                 className="text-[10px] font-black tracking-wider uppercase block truncate"
-                style={{ color: selectedMainCat ? primaryColor : '#64748B' }}
+                style={{ color: primaryColor }}
               >
                 SELECTED CATEGORY
               </span>
               <p className="text-xs sm:text-sm font-black text-slate-900 truncate">
-                {formattedPath || 'Select a Category'}
+                {formattedPath}
               </p>
             </div>
           </div>
@@ -516,13 +651,10 @@ export const CategorySelectorPage: React.FC<CategorySelectorPageProps> = ({
             <button
               type="button"
               onClick={handleApply}
-              disabled={!selectedMainCat}
-              className={`flex-1 sm:flex-initial py-3 px-6 rounded-xl text-white font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg active:scale-[0.99] transition-all ${
-                !selectedMainCat ? 'opacity-50 cursor-not-allowed pointer-events-none' : 'cursor-pointer'
-              }`}
+              className="flex-1 sm:flex-initial py-3 px-6 rounded-xl text-white font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg active:scale-[0.99] transition-all cursor-pointer"
               style={{ 
-                backgroundColor: selectedMainCat ? primaryColor : '#94A3B8',
-                boxShadow: selectedMainCat ? `0 8px 20px -4px ${primaryColor}40` : 'none'
+                backgroundColor: primaryColor,
+                boxShadow: `0 8px 20px -4px ${primaryColor}40`
               }}
             >
               <CheckCircle2 className="w-4 h-4 stroke-[2.5]" />

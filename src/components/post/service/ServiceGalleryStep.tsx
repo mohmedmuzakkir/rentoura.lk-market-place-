@@ -46,6 +46,7 @@ export const ServiceGalleryStep: React.FC<ServiceGalleryStepProps> = ({
         url: objectUrl,
         name: file.name,
         size: file.size,
+        file: file,
         isCover
       });
     });

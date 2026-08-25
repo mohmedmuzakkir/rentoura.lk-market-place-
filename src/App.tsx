@@ -24,6 +24,7 @@ import { EditProfilePage } from './pages/EditProfilePage';
 import { MyListingsPage } from './pages/MyListingsPage';
 import { SearchResultsPage } from './pages/SearchResultsPage';
 import { LocationSelectorPage } from './pages/LocationSelectorPage';
+import { LocationValueModel } from './services/locationService';
 import { CategorySelectorPage } from './pages/CategorySelectorPage';
 import { AdvancedFiltersPage } from './pages/AdvancedFiltersPage';
 import { RentalDetailPage } from './pages/RentalDetailPage';
@@ -49,6 +50,7 @@ import { LegalModal } from './components/auth/LegalModals';
 import { AuthService } from './services/authService';
 import { PostFlowContainer } from './components/post/PostFlowContainer';
 import { getListingDetailById } from './data/listingDetailsData';
+import { ListingDetailService } from './services/listingDetailService';
 import { RentalListingDetail, JobListingDetail, ServiceListingDetail } from './types/listingDetailsTypes';
 import { AppRoute, FilterState } from './types';
 import { SelectedCategoryState } from './data/categorySelectorData';
@@ -67,7 +69,41 @@ import { isSuperAdmin, isAdmin, isModerator, isStaff } from './utils/roleUtils';
 export default function App() {
   // Navigation Route State
   const [currentRoute, setCurrentRoute] = useState<AppRoute>(() => {
-    const path = window.location.pathname as AppRoute;
+    const path = window.location.pathname;
+    if (path.startsWith('/rentals/') && path.length > 9) {
+      return path as AppRoute;
+    }
+    if (path.startsWith('/rental-detail')) {
+      const params = new URLSearchParams(window.location.search);
+      const id = params.get('id');
+      if (id) {
+        window.history.replaceState({}, '', `/rentals/${id}`);
+        return `/rentals/${id}` as AppRoute;
+      }
+    }
+    if (path.startsWith('/jobs/') && path.length > 6) {
+      return path as AppRoute;
+    }
+    if (path.startsWith('/job-detail')) {
+      const params = new URLSearchParams(window.location.search);
+      const id = params.get('id');
+      if (id) {
+        window.history.replaceState({}, '', `/jobs/${id}`);
+        return `/jobs/${id}` as AppRoute;
+      }
+    }
+    if (path.startsWith('/services/') && path.length > 10) {
+      return path as AppRoute;
+    }
+    if (path.startsWith('/service-detail')) {
+      const params = new URLSearchParams(window.location.search);
+      const id = params.get('id');
+      if (id) {
+        window.history.replaceState({}, '', `/services/${id}`);
+        return `/services/${id}` as AppRoute;
+      }
+    }
+
     const validRoutes: AppRoute[] = [
       '/', 
       '/rentals', 
@@ -106,7 +142,7 @@ export default function App() {
       '/moderator',
       '/super-admin'
     ];
-    return validRoutes.includes(path) ? path : '/';
+    return validRoutes.includes(path as AppRoute) ? (path as AppRoute) : '/';
   });
 
   // Auth & Profile Loading States
@@ -114,7 +150,28 @@ export default function App() {
   const [isProfileLoading, setIsProfileLoading] = useState<boolean>(true);
 
   // Selected Listing Detail State
-  const [selectedListingId, setSelectedListingId] = useState<string>('rent-prius-2018');
+  const [selectedListingId, setSelectedListingId] = useState<string>(() => {
+    const path = window.location.pathname;
+    if (path.startsWith('/rentals/') && path.length > 9) {
+      return path.slice(9);
+    }
+    if (path.startsWith('/rental-detail')) {
+      return new URLSearchParams(window.location.search).get('id') || '';
+    }
+    if (path.startsWith('/jobs/') && path.length > 6) {
+      return path.slice(6);
+    }
+    if (path.startsWith('/job-detail')) {
+      return new URLSearchParams(window.location.search).get('id') || '';
+    }
+    if (path.startsWith('/services/') && path.length > 10) {
+      return path.slice(10);
+    }
+    if (path.startsWith('/service-detail')) {
+      return new URLSearchParams(window.location.search).get('id') || '';
+    }
+    return '';
+  });
   const [reviewsTargetListingId, setReviewsTargetListingId] = useState<string | null>(null);
   const [previousRoute, setPreviousRoute] = useState<AppRoute>('/');
   const [reportTargetListing, setReportTargetListing] = useState<ReportListingTarget | null>(null);
@@ -126,7 +183,6 @@ export default function App() {
     selectedCategory: '',
     selectedFilter: 'All Filters',
     priceRange: [0, 500000],
-    verifiedOnly: false,
     sortBy: 'featured'
   });
 
@@ -141,6 +197,7 @@ export default function App() {
     returnTo: AppRoute;
     module?: 'all' | 'rentals' | 'jobs' | 'services' | 'rental' | 'job' | 'service';
     initialLocation?: string;
+    initialLocationModel?: LocationValueModel;
     initialCategoryPath?: string;
   }>({ returnTo: '/' });
 
@@ -148,11 +205,13 @@ export default function App() {
     returnTo?: AppRoute;
     module?: 'all' | 'rentals' | 'jobs' | 'services' | 'rental' | 'job' | 'service';
     initialLocation?: string;
+    initialLocationModel?: LocationValueModel;
   }) => {
     setSelectorOrigin({
       returnTo: opts?.returnTo || currentRoute || '/',
       module: opts?.module || 'all',
-      initialLocation: opts?.initialLocation || filterState.selectedLocation
+      initialLocation: opts?.initialLocation || filterState.selectedLocation,
+      initialLocationModel: opts?.initialLocationModel || filterState.selectedLocationModel
     });
     handleNavigate('/select-location');
   };
@@ -357,7 +416,56 @@ export default function App() {
   // Sync browser back/forward navigation
   useEffect(() => {
     const handlePopState = () => {
-      const path = window.location.pathname as AppRoute;
+      const path = window.location.pathname;
+      if (path.startsWith('/rentals/') && path.length > 9) {
+        const id = path.slice(9);
+        setSelectedListingId(id);
+        setCurrentRoute(path as AppRoute);
+        return;
+      }
+      if (path.startsWith('/rental-detail')) {
+        const params = new URLSearchParams(window.location.search);
+        const id = params.get('id');
+        if (id) {
+          window.history.replaceState({}, '', `/rentals/${id}`);
+          setSelectedListingId(id);
+          setCurrentRoute(`/rentals/${id}` as AppRoute);
+          return;
+        }
+      }
+      if (path.startsWith('/jobs/') && path.length > 6) {
+        const id = path.slice(6);
+        setSelectedListingId(id);
+        setCurrentRoute(path as AppRoute);
+        return;
+      }
+      if (path.startsWith('/job-detail')) {
+        const params = new URLSearchParams(window.location.search);
+        const id = params.get('id');
+        if (id) {
+          window.history.replaceState({}, '', `/jobs/${id}`);
+          setSelectedListingId(id);
+          setCurrentRoute(`/jobs/${id}` as AppRoute);
+          return;
+        }
+      }
+      if (path.startsWith('/services/') && path.length > 10) {
+        const id = path.slice(10);
+        setSelectedListingId(id);
+        setCurrentRoute(path as AppRoute);
+        return;
+      }
+      if (path.startsWith('/service-detail')) {
+        const params = new URLSearchParams(window.location.search);
+        const id = params.get('id');
+        if (id) {
+          window.history.replaceState({}, '', `/services/${id}`);
+          setSelectedListingId(id);
+          setCurrentRoute(`/services/${id}` as AppRoute);
+          return;
+        }
+      }
+
       const validRoutes: AppRoute[] = [
         '/', 
         '/rentals', 
@@ -396,8 +504,8 @@ export default function App() {
         '/moderator',
         '/super-admin'
       ];
-      if (validRoutes.includes(path)) {
-        setCurrentRoute(path);
+      if (validRoutes.includes(path as AppRoute)) {
+        setCurrentRoute(path as AppRoute);
       } else {
         setCurrentRoute('/');
       }
@@ -408,7 +516,7 @@ export default function App() {
   }, []);
 
   const handleNavigate = (route: AppRoute) => {
-    if (currentRoute !== route && !['/rental-detail', '/job-detail', '/service-detail'].includes(currentRoute)) {
+    if (currentRoute !== route && !['/rental-detail', '/job-detail', '/service-detail'].includes(currentRoute) && !currentRoute.startsWith('/rentals/') && !currentRoute.startsWith('/jobs/') && !currentRoute.startsWith('/services/')) {
       setPreviousRoute(currentRoute);
     }
     setCurrentRoute(route);
@@ -427,13 +535,23 @@ export default function App() {
     setPreviousRoute(currentRoute);
 
     const normHint = moduleHint?.toLowerCase();
+    let canonicalPath = `/rentals/${id}`;
+    let targetRoute: AppRoute = `/rentals/${id}` as AppRoute;
+
     if (normHint?.includes('job') || id.includes('job')) {
-      handleNavigate('/job-detail');
+      targetRoute = `/jobs/${id}` as AppRoute;
+      canonicalPath = `/jobs/${id}`;
     } else if (normHint?.includes('serv') || id.includes('srv') || id.includes('service')) {
-      handleNavigate('/service-detail');
-    } else {
-      handleNavigate('/rental-detail');
+      targetRoute = `/services/${id}` as AppRoute;
+      canonicalPath = `/services/${id}`;
     }
+
+    if (window.location.pathname !== canonicalPath) {
+      window.history.pushState({ id }, '', canonicalPath);
+    }
+
+    setCurrentRoute(targetRoute);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleBackFromDetail = () => {
@@ -536,7 +654,8 @@ export default function App() {
           messages: [...targetConv.messages, replyMsg],
           lastMessage: replyText,
           lastMessageTime: 'Just now',
-          lastMessageTimestamp: Date.now()
+          lastMessageTimestamp: Date.now(),
+          unreadCount: (activeConversationId === convId && currentRoute === '/chat') ? 0 : (targetConv.unreadCount || 0) + 1
         };
 
         const otherConvs = prev.filter(c => c.id !== convId);
@@ -626,7 +745,6 @@ export default function App() {
       selectedCategory: '',
       selectedFilter: 'All Filters',
       priceRange: [0, 500000],
-      verifiedOnly: false,
       sortBy: 'featured'
     });
   };
@@ -716,6 +834,129 @@ export default function App() {
       );
     }
 
+    if (currentRoute.startsWith('/rentals/') || currentRoute === '/rental-detail') {
+      const activeListingId = currentRoute.startsWith('/rentals/')
+        ? currentRoute.slice(9)
+        : selectedListingId;
+
+      return (
+        <RentalDetailPage
+          listingId={activeListingId}
+          onBack={handleBackFromDetail}
+          onNavigate={(route) => {
+            if (route === '/messages' || route === '/chat') {
+              handleStartChatFromListing({
+                id: activeListingId,
+                title: 'Rental Listing',
+                module: 'rentals',
+                price: 'Contact for price',
+                location: 'Sri Lanka'
+              });
+            } else if (route === '/report-listing') {
+              setReportTargetListing({
+                id: activeListingId,
+                title: 'Rental Listing',
+                location: 'Sri Lanka',
+                price: 'Contact for price',
+                pricePeriod: '/ Month',
+                imageUrl: '',
+                module: 'rentals',
+                category: 'Rentals',
+                ownerId: ''
+              });
+              handleNavigate('/report-listing');
+            } else {
+              handleNavigate(route as AppRoute);
+            }
+          }}
+          isSaved={savedListings.includes(activeListingId)}
+          onToggleSave={() => handleToggleSave(activeListingId)}
+        />
+      );
+    }
+
+    if (currentRoute.startsWith('/jobs/') || currentRoute === '/job-detail') {
+      const activeJobId = currentRoute.startsWith('/jobs/')
+        ? currentRoute.slice(6)
+        : selectedListingId;
+
+      return (
+        <JobDetailPage
+          listingId={activeJobId}
+          onBack={handleBackFromDetail}
+          onNavigate={(route) => {
+            if (route === '/messages' || route === '/chat') {
+              handleStartChatFromListing({
+                id: activeJobId,
+                title: 'Job Opportunity',
+                module: 'jobs',
+                price: 'Contact Employer',
+                location: 'Sri Lanka'
+              });
+            } else if (route === '/report-listing') {
+              setReportTargetListing({
+                id: activeJobId,
+                title: 'Job Opportunity',
+                location: 'Sri Lanka',
+                price: 'Contact Employer',
+                pricePeriod: '',
+                imageUrl: '',
+                module: 'jobs',
+                category: 'Jobs',
+                ownerId: ''
+              });
+              handleNavigate('/report-listing');
+            } else {
+              handleNavigate(route as AppRoute);
+            }
+          }}
+          isSaved={savedListings.includes(activeJobId)}
+          onToggleSave={() => handleToggleSave(activeJobId)}
+        />
+      );
+    }
+
+    if (currentRoute.startsWith('/services/') || currentRoute === '/service-detail') {
+      const activeServiceId = currentRoute.startsWith('/services/')
+        ? currentRoute.slice(10)
+        : selectedListingId;
+
+      return (
+        <ServiceDetailPage
+          listingId={activeServiceId}
+          onBack={handleBackFromDetail}
+          onNavigate={(route) => {
+            if (route === '/messages' || route === '/chat') {
+              handleStartChatFromListing({
+                id: activeServiceId,
+                title: 'Service Listing',
+                module: 'services',
+                price: 'Contact Provider',
+                location: 'Sri Lanka'
+              });
+            } else if (route === '/report-listing') {
+              setReportTargetListing({
+                id: activeServiceId,
+                title: 'Service Listing',
+                location: 'Sri Lanka',
+                price: 'Contact Provider',
+                pricePeriod: '',
+                imageUrl: '',
+                module: 'services',
+                category: 'Services',
+                ownerId: ''
+              });
+              handleNavigate('/report-listing');
+            } else {
+              handleNavigate(route as AppRoute);
+            }
+          }}
+          isSaved={savedListings.includes(activeServiceId)}
+          onToggleSave={() => handleToggleSave(activeServiceId)}
+        />
+      );
+    }
+
     switch (currentRoute) {
       case '/notifications':
         return (
@@ -740,131 +981,6 @@ export default function App() {
             unreadMessagesCount={unreadMessagesCount}
           />
         );
-      case '/rental-detail': {
-        const listing = getListingDetailById(selectedListingId, 'rentals') as RentalListingDetail;
-        return (
-          <RentalDetailPage
-            listing={listing}
-            onBack={handleBackFromDetail}
-            onNavigate={(route) => {
-              if (route === '/messages' || route === '/chat') {
-                handleStartChatFromListing({
-                  id: listing.id,
-                  title: listing.title,
-                  module: 'rentals',
-                  price: listing.pricing?.rates?.[0]?.label || 'Rs. 85,000 / Month',
-                  location: `${listing.location.city}, ${listing.location.province}`,
-                  imageUrl: listing.images?.[0],
-                  participantName: listing.owner?.name,
-                  participantAvatar: listing.owner?.photoUrl,
-                  phone: listing.contact?.phone
-                });
-              } else if (route === '/report-listing') {
-                setReportTargetListing({
-                  id: listing.id,
-                  title: listing.title,
-                  location: `${listing.location.city}, ${listing.location.province}`,
-                  price: listing.pricing?.rates?.[0]?.price ? `Rs. ${listing.pricing.rates[0].price.toLocaleString()}` : 'Rs. 120,000',
-                  pricePeriod: listing.pricing?.rates?.[0]?.unit ? `/ ${listing.pricing.rates[0].unit}` : '/ Month',
-                  imageUrl: listing.images?.[0] || 'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?auto=format&fit=crop&w=800&q=80',
-                  module: 'rentals',
-                  category: listing.categoryPath,
-                  ownerId: listing.owner?.id || 'usr-owner-99'
-                });
-                handleNavigate('/report-listing');
-              } else {
-                handleNavigate(route as AppRoute);
-              }
-            }}
-            isSaved={savedListings.includes(listing.id)}
-            onToggleSave={() => handleToggleSave(listing.id)}
-          />
-        );
-      }
-      case '/job-detail': {
-        const job = getListingDetailById(selectedListingId, 'jobs') as JobListingDetail;
-        return (
-          <JobDetailPage
-            job={job}
-            onBack={handleBackFromDetail}
-            onNavigate={(route) => {
-              if (route === '/messages' || route === '/chat') {
-                handleStartChatFromListing({
-                  id: job.id,
-                  title: `${job.title} at ${job.company.name}`,
-                  module: 'jobs',
-                  price: job.salary?.min && job.salary?.max 
-                    ? `Rs. ${job.salary.min.toLocaleString()} - ${job.salary.max.toLocaleString()} / ${job.salary.period}`
-                    : 'Rs. 120,000 - 180,000 / Month',
-                  location: `${job.location.city}, ${job.location.province}`,
-                  imageUrl: job.company?.logoUrl,
-                  participantName: job.company?.name || 'Recruitment Team',
-                  participantAvatar: job.company?.logoUrl,
-                  phone: job.contact?.phone
-                });
-              } else if (route === '/report-listing') {
-                setReportTargetListing({
-                  id: job.id,
-                  title: job.title,
-                  location: `${job.location.city}, ${job.location.province}`,
-                  price: job.salary?.min ? `Rs. ${job.salary.min.toLocaleString()}` : 'Rs. 120,000',
-                  pricePeriod: `/ ${job.salary?.period || 'Month'}`,
-                  imageUrl: job.company?.logoUrl || 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=800&q=80',
-                  module: 'jobs',
-                  category: job.categoryPath,
-                  ownerId: 'usr-company-1'
-                });
-                handleNavigate('/report-listing');
-              } else {
-                handleNavigate(route as AppRoute);
-              }
-            }}
-            isSaved={savedListings.includes(job.id)}
-            onToggleSave={() => handleToggleSave(job.id)}
-          />
-        );
-      }
-      case '/service-detail': {
-        const service = getListingDetailById(selectedListingId, 'services') as ServiceListingDetail;
-        return (
-          <ServiceDetailPage
-            service={service}
-            onBack={handleBackFromDetail}
-            onNavigate={(route) => {
-              if (route === '/messages' || route === '/chat') {
-                handleStartChatFromListing({
-                  id: service.id,
-                  title: service.title,
-                  module: 'services',
-                  price: service.startingPrice ? `Rs. ${service.startingPrice.amount} ${service.startingPrice.unit}` : 'Rs. 1,500 / Visit',
-                  location: `${service.location.city}, ${service.location.province}`,
-                  imageUrl: service.images?.[0],
-                  participantName: service.provider?.name || 'Service Provider',
-                  participantAvatar: service.provider?.photoUrl,
-                  phone: service.contact?.phone
-                });
-              } else if (route === '/report-listing') {
-                setReportTargetListing({
-                  id: service.id,
-                  title: service.title,
-                  location: `${service.location.city}, ${service.location.province}`,
-                  price: service.startingPrice?.amount ? `Rs. ${service.startingPrice.amount.toLocaleString()}` : 'Rs. 2,500',
-                  pricePeriod: `/ ${service.startingPrice?.unit || 'Visit'}`,
-                  imageUrl: service.images?.[0] || 'https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=800&q=80',
-                  module: 'services',
-                  category: service.categoryPath,
-                  ownerId: service.provider?.id || 'usr-provider-1'
-                });
-                handleNavigate('/report-listing');
-              } else {
-                handleNavigate(route as AppRoute);
-              }
-            }}
-            isSaved={savedListings.includes(service.id)}
-            onToggleSave={() => handleToggleSave(service.id)}
-          />
-        );
-      }
       case '/filters':
         return (
           <AdvancedFiltersPage
@@ -881,8 +997,7 @@ export default function App() {
                 ...prev,
                 selectedLocation: locStr || prev.selectedLocation,
                 selectedCategory: catStr || prev.selectedCategory,
-                priceRange: [newAdvFilters.price.min, newAdvFilters.price.max],
-                verifiedOnly: newAdvFilters.verifiedOnly
+                priceRange: [newAdvFilters.price.min, newAdvFilters.price.max]
               }));
             }}
           />
@@ -909,9 +1024,14 @@ export default function App() {
             onNavigate={handleNavigate}
             returnTo={selectorOrigin.returnTo || '/'}
             initialLocation={selectorOrigin.initialLocation || filterState.selectedLocation}
+            initialLocationModel={selectorOrigin.initialLocationModel || filterState.selectedLocationModel}
             savedCount={savedListings.length}
             onApplyLocation={(locModel, displayName) => {
-              setFilterState(prev => ({ ...prev, selectedLocation: displayName }));
+              setFilterState(prev => ({ 
+                ...prev, 
+                selectedLocation: displayName,
+                selectedLocationModel: locModel
+              }));
               const targetRoute = selectorOrigin.returnTo || '/';
               if (targetRoute === '/filters') {
                 setAdvancedFilterState(prev => ({

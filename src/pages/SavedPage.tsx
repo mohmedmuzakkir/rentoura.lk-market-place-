@@ -34,6 +34,7 @@ import {
   SavedJobItem,
   SavedServiceItem
 } from '../data/savedListingsData';
+import { SavedListingService } from '../services/savedListingService';
 
 interface SavedPageProps {
   savedListings: string[];
@@ -56,17 +57,31 @@ export const SavedPage: React.FC<SavedPageProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
 
+  const [dbSavedRentals, setDbSavedRentals] = useState<SavedRentalItem[]>([]);
+  const [dbSavedJobs, setDbSavedJobs] = useState<SavedJobItem[]>([]);
+  const [dbSavedServices, setDbSavedServices] = useState<SavedServiceItem[]>([]);
+
+  React.useEffect(() => {
+    SavedListingService.getSavedListingsWithDetails().then(res => {
+      setDbSavedRentals(res.rentals);
+      setDbSavedJobs(res.jobs);
+      setDbSavedServices(res.services);
+    });
+  }, [savedListings]);
+
   // Filter saved rentals
-  const allSavedRentals = getSavedRentals(savedListings);
-  const savedRentals = allSavedRentals.filter(item => 
+  const staticRentals = getSavedRentals(savedListings);
+  const combinedRentals = [...staticRentals, ...dbSavedRentals.filter(d => !staticRentals.some(s => s.id === d.id))];
+  const savedRentals = combinedRentals.filter(item => 
     !searchQuery || 
     item.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
     item.location.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   // Filter saved jobs
-  const allSavedJobs = getSavedJobs(savedListings);
-  const savedJobs = allSavedJobs.filter(item => 
+  const staticJobs = getSavedJobs(savedListings);
+  const combinedJobs = [...staticJobs, ...dbSavedJobs.filter(d => !staticJobs.some(s => s.id === d.id))];
+  const savedJobs = combinedJobs.filter(item => 
     !searchQuery || 
     item.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
     item.company.toLowerCase().includes(searchQuery.toLowerCase()) || 
@@ -74,15 +89,16 @@ export const SavedPage: React.FC<SavedPageProps> = ({
   );
 
   // Filter saved services
-  const allSavedServices = getSavedServices(savedListings);
-  const savedServices = allSavedServices.filter(item => 
+  const staticServices = getSavedServices(savedListings);
+  const combinedServices = [...staticServices, ...dbSavedServices.filter(d => !staticServices.some(s => s.id === d.id))];
+  const savedServices = combinedServices.filter(item => 
     !searchQuery || 
     item.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
     item.providerName.toLowerCase().includes(searchQuery.toLowerCase()) || 
     item.location.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const totalSavedCount = allSavedRentals.length + allSavedJobs.length + allSavedServices.length;
+  const totalSavedCount = combinedRentals.length + combinedJobs.length + combinedServices.length;
 
   const renderSpecIcon = (iconName: string) => {
     switch (iconName) {

@@ -254,12 +254,12 @@ export const JobPostFlow: React.FC<JobPostFlowProps> = ({
     }
   };
 
-  const handleSubmitFinal = () => {
+  const handleSubmitFinal = async () => {
     setIsSubmitting(true);
     setStepErrors({});
 
-    setTimeout(() => {
-      const result = ListingSubmissionService.submitListing(draft);
+    try {
+      const result = await ListingSubmissionService.submitListing(draft);
       setIsSubmitting(false);
 
       if (result.success) {
@@ -270,7 +270,10 @@ export const JobPostFlow: React.FC<JobPostFlowProps> = ({
       } else {
         setStepErrors({ submit: result.error || 'Failed to submit job opportunity.' });
       }
-    }, 1200);
+    } catch (e: any) {
+      setIsSubmitting(false);
+      setStepErrors({ submit: e?.message || 'Failed to submit job opportunity.' });
+    }
   };
 
   return (

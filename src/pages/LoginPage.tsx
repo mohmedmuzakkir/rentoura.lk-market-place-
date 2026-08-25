@@ -28,6 +28,15 @@ interface LoginPageProps {
   onLanguageChange?: (lang: 'English' | 'Sinhala' | 'Tamil') => void;
 }
 
+export function sanitizeReturnUrl(url?: string): AppRoute {
+  if (!url || typeof url !== 'string') return '/';
+  const trimmed = url.trim();
+  if (!trimmed.startsWith('/')) return '/';
+  if (trimmed.startsWith('//') || trimmed.startsWith('/\\') || trimmed.includes('://')) return '/';
+  if (trimmed.toLowerCase().startsWith('/javascript:') || trimmed.toLowerCase().startsWith('/data:')) return '/';
+  return trimmed as AppRoute;
+}
+
 export const LoginPage: React.FC<LoginPageProps> = ({
   onNavigate,
   returnUrl,
@@ -56,11 +65,28 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       AuthService.fetchUserProfile(user.id).then((profile) => {
         if (!isMounted) return;
         if (profile) {
-          const dest = getDashboardRouteForRole(profile.role, profile.accountStatus);
-          if (dest !== '/') {
-            onNavigate(dest);
+          const status = profile.accountStatus || 'active';
+          if (!isActiveAccount(status)) {
+            if (status === 'suspended') {
+              setGeneralError('Your account has been suspended. Please contact platform support.');
+            } else if (status === 'banned') {
+              setGeneralError('Your account has been banned due to terms of service violations.');
+            } else if (status === 'restricted') {
+              setGeneralError('Your account is currently restricted. Please contact platform support.');
+            } else {
+              setGeneralError('Your account is inactive or disabled. Please contact platform support.');
+            }
+            return;
+          }
+
+          const cleanReturn = sanitizeReturnUrl(returnUrl);
+          const staffDash = getDashboardRouteForRole(profile.role, profile.accountStatus);
+          if (cleanReturn && cleanReturn !== '/') {
+            onNavigate(cleanReturn);
+          } else if (staffDash !== '/') {
+            onNavigate(staffDash);
           } else {
-            onNavigate(returnUrl || '/');
+            onNavigate('/');
           }
         } else {
           onNavigate('/');
@@ -92,8 +118,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     // Reset error states
     let hasError = false;
 
-    // Validate email
-    const emailVal = validateAndNormalizeEmail(email);
+    // Validate and normalize email
+    const trimmedEmail = email.trim();
+    const emailVal = validateAndNormalizeEmail(trimmedEmail);
     if (!emailVal.isValid) {
       setEmailError(emailVal.error || 'Please enter a valid email address.');
       hasError = true;
@@ -115,21 +142,33 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     setIsSubmitting(true);
 
     try {
-      const { profile } = await AuthService.login(email, password, rememberMe);
+      const { profile } = await AuthService.login(trimmedEmail, password, rememberMe);
 
-      if (!isActiveAccount(profile.accountStatus)) {
-        setGeneralError('Your account is currently inactive or suspended. Please contact platform support.');
+      const status = profile?.accountStatus || 'active';
+      if (!isActiveAccount(status)) {
+        if (status === 'suspended') {
+          setGeneralError('Your account has been suspended. Please contact platform support.');
+        } else if (status === 'banned') {
+          setGeneralError('Your account has been banned due to terms of service violations.');
+        } else if (status === 'restricted') {
+          setGeneralError('Your account is currently restricted. Please contact platform support.');
+        } else {
+          setGeneralError('Your account is inactive or disabled. Please contact platform support.');
+        }
         return;
       }
 
-      const destRoute = getDashboardRouteForRole(profile.role, profile.accountStatus);
+      const cleanReturn = sanitizeReturnUrl(returnUrl);
+      const staffDash = getDashboardRouteForRole(profile.role, profile.accountStatus);
 
-      setSuccessMsg(`Welcome back, ${profile.fullName}! Redirecting...`);
+      setSuccessMsg(`Welcome back, ${profile.fullName || 'Member'}! Redirecting...`);
 
-      if (destRoute !== '/') {
-        onNavigate(destRoute);
+      if (cleanReturn && cleanReturn !== '/') {
+        onNavigate(cleanReturn);
+      } else if (staffDash !== '/') {
+        onNavigate(staffDash);
       } else {
-        onNavigate(returnUrl || '/');
+        onNavigate('/');
       }
     } catch (err: any) {
       setGeneralError(err.message || 'Login failed. Please check your credentials and try again.');

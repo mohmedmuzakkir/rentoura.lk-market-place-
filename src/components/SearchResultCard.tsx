@@ -1,6 +1,6 @@
 import React from 'react';
-import { Heart, MapPin, Building2, Wrench, Home, Briefcase, ChevronRight } from 'lucide-react';
-import { SearchResultItemRaw } from '../services/searchService';
+import { Heart, MapPin, Wrench, Home, Briefcase, ChevronRight } from 'lucide-react';
+import { SearchResultItemRaw, SearchService } from '../services/searchService';
 
 interface SearchResultCardProps {
   item: SearchResultItemRaw;
@@ -41,11 +41,11 @@ export const SearchResultCard: React.FC<SearchResultCardProps> = ({
   const formatPrice = () => {
     if (isJob) {
       if (item.price) {
-        return `Rs. ${item.price.toLocaleString()} / mo`;
+        return `Rs. ${Number(item.price).toLocaleString()} / mo`;
       }
       if (item.minimum_price || item.maximum_price) {
-        const minP = item.minimum_price ? `Rs. ${item.minimum_price.toLocaleString()}` : '';
-        const maxP = item.maximum_price ? `Rs. ${item.maximum_price.toLocaleString()}` : '';
+        const minP = item.minimum_price ? `Rs. ${Number(item.minimum_price).toLocaleString()}` : '';
+        const maxP = item.maximum_price ? `Rs. ${Number(item.maximum_price).toLocaleString()}` : '';
         return minP && maxP ? `${minP} - ${maxP}` : minP || maxP || 'Negotiable';
       }
       return 'Salary Negotiable';
@@ -55,7 +55,7 @@ export const SearchResultCard: React.FC<SearchResultCardProps> = ({
       if (item.price || item.minimum_price) {
         const pVal = item.price || item.minimum_price;
         const unit = item.price_period ? ` / ${item.price_period}` : '';
-        return `From Rs. ${pVal?.toLocaleString()}${unit}`;
+        return `From Rs. ${Number(pVal).toLocaleString()}${unit}`;
       }
       return 'Price on Inquiry';
     }
@@ -63,7 +63,7 @@ export const SearchResultCard: React.FC<SearchResultCardProps> = ({
     // Rental
     if (item.price) {
       const unit = item.price_period ? ` ${item.price_period}` : ' / month';
-      return `Rs. ${item.price.toLocaleString()}${unit}`;
+      return `Rs. ${Number(item.price).toLocaleString()}${unit}`;
     }
     return 'Price on Inquiry';
   };
@@ -73,13 +73,7 @@ export const SearchResultCard: React.FC<SearchResultCardProps> = ({
     onToggleSave(item.id);
   };
 
-  const fallbackImage = isRental
-    ? 'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?auto=format&fit=crop&w=600&q=80'
-    : isJob
-    ? 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=600&q=80'
-    : 'https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=600&q=80';
-
-  const imageUrl = item.cover_url || fallbackImage;
+  const imageUrl = item.cover_url || SearchService.NEUTRAL_PLACEHOLDER;
 
   return (
     <div
@@ -94,7 +88,7 @@ export const SearchResultCard: React.FC<SearchResultCardProps> = ({
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
           loading="lazy"
           onError={(e) => {
-            (e.target as HTMLImageElement).src = fallbackImage;
+            (e.target as HTMLImageElement).src = SearchService.NEUTRAL_PLACEHOLDER;
           }}
         />
 
@@ -126,14 +120,14 @@ export const SearchResultCard: React.FC<SearchResultCardProps> = ({
       {/* Content Container */}
       <div className="p-4 sm:p-5 flex-1 flex flex-col justify-between">
         <div>
-          {/* Company / Business / Category row */}
+          {/* Company / Business / Category row - NO fabricated ratings/verified */}
           <div className="flex items-center justify-between gap-2 text-xs text-slate-500 mb-1 font-medium">
             <span className="truncate max-w-[200px]">
               {isJob
-                ? item.company_name || item.category_name || 'Employment Opportunity'
+                ? item.company_name || item.category_name || 'Job Opportunity'
                 : isService
-                ? item.business_name || item.category_name || 'Professional Service'
-                : item.category_name || 'Rental Listing'}
+                ? item.business_name || item.category_name || 'Service Provider'
+                : item.category_name || 'Rental Property'}
             </span>
             {item.category_name && (
               <span className="text-[11px] bg-slate-100 px-2 py-0.5 rounded-md text-slate-600 truncate max-w-[120px]">
@@ -153,7 +147,7 @@ export const SearchResultCard: React.FC<SearchResultCardProps> = ({
             <span className="truncate">{item.location_name || 'Sri Lanka'}</span>
           </div>
 
-          {/* Additional Module Specific Badges */}
+          {/* Module-Specific Badges (Only shown if real data exists) */}
           {(isJob && (item.job_type || item.work_mode)) && (
             <div className="flex flex-wrap gap-1.5 mt-2.5">
               {item.job_type && (

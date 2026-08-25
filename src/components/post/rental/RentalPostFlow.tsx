@@ -174,7 +174,7 @@ export const RentalPostFlow: React.FC<RentalPostFlowProps> = ({
     }
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     // Validate final checks
     const isValid = validateStep(1) && validateStep(2) && validateStep(3) && validateStep(4) && validateStep(6);
     if (!isValid) {
@@ -183,7 +183,7 @@ export const RentalPostFlow: React.FC<RentalPostFlowProps> = ({
     }
 
     setIsSubmitting(true);
-    setTimeout(() => {
+    try {
       // Sync price into formValues for submission service compatibility
       const submissionDraft: ListingDraft = {
         ...draft,
@@ -194,7 +194,7 @@ export const RentalPostFlow: React.FC<RentalPostFlowProps> = ({
         }
       };
 
-      const result = ListingSubmissionService.submitListing(submissionDraft);
+      const result = await ListingSubmissionService.submitListing(submissionDraft);
       setIsSubmitting(false);
 
       if (result.success && result.listing) {
@@ -205,7 +205,10 @@ export const RentalPostFlow: React.FC<RentalPostFlowProps> = ({
       } else {
         alert(result.error || 'Failed to submit listing. Please try again.');
       }
-    }, 900);
+    } catch (e: any) {
+      setIsSubmitting(false);
+      alert(e?.message || 'Failed to submit listing. Please try again.');
+    }
   };
 
   return (

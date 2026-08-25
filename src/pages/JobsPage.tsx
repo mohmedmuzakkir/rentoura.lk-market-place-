@@ -978,8 +978,10 @@ export const JobsPage: React.FC<JobsPageProps> = ({
         isOpen={isCategoryModalOpen}
         onClose={() => setIsCategoryModalOpen(false)}
         selectedCategory={selectedCategory}
-        onSelectCategory={(catName) => {
+        selectedCategoryId={selectedCategoryId}
+        onSelectCategory={(catName, catId) => {
           setSelectedCategory(catName);
+          setSelectedCategoryId(catId);
           setIsCategoryModalOpen(false);
           scrollToFeed();
         }}

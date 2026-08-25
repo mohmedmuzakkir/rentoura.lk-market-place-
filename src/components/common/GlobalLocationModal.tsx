@@ -19,6 +19,7 @@ export interface GlobalLocationModalProps {
   isOpen: boolean;
   onClose: () => void;
   selectedLocation?: string;
+  selectedLocationModel?: LocationValueModel;
   onSelectLocation: (displayName: string, locationObj?: LocationValueModel) => void;
   accentColor?: string;
   title?: string;
@@ -28,6 +29,7 @@ export const GlobalLocationModal: React.FC<GlobalLocationModalProps> = ({
   isOpen,
   onClose,
   selectedLocation = 'All Sri Lanka',
+  selectedLocationModel,
   onSelectLocation,
   accentColor = '#1464F4',
   title = 'Select Location'
@@ -45,7 +47,7 @@ export const GlobalLocationModal: React.FC<GlobalLocationModalProps> = ({
 
   // Draft Location State
   const [draftDisplayName, setDraftDisplayName] = useState(selectedLocation || 'All Sri Lanka');
-  const [draftLocationObj, setDraftLocationObj] = useState<LocationValueModel | undefined>(undefined);
+  const [draftLocationObj, setDraftLocationObj] = useState<LocationValueModel | undefined>(selectedLocationModel);
 
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
@@ -54,11 +56,28 @@ export const GlobalLocationModal: React.FC<GlobalLocationModalProps> = ({
 
   // Sync draft on open
   useEffect(() => {
-    if (isOpen) {
-      setDraftDisplayName(selectedLocation || 'All Sri Lanka');
-      setDraftLocationObj(undefined);
+    if (!isOpen) return;
+    let isMounted = true;
+
+    async function initDraft() {
+      const targetInput = selectedLocationModel?.displayName || selectedLocation;
+      if (targetInput && targetInput !== 'All Sri Lanka') {
+        const resolved = await LocationService.resolveLocationValueModel(targetInput);
+        if (isMounted) {
+          setDraftDisplayName(resolved.displayName || targetInput);
+          setDraftLocationObj(resolved);
+        }
+      } else {
+        if (isMounted) {
+          setDraftDisplayName('All Sri Lanka');
+          setDraftLocationObj({ displayName: 'All Sri Lanka', type: 'country' });
+        }
+      }
     }
-  }, [isOpen, selectedLocation]);
+
+    initDraft();
+    return () => { isMounted = false; };
+  }, [isOpen, selectedLocation, selectedLocationModel]);
 
   // Load provinces on open
   useEffect(() => {
@@ -196,7 +215,15 @@ export const GlobalLocationModal: React.FC<GlobalLocationModalProps> = ({
   };
 
   const handleApply = () => {
-    onSelectLocation(draftDisplayName, draftLocationObj);
+    const finalObj: LocationValueModel = draftLocationObj || {
+      displayName: draftDisplayName,
+      type: draftDisplayName === 'All Sri Lanka' ? 'country' : 'city'
+    };
+
+    // Log explicit location search event
+    LocationService.logLocationApplyEvent(finalObj, searchQuery);
+
+    onSelectLocation(draftDisplayName, finalObj);
     onClose();
   };
 

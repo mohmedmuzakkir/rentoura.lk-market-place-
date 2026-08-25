@@ -92,10 +92,10 @@ export const AdminUsersView: React.FC<AdminUsersViewProps> = ({ staff, onRefresh
           const createdAtDate = p.created_at ? new Date(p.created_at) : new Date();
           return {
             id: p.id,
-            fullName: p.full_name || p.display_name || 'Rentoura User',
+            fullName: p.full_name || p.email || 'Rentoura User',
             email: p.email || 'N/A',
             phone: p.phone_normalized || 'N/A',
-            avatarUrl: p.profile_photo_url || 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=400&q=80',
+            avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=400&q=80',
             accountType: 'Individual',
             status: p.account_status === 'active' ? 'Active' : p.account_status === 'suspended' ? 'Suspended' : p.account_status === 'banned' ? 'Banned' : 'Active',
             isVerified: true,

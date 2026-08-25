@@ -31,10 +31,10 @@ export const JobHeroAndSalary: React.FC<JobHeroAndSalaryProps> = ({
     { id: 'requirements', label: 'Requirements' },
     { id: 'benefits', label: 'Benefits' },
     { id: 'company', label: 'Company' },
-    { 
+    ...(job.companyReviews ? [{ 
       id: 'reviews', 
-      label: job.companyReviews?.count ? `Reviews (${job.companyReviews.count})` : 'Reviews' 
-    }
+      label: job.companyReviews.count ? `Reviews (${job.companyReviews.count})` : 'Reviews' 
+    }] : [])
   ];
 
   const formattedSalary = () => {

@@ -29,7 +29,7 @@ import { ServiceHeroSlide } from '../data/serviceHeroSlidesData';
 import { getCategoryIconComponent } from '../components/CategoryIcon';
 import { SavedListingService } from '../services/savedListingService';
 import { AuthService } from '../services/authService';
-import { SERVICE_CATEGORIES } from '../data/mockData';
+import { SERVICES_CATEGORIES } from '../data/categories/servicesData';
 
 interface ServicesPageProps {
   onNavigate: (route: AppRoute) => void;
@@ -553,16 +553,17 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({
               onClick={() => setIsCategoryModalOpen(true)}
               className="text-xs font-bold text-[#FF650A] hover:underline flex items-center gap-1 cursor-pointer"
             >
-              View All 13 Categories <ArrowRight className="w-3.5 h-3.5" />
+              View All 30 Main Categories <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2.5">
-            {SERVICE_CATEGORIES.slice(0, 14).map((cat) => (
+            {SERVICES_CATEGORIES.slice(0, 14).map((cat) => (
               <button
                 key={cat.id}
                 onClick={() => {
                   setSelectedCategory(cat.name);
+                  setSelectedCategoryId(cat.id);
                   if (feedRef.current) feedRef.current.scrollIntoView({ behavior: 'smooth' });
                 }}
                 className={`flex flex-col items-center gap-2 p-3 rounded-2xl bg-white border shadow-xs hover:border-[#FF650A] transition-all group tap-bounce cursor-pointer ${
@@ -571,11 +572,8 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({
                     : 'border-slate-200/80'
                 }`}
               >
-                <div 
-                  className="w-11 h-11 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-105"
-                  style={{ backgroundColor: cat.bgColor }}
-                >
-                  {getServiceCategoryIcon(cat.iconName)}
+                <div className="w-11 h-11 rounded-2xl bg-orange-50 text-[#FF650A] flex items-center justify-center transition-transform group-hover:scale-105">
+                  {getCategoryIconComponent({ iconKey: cat.icon, module: 'service', className: 'w-5 h-5 text-[#FF650A]' })}
                 </div>
                 <span className="text-[11px] font-bold text-slate-800 text-center leading-tight truncate w-full">
                   {cat.name}
@@ -999,6 +997,7 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({
         isOpen={isCategoryModalOpen}
         onClose={() => setIsCategoryModalOpen(false)}
         selectedCategory={selectedCategory}
+        selectedCategoryId={selectedCategoryId}
         onSelectCategory={(categoryName, categoryId) => {
           setSelectedCategory(categoryName);
           setSelectedCategoryId(categoryId);

@@ -3,7 +3,7 @@ import { HeroSlide } from '../types/heroSlide';
 import { DEFAULT_HERO_SLIDES } from '../data/heroSlidesData';
 import { FeaturedListingItem, LocationItem } from '../types';
 import { FeedListingItem } from '../components/HomeListingFeed';
-import { POPULAR_LOCATIONS } from '../data/mockData';
+import { LocationService } from './locationService';
 
 export interface MarketplaceStats {
   totalActiveListings: number;
@@ -14,9 +14,33 @@ export interface MarketplaceStats {
 
 export class HomeService {
   /**
+   * Helper: Resolves image storage path in private bucket 'listing-images' using signed URL.
+   * Does NOT use getPublicUrl fallback as bucket is private. Returns empty string if missing or error.
+   */
+  public static async resolveSignedMediaUrl(storagePath: string | null | undefined): Promise<string> {
+    if (!storagePath) return '';
+    if (storagePath.startsWith('http://') || storagePath.startsWith('https://')) {
+      return storagePath;
+    }
+
+    try {
+      const { data, error } = await supabase.storage
+        .from('listing-images')
+        .createSignedUrl(storagePath, 3600);
+
+      if (!error && data?.signedUrl) {
+        return data.signedUrl;
+      }
+    } catch (e) {
+      console.warn('Error signing listing image URL:', e);
+    }
+    return '';
+  }
+
+  /**
    * 1. HERO SLIDES
-   * Fetches hero slides from Supabase `home_slides` table.
-   * If table doesn't exist or query fails/empty, falls back safely to DEFAULT_HERO_SLIDES.
+   * Fetches hero slides from Supabase `home_slides` table where placement='home' and is_active=true.
+   * If DB query returns zero rows or errors out, safely falls back to local visual slide data.
    */
   static async getHeroSlides(): Promise<HeroSlide[]> {
     try {
@@ -55,15 +79,14 @@ export class HomeService {
 
   /**
    * 2. MARKETPLACE STATISTICS
-   * Returns exact counts of active/approved listings in Supabase.
+   * Returns exact counts of active listings in Supabase.
    */
   static async getMarketplaceStats(): Promise<MarketplaceStats> {
     try {
-      // Query overall active listings
       const { count: totalCount, error: totalErr } = await supabase
         .from('listings')
         .select('id', { count: 'exact', head: true })
-        .in('status', ['active', 'approved']);
+        .eq('status', 'active');
 
       if (totalErr) {
         return {
@@ -74,26 +97,23 @@ export class HomeService {
         };
       }
 
-      // Query rentals count
       const { count: rentalCount } = await supabase
         .from('listings')
         .select('id', { count: 'exact', head: true })
-        .in('status', ['active', 'approved'])
-        .in('module', ['rental', 'rentals']);
+        .eq('status', 'active')
+        .eq('module', 'rental');
 
-      // Query jobs count
       const { count: jobCount } = await supabase
         .from('listings')
         .select('id', { count: 'exact', head: true })
-        .in('status', ['active', 'approved'])
-        .in('module', ['job', 'jobs']);
+        .eq('status', 'active')
+        .eq('module', 'job');
 
-      // Query services count
       const { count: serviceCount } = await supabase
         .from('listings')
         .select('id', { count: 'exact', head: true })
-        .in('status', ['active', 'approved'])
-        .in('module', ['service', 'services']);
+        .eq('status', 'active')
+        .eq('module', 'service');
 
       return {
         totalActiveListings: totalCount || 0,
@@ -114,7 +134,7 @@ export class HomeService {
 
   /**
    * 3. FEATURED LISTINGS
-   * Fetches featured listings where status = 'active' or 'approved' and featured/is_featured = true.
+   * Fetches featured listings where status = 'active' and is_featured = true.
    */
   static async getFeaturedListings(): Promise<FeaturedListingItem[]> {
     try {
@@ -127,11 +147,9 @@ export class HomeService {
           price,
           pricing_period,
           is_featured,
+          module_data,
           created_at,
           published_at,
-          rental_details(rates),
-          job_details(salary_min, salary_max, salary_type),
-          service_details(starting_price),
           listing_media(storage_path, position),
           locations:city_id(name),
           categories:category_id(name)
@@ -145,53 +163,59 @@ export class HomeService {
         return [];
       }
 
-      return data.map((row: any) => {
-        const rawMod = row.module || 'rental';
-        const normMod = (rawMod === 'rental' || rawMod === 'rentals') ? 'RENTAL' : ((rawMod === 'job' || rawMod === 'jobs') ? 'JOB' : 'SERVICE');
-        const badgeColor = normMod === 'RENTAL' ? '#1464F4' : (normMod === 'JOB' ? '#08A34F' : '#FF650A');
-        
-        let coverImg = 'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?auto=format&fit=crop&w=600&q=80';
-        if (row.listing_media && row.listing_media.length > 0) {
-          const sorted = [...row.listing_media].sort((a: any, b: any) => (a.position || 0) - (b.position || 0));
-          if (sorted[0]?.storage_path) coverImg = sorted[0].storage_path;
-        }
+      const items = await Promise.all(
+        data.map(async (row: any) => {
+          const rawMod = row.module || 'rental';
+          const normMod = rawMod === 'rental' ? 'RENTAL' : (rawMod === 'job' ? 'JOB' : 'SERVICE');
+          const badgeColor = normMod === 'RENTAL' ? '#1464F4' : (normMod === 'JOB' ? '#08A34F' : '#FF650A');
+          
+          let coverImg = '';
+          if (row.listing_media && row.listing_media.length > 0) {
+            const sorted = [...row.listing_media].sort((a: any, b: any) => (a.position ?? a.sort_order ?? 0) - (b.position ?? b.sort_order ?? 0));
+            if (sorted[0]?.storage_path) {
+              coverImg = await this.resolveSignedMediaUrl(sorted[0].storage_path);
+            }
+          }
 
-        let price = 'Contact for Price';
-        let pricePeriod = '/ Month';
+          let price = 'Contact for Price';
+          let pricePeriod = '/ Month';
 
-        if (row.price != null && row.price > 0) {
-          price = `LKR ${Number(row.price).toLocaleString()}`;
-          if (row.pricing_period) pricePeriod = row.pricing_period;
-        } else if (normMod === 'RENTAL') {
-          const rates = row.rental_details?.rates;
-          if (rates?.monthly) price = `LKR ${Number(rates.monthly).toLocaleString()}`;
-        } else if (normMod === 'JOB') {
-          const salMin = row.job_details?.salary_min;
-          if (salMin) price = `LKR ${Number(salMin).toLocaleString()}`;
-          pricePeriod = 'Full Time';
-        } else if (normMod === 'SERVICE') {
-          const startingPrice = row.service_details?.starting_price;
-          if (startingPrice) price = `From LKR ${Number(startingPrice).toLocaleString()}`;
-          pricePeriod = 'Per Service';
-        }
+          if (row.price != null && row.price > 0) {
+            price = `LKR ${Number(row.price).toLocaleString()}`;
+            if (row.pricing_period) pricePeriod = row.pricing_period;
+          } else if (normMod === 'RENTAL') {
+            const rates = row.module_data?.rates;
+            if (rates?.monthly) price = `LKR ${Number(rates.monthly).toLocaleString()}`;
+          } else if (normMod === 'JOB') {
+            const salMin = row.module_data?.salary_min;
+            if (salMin) price = `LKR ${Number(salMin).toLocaleString()}`;
+            pricePeriod = 'Full Time';
+          } else if (normMod === 'SERVICE') {
+            const startingPrice = row.module_data?.starting_price;
+            if (startingPrice) price = `From LKR ${Number(startingPrice).toLocaleString()}`;
+            pricePeriod = 'Per Service';
+          }
 
-        const categoryName = row.categories?.name || 'Property';
-        const locationName = row.locations?.name || 'Sri Lanka';
+          const categoryName = row.categories?.name || (normMod === 'RENTAL' ? 'Property' : (normMod === 'JOB' ? 'Jobs' : 'Services'));
+          const locationName = row.locations?.name || 'Sri Lanka';
 
-        return {
-          id: row.id,
-          title: row.title,
-          category: categoryName,
-          categoryType: 'HOUSE' as const,
-          badgeType: 'FEATURED' as const,
-          badgeColor,
-          location: locationName,
-          price,
-          pricePeriod,
-          imageUrl: coverImg,
-          isSaved: false
-        };
-      });
+          return {
+            id: row.id,
+            title: row.title,
+            category: categoryName,
+            categoryType: 'HOUSE' as const,
+            badgeType: 'FEATURED' as const,
+            badgeColor,
+            location: locationName,
+            price,
+            pricePeriod,
+            imageUrl: coverImg,
+            isSaved: false
+          };
+        })
+      );
+
+      return items;
     } catch (e) {
       console.error('Error fetching featured listings:', e);
       return [];
@@ -200,7 +224,7 @@ export class HomeService {
 
   /**
    * 4. LATEST LISTINGS FEED (PAGINATED)
-   * Fetches public listings sorted by published_at DESC / created_at DESC with pagination.
+   * Fetches active listings sorted by published_at DESC NULLS LAST, created_at DESC with pagination.
    */
   static async getLatestListingsFeed(
     page: number = 1,
@@ -221,25 +245,22 @@ export class HomeService {
           module_data,
           created_at,
           published_at,
-          approved_at,
-          rental_details(rates, attributes),
-          job_details(company_name, salary_min, salary_max, salary_type, employment_type),
-          service_details(starting_price, pricing_type),
           listing_media(storage_path, position),
           locations:city_id(name),
           categories:category_id(name)
         `, { count: 'exact' })
-        .in('status', ['active', 'approved']);
+        .eq('status', 'active');
 
       if (activeModule !== 'all') {
         const targetModule = activeModule === 'rentals' ? 'rental' : (activeModule === 'jobs' ? 'job' : 'service');
-        query = query.in('module', [targetModule, activeModule]);
+        query = query.eq('module', targetModule);
       }
 
       const fromIndex = (page - 1) * limit;
       const toIndex = fromIndex + limit - 1;
 
       const { data, count, error } = await query
+        .order('published_at', { ascending: false, nullsFirst: false })
         .order('created_at', { ascending: false })
         .range(fromIndex, toIndex);
 
@@ -250,73 +271,72 @@ export class HomeService {
       const total = count || 0;
       const hasMore = toIndex < total - 1;
 
-      const items: FeedListingItem[] = data.map((row: any) => {
-        const rawMod = row.module || 'rental';
-        const normMod: 'rentals' | 'jobs' | 'services' =
-          (rawMod === 'rental' || rawMod === 'rentals') ? 'rentals' : ((rawMod === 'job' || rawMod === 'jobs') ? 'jobs' : 'services');
+      const items: FeedListingItem[] = await Promise.all(
+        data.map(async (row: any) => {
+          const rawMod = row.module || 'rental';
+          const normMod: 'rentals' | 'jobs' | 'services' =
+            rawMod === 'rental' ? 'rentals' : (rawMod === 'job' ? 'jobs' : 'services');
 
-        let priceOrSalary = 'Contact for Price';
-        let periodOrType = 'Fixed';
+          let priceOrSalary = 'Contact for Price';
+          let periodOrType = 'Fixed';
 
-        if (row.price != null && row.price > 0) {
-          priceOrSalary = `LKR ${Number(row.price).toLocaleString()}`;
-          if (row.pricing_period) periodOrType = row.pricing_period;
-        } else if (normMod === 'rentals') {
-          const rates = row.rental_details?.rates || row.module_data?.rates;
-          if (rates?.monthly) {
-            priceOrSalary = `LKR ${Number(rates.monthly).toLocaleString()}`;
-            periodOrType = '/ Month';
-          } else if (rates?.daily) {
-            priceOrSalary = `LKR ${Number(rates.daily).toLocaleString()}`;
-            periodOrType = '/ Day';
+          if (row.price != null && row.price > 0) {
+            priceOrSalary = `LKR ${Number(row.price).toLocaleString()}`;
+            if (row.pricing_period) periodOrType = row.pricing_period;
+          } else if (normMod === 'rentals') {
+            const rates = row.module_data?.rates;
+            if (rates?.monthly) {
+              priceOrSalary = `LKR ${Number(rates.monthly).toLocaleString()}`;
+              periodOrType = '/ Month';
+            } else if (rates?.daily) {
+              priceOrSalary = `LKR ${Number(rates.daily).toLocaleString()}`;
+              periodOrType = '/ Day';
+            }
+          } else if (normMod === 'jobs') {
+            const salMin = row.module_data?.salary_min;
+            const salMax = row.module_data?.salary_max;
+            if (salMin && salMax) {
+              priceOrSalary = `LKR ${(salMin / 1000).toFixed(0)}k - ${(salMax / 1000).toFixed(0)}k`;
+            } else if (salMin) {
+              priceOrSalary = `LKR ${Number(salMin).toLocaleString()}`;
+            }
+            periodOrType = row.module_data?.employment_type || 'Full Time';
+          } else if (normMod === 'services') {
+            const startingPrice = row.module_data?.starting_price;
+            if (startingPrice) {
+              priceOrSalary = `From LKR ${Number(startingPrice).toLocaleString()}`;
+            }
+            periodOrType = row.module_data?.pricing_type || 'Per Service';
           }
-        } else if (normMod === 'jobs') {
-          const salMin = row.job_details?.salary_min || row.module_data?.salary_min;
-          const salMax = row.job_details?.salary_max || row.module_data?.salary_max;
-          if (salMin && salMax) {
-            priceOrSalary = `LKR ${(salMin / 1000).toFixed(0)}k - ${(salMax / 1000).toFixed(0)}k`;
-          } else if (salMin) {
-            priceOrSalary = `LKR ${Number(salMin).toLocaleString()}`;
+
+          let coverUrl = '';
+          if (row.listing_media && row.listing_media.length > 0) {
+            const sortedMedia = [...row.listing_media].sort((a: any, b: any) => (a.position ?? a.sort_order ?? 0) - (b.position ?? b.sort_order ?? 0));
+            if (sortedMedia[0]?.storage_path) {
+              coverUrl = await this.resolveSignedMediaUrl(sortedMedia[0].storage_path);
+            }
           }
-          periodOrType = row.job_details?.employment_type || row.module_data?.employment_type || 'Full Time';
-        } else if (normMod === 'services') {
-          const startingPrice = row.service_details?.starting_price || row.module_data?.starting_price;
-          if (startingPrice) {
-            priceOrSalary = `From LKR ${Number(startingPrice).toLocaleString()}`;
-          }
-          periodOrType = row.service_details?.pricing_type || row.module_data?.pricing_type || 'Per Service';
-        }
 
-        let coverUrl = 'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?auto=format&fit=crop&w=600&q=80';
-        if (normMod === 'jobs') coverUrl = 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=600&q=80';
-        if (normMod === 'services') coverUrl = 'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?auto=format&fit=crop&w=600&q=80';
+          const badgeLabel = normMod === 'rentals' ? 'Rental' : (normMod === 'jobs' ? 'Job' : 'Service');
+          const badgeColor = normMod === 'rentals' ? '#1464F4' : (normMod === 'jobs' ? '#08A34F' : '#FF650A');
+          const locationName = row.locations?.name || 'Sri Lanka';
+          const categoryName = row.categories?.name || (normMod === 'rentals' ? 'Property' : (normMod === 'jobs' ? 'Opportunities' : 'Service'));
 
-        if (row.listing_media && row.listing_media.length > 0) {
-          const sortedMedia = [...row.listing_media].sort((a: any, b: any) => (a.position || 0) - (b.position || 0));
-          if (sortedMedia[0]?.storage_path) {
-            coverUrl = sortedMedia[0].storage_path;
-          }
-        }
-
-        const badgeLabel = normMod === 'rentals' ? 'Rental' : (normMod === 'jobs' ? 'Job' : 'Service');
-        const badgeColor = normMod === 'rentals' ? '#1464F4' : (normMod === 'jobs' ? '#08A34F' : '#FF650A');
-        const locationName = row.locations?.name || 'Sri Lanka';
-        const categoryName = row.categories?.name || (normMod === 'rentals' ? 'Property' : (normMod === 'jobs' ? 'Opportunities' : 'Service'));
-
-        return {
-          id: row.id,
-          title: row.title,
-          module: normMod,
-          category: categoryName,
-          location: locationName,
-          priceOrSalary,
-          periodOrType,
-          imageUrl: coverUrl,
-          postedDate: row.published_at || row.approved_at || row.created_at || new Date().toISOString(),
-          badgeLabel,
-          badgeColor
-        };
-      });
+          return {
+            id: row.id,
+            title: row.title,
+            module: normMod,
+            category: categoryName,
+            location: locationName,
+            priceOrSalary,
+            periodOrType,
+            imageUrl: coverUrl,
+            postedDate: row.published_at || row.created_at || new Date().toISOString(),
+            badgeLabel,
+            badgeColor
+          };
+        })
+      );
 
       return { items, totalCount: total, hasMore };
     } catch (e) {
@@ -326,61 +346,90 @@ export class HomeService {
   }
 
   /**
-   * 5. POPULAR LOCATIONS WITH GENUINE LISTING COUNTS
-   */
-  /**
    * 5. POPULAR LOCATIONS
-   * Popularity ranking is driven by search/filter events from `location_search_events`.
-   * Listing counts are separately computed from active listings in `listings`.
+   * Calls get_popular_locations RPC or resolves top active listing location UUIDs to the canonical 457 location dataset.
    */
   static async getPopularLocations(): Promise<(LocationItem & { searchCount?: number; listingCount?: number })[]> {
     try {
-      // 1. Fetch search/filter activity from location_search_events
-      const { data: searchEvents } = await supabase
-        .from('location_search_events')
-        .select('location_id');
+      const allCanonicals = await LocationService.getAllLocationsAsync(false);
+      const topLocationsMap = new Map<string, { location: any; searchCount: number; listingCount: number }>();
 
-      const searchCountsMap: Record<string, number> = {};
-      if (searchEvents) {
-        searchEvents.forEach((ev: any) => {
-          if (ev.location_id) {
-            searchCountsMap[ev.location_id] = (searchCountsMap[ev.location_id] || 0) + 1;
+      // 1. Try calling get_popular_locations RPC
+      const { data: rpcData, error: rpcErr } = await supabase.rpc('get_popular_locations');
+
+      if (!rpcErr && Array.isArray(rpcData) && rpcData.length > 0) {
+        rpcData.forEach((item: any) => {
+          const locUuid = item.id || item.location_id;
+          const match = allCanonicals.find(c => c.id === locUuid || c.code === item.code);
+          if (match) {
+            topLocationsMap.set(match.id, {
+              location: match,
+              searchCount: Number(item.search_count || item.total_searches || 0),
+              listingCount: Number(item.listing_count || item.active_listings || 0)
+            });
           }
         });
       }
 
-      // 2. Fetch active listing count per district/city from listings
-      const { data: listingLocations } = await supabase
-        .from('listings')
-        .select('district_id, city_id')
-        .eq('status', 'active');
+      // If map has less than 5 locations, populate from active listings distribution
+      if (topLocationsMap.size < 5) {
+        const { data: listingLocs } = await supabase
+          .from('listings')
+          .select('city_id, district_id, province_id')
+          .eq('status', 'active');
 
-      const listingCountsMap: Record<string, number> = {};
-      if (listingLocations) {
-        listingLocations.forEach((item: any) => {
-          if (item.city_id) listingCountsMap[item.city_id] = (listingCountsMap[item.city_id] || 0) + 1;
-          if (item.district_id) listingCountsMap[item.district_id] = (listingCountsMap[item.district_id] || 0) + 1;
+        if (listingLocs) {
+          listingLocs.forEach((l: any) => {
+            const targetId = l.city_id || l.district_id || l.province_id;
+            if (!targetId) return;
+            const match = allCanonicals.find(c => c.id === targetId);
+            if (match) {
+              const existing = topLocationsMap.get(match.id);
+              if (existing) {
+                existing.listingCount += 1;
+              } else {
+                topLocationsMap.set(match.id, {
+                  location: match,
+                  searchCount: 0,
+                  listingCount: 1
+                });
+              }
+            }
+          });
+        }
+      }
+
+      // If still fewer than 5, pick top active provinces/districts from canonical dataset
+      if (topLocationsMap.size < 5) {
+        const topProvinces = allCanonicals.filter(c => c.type === 'province').slice(0, 5);
+        topProvinces.forEach(p => {
+          if (!topLocationsMap.has(p.id)) {
+            topLocationsMap.set(p.id, {
+              location: p,
+              searchCount: 0,
+              listingCount: 0
+            });
+          }
         });
       }
 
-      // 3. Map POPULAR_LOCATIONS with distinct searchCount (popularity) and listingCount (supply)
-      const mappedLocations = POPULAR_LOCATIONS.map(loc => {
-        const searchCount = searchCountsMap[loc.id] || 0;
-        const listingCount = listingCountsMap[loc.id] || 0;
-        return {
-          ...loc,
-          searchCount,
-          listingCount
-        };
-      });
+      const results = Array.from(topLocationsMap.values()).map(item => ({
+        id: item.location.id,
+        name: item.location.name,
+        province: item.location.provinceName || item.location.parentName || 'Sri Lanka',
+        imageUrl: 'https://images.unsplash.com/photo-1586861635167-e5223aadc9fe?auto=format&fit=crop&w=600&q=80',
+        listingsCount: `${item.listingCount} Ads`,
+        searchCount: item.searchCount,
+        listingCount: item.listingCount
+      }));
 
-      // Sort by popularity ranking (searchCount DESC)
-      mappedLocations.sort((a, b) => (b.searchCount || 0) - (a.searchCount || 0));
+      // Sort by searchCount DESC, then listingCount DESC
+      results.sort((a, b) => (b.searchCount || 0) - (a.searchCount || 0) || (b.listingCount || 0) - (a.listingCount || 0));
 
-      return mappedLocations;
+      return results.slice(0, 8);
     } catch (e) {
       console.error('Error getting popular locations:', e);
-      return POPULAR_LOCATIONS.map(loc => ({ ...loc, searchCount: 0, listingCount: 0 }));
+      return [];
     }
   }
 
@@ -390,9 +439,7 @@ export class HomeService {
   static async recordLocationActivity(locationIdOrName: string): Promise<void> {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
 
-      // If locationIdOrName is UUID, insert directly into location_search_events
       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(locationIdOrName);
       
       if (isUuid) {
@@ -400,11 +447,10 @@ export class HomeService {
           .from('location_search_events')
           .insert({
             location_id: locationIdOrName,
-            user_id: user.id,
-            event_type: 'search'
+            user_id: user?.id || null,
+            search_query: null
           });
       } else {
-        // Try finding location id from locations table by name
         const { data: loc } = await supabase
           .from('locations')
           .select('id')
@@ -417,13 +463,14 @@ export class HomeService {
             .from('location_search_events')
             .insert({
               location_id: loc.id,
-              user_id: user.id,
-              event_type: 'search'
+              user_id: user?.id || null,
+              search_query: locationIdOrName
             });
         }
       }
     } catch (e) {
-      // Ignore background analytics error
+      // Ignore analytics logging failure
     }
   }
 }
+

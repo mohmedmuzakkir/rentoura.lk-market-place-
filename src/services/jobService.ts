@@ -47,8 +47,7 @@ export class JobService {
       console.warn('Error signing job image URL:', e);
     }
 
-    const { data: pubData } = supabase.storage.from('listing-images').getPublicUrl(storagePath);
-    return pubData?.publicUrl || fallbackImage;
+    return fallbackImage;
   }
 
   /**

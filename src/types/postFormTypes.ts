@@ -87,6 +87,7 @@ export interface UploadedImage {
   name?: string;
   size?: number;
   isCover?: boolean;
+  file?: File;
 }
 
 export interface LocationDataState {

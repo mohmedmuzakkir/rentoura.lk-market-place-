@@ -25,7 +25,9 @@ export const OwnerProfileCard: React.FC<OwnerProfileCardProps> = ({ owner, onCli
   return (
     <div 
       onClick={onClick}
-      className="bg-white rounded-2xl border border-slate-100 p-4 shadow-xs hover:border-blue-200 transition-all cursor-pointer group"
+      className={`bg-white rounded-2xl border border-slate-100 p-4 shadow-xs transition-all ${
+        onClick ? 'hover:border-blue-200 cursor-pointer group' : ''
+      }`}
     >
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         {/* Left: User Identity */}
@@ -52,7 +54,7 @@ export const OwnerProfileCard: React.FC<OwnerProfileCardProps> = ({ owner, onCli
 
           <div>
             <div className="flex items-center gap-1.5">
-              <h4 className="font-bold text-sm text-slate-900 group-hover:text-[#1464F4] transition-colors">
+              <h4 className={`font-bold text-sm text-slate-900 ${onClick ? 'group-hover:text-[#1464F4]' : ''} transition-colors`}>
                 {owner.name}
               </h4>
               {owner.isVerified && (
@@ -67,7 +69,7 @@ export const OwnerProfileCard: React.FC<OwnerProfileCardProps> = ({ owner, onCli
             )}
 
             <div className="flex items-center gap-2 mt-1 text-xs">
-              {owner.rating !== undefined && (
+              {owner.rating !== undefined && owner.reviewsCount !== undefined && owner.reviewsCount > 0 && (
                 <button 
                   type="button"
                   onClick={(e) => {
@@ -80,15 +82,13 @@ export const OwnerProfileCard: React.FC<OwnerProfileCardProps> = ({ owner, onCli
                 >
                   <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
                   <span>{owner.rating}</span>
-                  {owner.reviewsCount !== undefined && (
-                    <span className="text-slate-400 font-normal underline decoration-slate-300">
-                      ({owner.reviewsCount} Reviews)
-                    </span>
-                  )}
+                  <span className="text-slate-400 font-normal underline decoration-slate-300">
+                    ({owner.reviewsCount} Reviews)
+                  </span>
                 </button>
               )}
               {owner.activeListingsCount !== undefined && (
-                <div className="text-slate-500 text-[11px] border-l border-slate-200 pl-2">
+                <div className="text-slate-500 text-[11px]">
                   <span className="font-bold text-slate-800">{owner.activeListingsCount}</span> Active Listings
                 </div>
               )}
@@ -96,44 +96,12 @@ export const OwnerProfileCard: React.FC<OwnerProfileCardProps> = ({ owner, onCli
           </div>
         </div>
 
-        {/* Right: Metrics / Action */}
-        <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
-          {owner.responseRate && (
-            <div className="px-3 py-2 rounded-xl bg-blue-50/50 border border-blue-100/60 text-left min-w-[100px]">
-              <div className="flex items-center gap-1 text-[10px] text-slate-500 font-semibold">
-                <Zap className="w-3 h-3 text-[#1464F4]" />
-                <span>Response Rate</span>
-              </div>
-              <div className="font-black text-xs text-[#1464F4]">
-                {owner.responseRate}
-              </div>
-              {owner.responseSpeed && (
-                <div className="text-[9px] text-slate-400 truncate max-w-[110px]">
-                  {owner.responseSpeed}
-                </div>
-              )}
-            </div>
-          )}
-
-          {owner.totalRentalsCompleted !== undefined && (
-            <div className="px-3 py-2 rounded-xl bg-slate-50 border border-slate-100 text-left min-w-[100px]">
-              <div className="flex items-center gap-1 text-[10px] text-slate-500 font-semibold">
-                <Car className="w-3 h-3 text-slate-600" />
-                <span>Total Rentals</span>
-              </div>
-              <div className="font-black text-xs text-slate-900">
-                {owner.totalRentalsCompleted}+
-              </div>
-              <div className="text-[9px] text-slate-400">
-                Completed
-              </div>
-            </div>
-          )}
-
-          <div className="p-2 text-slate-400 group-hover:text-slate-700 transition-colors">
+        {/* Right: Actions or Chevron if clickable */}
+        {onClick && (
+          <div className="flex items-center gap-2 text-slate-400 group-hover:text-slate-700 transition-colors">
             <ChevronRight className="w-5 h-5" />
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
