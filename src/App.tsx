@@ -365,6 +365,9 @@ export default function App() {
         '/services', 
         '/saved', 
         '/post', 
+        '/post/rental',
+        '/post/job',
+        '/post/service',
         '/messages', 
         '/chat',
         '/profile',
@@ -381,11 +384,17 @@ export default function App() {
         '/login',
         '/register',
         '/forgot-password',
+        '/reset-password',
         '/user-agreement',
         '/privacy-policy',
         '/safety',
         '/help',
-        '/report-listing'
+        '/report-listing',
+        '/reviews',
+        '/admin',
+        '/admin/dashboard',
+        '/moderator',
+        '/super-admin'
       ];
       if (validRoutes.includes(path)) {
         setCurrentRoute(path);
