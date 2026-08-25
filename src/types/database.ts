@@ -163,6 +163,26 @@ export interface SavedListingRow {
   created_at: string;
 }
 
+export interface HomeSlideRow {
+  id: string;
+  title: string;
+  title_highlight?: string | null;
+  subtitle: string | null;
+  description: string | null;
+  image_url: string;
+  mobile_image_url?: string | null;
+  cta_text?: string | null;
+  cta_route?: string | null;
+  cta_action?: string | null;
+  theme_color?: string | null;
+  is_active: boolean;
+  display_order: number;
+  duration_ms?: number | null;
+  overlay_strength?: number | null;
+  placement?: 'home' | 'rentals' | 'jobs' | 'services' | string | null;
+  created_at?: string;
+}
+
 export interface ReviewRow {
   id: string;
   author_id: string;

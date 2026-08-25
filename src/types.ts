@@ -66,7 +66,7 @@ export interface FeaturedListingItem {
   title: string;
   category: string;
   categoryType: 'HOUSE' | 'VEHICLE' | 'EVENT HALL' | 'EQUIPMENT' | 'VILLA' | 'BIKE' | 'CAMERA' | 'APARTMENT';
-  badgeType: 'FEATURED' | 'VERIFIED' | 'POPULAR';
+  badgeType?: 'FEATURED' | 'VERIFIED' | 'POPULAR' | 'NEW';
   badgeColor: string;
   location: string;
   price: string;
@@ -75,6 +75,8 @@ export interface FeaturedListingItem {
   tags?: string[];
   specs?: { label: string; icon: string }[];
   isSaved?: boolean;
+  rating?: number;
+  reviewsCount?: number;
 }
 
 export interface JobItem {

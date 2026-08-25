@@ -24,6 +24,7 @@ export class HomeService {
         .from('home_slides')
         .select('*')
         .eq('is_active', true)
+        .eq('placement', 'home')
         .order('display_order', { ascending: true });
 
       if (error || !data || data.length === 0) {

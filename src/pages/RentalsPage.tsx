@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { CategoryIcon, getCategoryIconComponent } from '../components/CategoryIcon';
 import { 
-  ArrowLeft, 
   Search, 
   ChevronDown, 
+  ChevronLeft,
+  ChevronRight,
   SlidersHorizontal, 
   Home, 
   BedDouble, 
@@ -17,18 +18,26 @@ import {
   MapPin, 
   Plus, 
   ArrowRight,
-  Sparkles,
   Users,
   Snowflake,
   Cpu,
   Bath,
   Bed,
   RefreshCw,
-  AlertCircle
+  AlertCircle,
+  X,
+  Filter,
+  Loader2,
+  CheckCircle2,
+  Check
 } from 'lucide-react';
-import { CATEGORIES_DATA, FEATURED_RENTALS, NEAR_YOU_RENTALS, SRI_LANKA_LOCATIONS } from '../data/mockData';
-import { AppRoute, FeaturedListingItem, FilterState } from '../types';
-import { CategoryService } from '../services/categoryService';
+import { CATEGORIES_DATA } from '../data/mockData';
+import { AppRoute, FeaturedListingItem } from '../types';
+import { RENTAL_HERO_SLIDES, RentalHeroSlide } from '../data/rentalHeroSlidesData';
+import { RENTALS_CATEGORIES } from '../data/categories/rentalsData';
+import { GlobalLocationModal } from '../components/common/GlobalLocationModal';
+import { RentalService, RentalCategoryRecord } from '../services/rentalService';
+import { SavedListingService } from '../services/savedListingService';
 
 interface RentalsPageProps {
   onNavigate: (route: AppRoute) => void;
@@ -39,43 +48,235 @@ interface RentalsPageProps {
 
 export const RentalsPage: React.FC<RentalsPageProps> = ({ 
   onNavigate,
-  savedListings,
-  onToggleSave,
+  savedListings: parentSavedListings,
+  onToggleSave: parentOnToggleSave,
   onOpenListingDetail
 }) => {
+  // Filter States
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLocation, setSelectedLocation] = useState('All Sri Lanka');
   const [selectedCategory, setSelectedCategory] = useState('All Categories');
   const [selectedPrice, setSelectedPrice] = useState('Any Price');
   const [selectedPeriod, setSelectedPeriod] = useState('Any Period');
 
-  // Dynamic filter lists for dropdowns
-  const [activeDropdown, setActiveDropdown] = useState<'location' | 'category' | 'price' | 'period' | null>(null);
+  // UI Modal States
+  const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+  const [modalSearch, setModalSearch] = useState('');
+  const [draftRentalCategory, setDraftRentalCategory] = useState(selectedCategory || 'All Categories');
+
+  useEffect(() => {
+    if (isCategoryModalOpen) {
+      setDraftRentalCategory(selectedCategory || 'All Categories');
+    }
+  }, [isCategoryModalOpen, selectedCategory]);
+  const [isPriceModalOpen, setIsPriceModalOpen] = useState(false);
+  const [isPeriodModalOpen, setIsPeriodModalOpen] = useState(false);
+
+  // Supabase Data States
+  const [heroSlides, setHeroSlides] = useState<RentalHeroSlide[]>(RENTAL_HERO_SLIDES);
+  const [featuredRentals, setFeaturedRentals] = useState<FeaturedListingItem[]>([]);
+  const [nearYouRentals, setNearYouRentals] = useState<FeaturedListingItem[]>([]);
+  const [rentalFeed, setRentalFeed] = useState<FeaturedListingItem[]>([]);
+  const [dbCategories, setDbCategories] = useState<RentalCategoryRecord[]>([]);
+  const [localSavedListings, setLocalSavedListings] = useState<string[]>(parentSavedListings || []);
+
+  const [totalCount, setTotalCount] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isMoreLoading, setIsMoreLoading] = useState(false);
+
+  // Carousel State
+  const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
+  const touchStartXRef = useRef<number | null>(null);
+  const mainFeedRef = useRef<HTMLDivElement>(null);
 
   const priceOptions = ['Any Price', '< Rs. 25,000', 'Rs. 25,000 - 75,000', 'Rs. 75,000 - 150,000', 'Rs. 150,000+'];
   const periodOptions = ['Any Period', 'Per Day', 'Per Week', 'Per Month', 'Per Event'];
-  
-  const [categoryOptions, setCategoryOptions] = useState<string[]>(['All Categories']);
-  const [categoriesLoading, setCategoriesLoading] = useState(true);
-  const [categoriesError, setCategoriesError] = useState<string | null>(null);
 
-  const loadRentalCategories = useCallback(async (forceRefresh = false) => {
-    setCategoriesLoading(true);
-    setCategoriesError(null);
-    const res = await CategoryService.getMainCategories('rental');
-    if (!res.success) {
-      setCategoriesError('Unable to load categories.');
-      setCategoryOptions(['All Categories']);
-    } else {
-      const names = ['All Categories', ...res.data.map(c => c.name)];
-      setCategoryOptions(names);
-    }
-    setCategoriesLoading(false);
+  // Load Saved Listings from Supabase
+  useEffect(() => {
+    let isMounted = true;
+    SavedListingService.getSavedListingIds().then(ids => {
+      if (isMounted && ids) {
+        setLocalSavedListings(ids);
+      }
+    });
+    return () => { isMounted = false; };
   }, []);
 
+  // Fetch Hero Slides & Categories on Mount
   useEffect(() => {
-    loadRentalCategories();
-  }, [loadRentalCategories]);
+    let isMounted = true;
+    async function loadInitialData() {
+      const [slidesData, categoriesData, featuredData] = await Promise.all([
+        RentalService.getRentalHeroSlides(),
+        RentalService.getRentalCategories(),
+        RentalService.getFeaturedRentals()
+      ]);
+
+      if (isMounted) {
+        if (slidesData && slidesData.length > 0) setHeroSlides(slidesData);
+        if (categoriesData && categoriesData.length > 0) setDbCategories(categoriesData);
+        setFeaturedRentals(featuredData);
+      }
+    }
+    loadInitialData();
+    return () => { isMounted = false; };
+  }, []);
+
+  // Fetch Near You Rentals when Location Changes
+  useEffect(() => {
+    let isMounted = true;
+    RentalService.getNearYouRentals(selectedLocation).then(nearData => {
+      if (isMounted) setNearYouRentals(nearData);
+    });
+    return () => { isMounted = false; };
+  }, [selectedLocation]);
+
+  // Fetch Main Rental Feed when Filters Change
+  useEffect(() => {
+    let isMounted = true;
+    setIsLoading(true);
+
+    if (selectedLocation !== 'All Sri Lanka') {
+      RentalService.logLocationSearchEvent(selectedLocation, 'rental');
+    }
+
+    RentalService.getRentalFeed({
+      searchQuery,
+      selectedLocation,
+      selectedCategory,
+      selectedPrice,
+      selectedPeriod,
+      offset: 0,
+      limit: 12
+    }).then(res => {
+      if (isMounted) {
+        setRentalFeed(res.items);
+        setTotalCount(res.totalCount);
+        setHasMore(res.hasMore);
+        setIsLoading(false);
+      }
+    });
+
+    return () => { isMounted = false; };
+  }, [searchQuery, selectedLocation, selectedCategory, selectedPrice, selectedPeriod]);
+
+  // Handle Load More
+  const handleLoadMore = async () => {
+    if (isMoreLoading || !hasMore) return;
+    setIsMoreLoading(true);
+
+    const res = await RentalService.getRentalFeed({
+      searchQuery,
+      selectedLocation,
+      selectedCategory,
+      selectedPrice,
+      selectedPeriod,
+      offset: rentalFeed.length,
+      limit: 12
+    });
+
+    setRentalFeed(prev => [...prev, ...res.items]);
+    setHasMore(res.hasMore);
+    setTotalCount(res.totalCount);
+    setIsMoreLoading(false);
+  };
+
+  // Toggle Save with Supabase
+  const handleToggleSaveListing = async (listingId: string) => {
+    const res = await SavedListingService.toggleSaveListing(listingId);
+    if (res.requiresLogin) {
+      onNavigate('/login');
+      return;
+    }
+
+    if (res.saved) {
+      setLocalSavedListings(prev => [...prev, listingId]);
+    } else {
+      setLocalSavedListings(prev => prev.filter(id => id !== listingId));
+    }
+    parentOnToggleSave(listingId);
+  };
+
+  // Active Slides
+  const slides = heroSlides.filter(s => s.isEnabled !== false);
+
+  // Auto-play slider effect (~5 seconds per slide)
+  useEffect(() => {
+    if (isPaused || slides.length <= 1) return;
+    const duration = slides[currentSlideIndex]?.durationMs || 5000;
+    const timer = setTimeout(() => {
+      setCurrentSlideIndex((prev) => (prev + 1) % slides.length);
+    }, duration);
+
+    return () => clearTimeout(timer);
+  }, [currentSlideIndex, isPaused, slides]);
+
+  const handleNextSlide = () => {
+    setCurrentSlideIndex((prev) => (prev + 1) % slides.length);
+  };
+
+  const handlePrevSlide = () => {
+    setCurrentSlideIndex((prev) => (prev - 1 + slides.length) % slides.length);
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartXRef.current = e.touches[0].clientX;
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartXRef.current === null) return;
+    const touchEndX = e.changedTouches[0].clientX;
+    const diffX = touchStartXRef.current - touchEndX;
+
+    if (diffX > 40) handleNextSlide();
+    else if (diffX < -40) handlePrevSlide();
+    touchStartXRef.current = null;
+  };
+
+  const handleSlideCTA = (slide: RentalHeroSlide) => {
+    if (slide.ctaAction === 'post' || slide.ctaRoute === '/post/rental') {
+      onNavigate('/post/rental');
+    } else if (slide.ctaAction === 'category_property') {
+      setSelectedCategory('Property');
+      scrollToFeed();
+    } else if (slide.ctaAction === 'category_vehicles') {
+      setSelectedCategory('Vehicles');
+      scrollToFeed();
+    } else if (slide.ctaAction === 'category_equipment') {
+      setSelectedCategory('Equipment');
+      scrollToFeed();
+    } else if (slide.ctaAction === 'explore') {
+      clearAllFilters();
+      scrollToFeed();
+    } else {
+      onNavigate('/post/rental');
+    }
+  };
+
+  const scrollToFeed = () => {
+    if (mainFeedRef.current) {
+      mainFeedRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
+  const clearAllFilters = () => {
+    setSearchQuery('');
+    setSelectedLocation('All Sri Lanka');
+    setSelectedCategory('All Categories');
+    setSelectedPrice('Any Price');
+    setSelectedPeriod('Any Period');
+  };
+
+  const hasActiveFilters = 
+    searchQuery.trim() !== '' || 
+    selectedLocation !== 'All Sri Lanka' || 
+    selectedCategory !== 'All Categories' || 
+    selectedPrice !== 'Any Price' || 
+    selectedPeriod !== 'Any Period';
 
   const getCategoryIcon = (iconName: string) => {
     return getCategoryIconComponent({ iconKey: iconName, module: 'rental', className: 'w-5 h-5' });
@@ -93,59 +294,139 @@ export const RentalsPage: React.FC<RentalsPageProps> = ({
     }
   };
 
+  // Categories list for modal
+  const modalCategoriesList = dbCategories.length > 0 
+    ? dbCategories.map(c => ({
+        id: c.id,
+        name: c.name,
+        icon: c.iconKey ? getCategoryIcon(c.iconKey) : '📦',
+        description: c.description || `${c.name} rental listings`
+      }))
+    : RENTALS_CATEGORIES.map(c => ({
+        id: c.id,
+        name: c.name,
+        icon: c.icon,
+        description: c.description
+      }));
+
+  const modalCategoriesFiltered = modalCategoriesList.filter(c => 
+    !modalSearch.trim() || 
+    c.name.toLowerCase().includes(modalSearch.toLowerCase()) ||
+    (c.description && c.description.toLowerCase().includes(modalSearch.toLowerCase()))
+  );
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 pb-28 overflow-x-hidden selection:bg-[#1464F4] selection:text-white">
-      {/* Hero Section with Luxury House & Blue Sedan Backdrop matching Image 2 */}
-      <div className="relative bg-[#041C43] text-white pt-4 pb-7 px-4 overflow-hidden shadow-md">
-        {/* Background Visual Layer */}
-        <div className="absolute inset-0 z-0">
-          <img
-            src="https://images.unsplash.com/photo-1613490493576-7fde63acd811?auto=format&fit=crop&w=1200&q=80"
-            alt="Luxury Rental in Sri Lanka"
-            className="w-full h-full object-cover object-right opacity-35"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#041C43] via-[#041C43]/70 to-transparent" />
-          <div className="absolute inset-0 bg-gradient-to-r from-[#041C43] via-[#041C43]/85 to-transparent" />
-        </div>
+      {/* 1. DATA-DRIVEN 5-SLIDE RENTALS HERO CAROUSEL */}
+      <div 
+        className="relative bg-[#041C43] text-white pt-4 pb-8 px-4 overflow-hidden shadow-md group"
+        onMouseEnter={() => setIsPaused(true)}
+        onMouseLeave={() => setIsPaused(false)}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+      >
+        {slides.map((slide, idx) => (
+          <div 
+            key={slide.id}
+            className={`absolute inset-0 z-0 transition-opacity duration-700 ease-in-out ${
+              idx === currentSlideIndex ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+            }`}
+          >
+            <img
+              src={slide.imageUrl}
+              alt={slide.title}
+              className="w-full h-full object-cover object-center"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-[#041C43] via-[#041C43]/75 to-[#041C43]/40" />
+            <div className="absolute inset-0 bg-gradient-to-r from-[#041C43] via-[#041C43]/80 to-transparent" />
+          </div>
+        ))}
 
-        <div className="relative z-10 max-w-md lg:max-w-7xl mx-auto">
-          {/* Main Hero Headline */}
-          <div className="mt-1">
-            <h1 className="text-3xl font-extrabold tracking-tight leading-[1.15] font-heading text-white">
-              Rent What<br />
-              You Need
-            </h1>
-            <p className="text-base font-semibold text-white/95 mt-1 tracking-tight">
-              Across Sri Lanka
-            </p>
-            <p className="text-xs text-blue-100/90 mt-1 max-w-[280px] leading-relaxed">
-              Find the best rentals near you, quick, easy and trusted.
-            </p>
+        <div className="relative z-10 max-w-md lg:max-w-6xl mx-auto min-h-[170px] flex flex-col justify-between">
+          {slides[currentSlideIndex] && (
+            <div className="animate-in fade-in slide-in-from-left-2 duration-300">
+              <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-white/15 backdrop-blur-md border border-white/20 text-[10px] font-bold tracking-wider uppercase text-blue-200 mb-1.5">
+                <Home className="w-3 h-3 text-[#1464F4]" />
+                <span>{slides[currentSlideIndex].subtitle}</span>
+              </div>
+
+              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight leading-tight font-heading text-white">
+                {slides[currentSlideIndex].title}{' '}
+                {slides[currentSlideIndex].titleHighlight && (
+                  <span className="text-blue-300">{slides[currentSlideIndex].titleHighlight}</span>
+                )}
+              </h1>
+
+              <p className="text-xs sm:text-sm text-blue-100/90 mt-1 max-w-md leading-relaxed font-medium">
+                {slides[currentSlideIndex].description}
+              </p>
+
+              <div className="mt-3">
+                <button
+                  onClick={() => handleSlideCTA(slides[currentSlideIndex])}
+                  className="px-4 py-2 rounded-xl bg-[#1464F4] hover:bg-blue-600 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-lg shadow-blue-500/30 tap-bounce cursor-pointer"
+                >
+                  <span>{slides[currentSlideIndex].ctaLabel}</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Desktop Arrow Controls */}
+          <div className="hidden sm:flex items-center justify-between absolute top-1/2 -translate-y-1/2 left-0 right-0 px-2 pointer-events-none">
+            <button
+              onClick={handlePrevSlide}
+              className="w-8 h-8 rounded-full bg-black/40 hover:bg-black/70 text-white flex items-center justify-center backdrop-blur-xs pointer-events-auto tap-bounce border border-white/20"
+              aria-label="Previous slide"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button
+              onClick={handleNextSlide}
+              className="w-8 h-8 rounded-full bg-black/40 hover:bg-black/70 text-white flex items-center justify-center backdrop-blur-xs pointer-events-auto tap-bounce border border-white/20"
+              aria-label="Next slide"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
           </div>
 
-          {/* Module Switcher Tabs matching Image 2 (White pill frame with 3 items) */}
-          <div className="bg-white rounded-full p-1.5 mt-5 flex items-center justify-between shadow-xl">
-            {/* Active Rentals Tab */}
+          {/* Carousel Slide Indicators */}
+          <div className="flex items-center justify-center gap-1.5 mt-4">
+            {slides.map((_, idx) => (
+              <button
+                key={idx}
+                onClick={() => setCurrentSlideIndex(idx)}
+                className={`h-1.5 rounded-full transition-all duration-300 ${
+                  idx === currentSlideIndex 
+                    ? 'w-6 bg-[#1464F4]' 
+                    : 'w-1.5 bg-white/40 hover:bg-white/70'
+                }`}
+                aria-label={`Go to slide ${idx + 1}`}
+              />
+            ))}
+          </div>
+
+          {/* Module Switcher Tabs (Rentals / Jobs / Services) */}
+          <div className="bg-white rounded-full p-1.5 mt-4 flex items-center justify-between shadow-xl border border-white/20">
             <button 
-              className="flex-1 py-2 px-3 rounded-full bg-[#1464F4] text-white text-xs font-extrabold flex items-center justify-center gap-1.5 shadow-sm tap-bounce"
+              className="flex-1 py-2 px-3 rounded-full bg-[#1464F4] text-white text-xs font-extrabold flex items-center justify-center gap-1.5 shadow-sm tap-bounce cursor-pointer"
             >
               <Home className="w-3.5 h-3.5" />
               <span>RENTALS</span>
             </button>
 
-            {/* Jobs Tab */}
             <button
               onClick={() => onNavigate('/jobs')}
-              className="flex-1 py-2 px-3 rounded-full text-[#08A34F] hover:bg-slate-50 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors tap-bounce"
+              className="flex-1 py-2 px-3 rounded-full text-[#08A34F] hover:bg-slate-50 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors tap-bounce cursor-pointer"
             >
               <Briefcase className="w-3.5 h-3.5" />
               <span>JOBS</span>
             </button>
 
-            {/* Services Tab */}
             <button
               onClick={() => onNavigate('/services')}
-              className="flex-1 py-2 px-3 rounded-full text-[#FF650A] hover:bg-slate-50 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors tap-bounce"
+              className="flex-1 py-2 px-3 rounded-full text-[#FF650A] hover:bg-slate-50 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors tap-bounce cursor-pointer"
             >
               <Drill className="w-3.5 h-3.5" />
               <span>SERVICES</span>
@@ -154,176 +435,172 @@ export const RentalsPage: React.FC<RentalsPageProps> = ({
         </div>
       </div>
 
-      <div className="max-w-md mx-auto px-4 -mt-3 relative z-20 space-y-5">
-        {/* Floating Search & Filter Card matching Image 2 */}
+      {/* 2. FLOATING SEARCH & FILTER CONTROLS */}
+      <div className="max-w-md lg:max-w-5xl mx-auto px-4 -mt-3 relative z-20 space-y-4">
         <div className="bg-white rounded-2xl p-3 shadow-md border border-slate-200/80 space-y-2.5">
-          {/* Main Input Box with Blue Circle Search Icon */}
-          <div className="flex items-center gap-2 bg-slate-50 rounded-xl px-3 py-1.5 border border-slate-200">
+          <div className="flex items-center gap-2 bg-slate-50 rounded-xl px-3 py-1.5 border border-slate-200 focus-within:border-[#1464F4] transition-colors">
             <Search className="w-4 h-4 text-slate-400 shrink-0" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') onNavigate('/search');
-              }}
               placeholder="Search homes, vehicles, rooms, equipment..."
               className="flex-1 bg-transparent text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none py-1.5 font-medium"
             />
+            {searchQuery && (
+              <button 
+                onClick={() => setSearchQuery('')}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
             <button 
-              onClick={() => onNavigate('/search')}
-              className="w-8 h-8 rounded-full bg-[#1464F4] text-white flex items-center justify-center shadow-md shadow-blue-500/25 tap-bounce shrink-0"
+              onClick={scrollToFeed}
+              className="w-8 h-8 rounded-full bg-[#1464F4] text-white flex items-center justify-center shadow-md shadow-blue-500/25 tap-bounce shrink-0 cursor-pointer"
               aria-label="Search"
             >
               <Search className="w-3.5 h-3.5 stroke-[2.5]" />
             </button>
           </div>
 
-          {/* Dropdown Filters Row matching Image 2 */}
           <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1 text-[11px]">
-            {/* Location Pill */}
             <div className="relative shrink-0">
               <button
-                onClick={() => setActiveDropdown(activeDropdown === 'location' ? null : 'location')}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-semibold"
+                onClick={() => setIsLocationModalOpen(true)}
+                className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl border text-xs font-semibold cursor-pointer transition-colors ${
+                  selectedLocation !== 'All Sri Lanka' 
+                    ? 'border-[#1464F4] bg-blue-50 text-[#1464F4]' 
+                    : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
+                }`}
               >
                 <MapPin className="w-3.5 h-3.5 text-[#1464F4]" />
                 <span className="text-[10.5px]">Location:</span>
-                <span className="font-bold text-slate-900 truncate max-w-[70px]">{selectedLocation}</span>
+                <span className="font-bold text-slate-900 truncate max-w-[80px]">{selectedLocation}</span>
                 <ChevronDown className="w-3 h-3 text-slate-400" />
               </button>
-
-              {activeDropdown === 'location' && (
-                <div className="absolute top-full left-0 mt-1 w-48 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-30 animate-in fade-in zoom-in-95 max-h-48 overflow-y-auto">
-                  {SRI_LANKA_LOCATIONS.map((loc) => (
-                    <button
-                      key={loc.name}
-                      onClick={() => { setSelectedLocation(loc.name); setActiveDropdown(null); }}
-                      className="w-full px-3 py-1.5 text-left text-xs hover:bg-blue-50 text-slate-800 font-medium flex items-center justify-between"
-                    >
-                      <span>{loc.name}</span>
-                      {selectedLocation === loc.name && <span className="text-[#1464F4] font-bold">✓</span>}
-                    </button>
-                  ))}
-                </div>
-              )}
             </div>
 
-            {/* Category Pill */}
             <div className="relative shrink-0">
               <button
-                onClick={() => setActiveDropdown(activeDropdown === 'category' ? null : 'category')}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-semibold"
+                onClick={() => setIsCategoryModalOpen(true)}
+                className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl border text-xs font-semibold cursor-pointer transition-colors ${
+                  selectedCategory !== 'All Categories' 
+                    ? 'border-[#1464F4] bg-blue-50 text-[#1464F4]' 
+                    : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
+                }`}
               >
                 <LayoutGrid className="w-3.5 h-3.5 text-[#1464F4]" />
                 <span className="text-[10.5px]">Category:</span>
-                <span className="font-bold text-slate-900 truncate max-w-[70px]">{selectedCategory}</span>
+                <span className="font-bold text-slate-900 truncate max-w-[85px]">{selectedCategory}</span>
                 <ChevronDown className="w-3 h-3 text-slate-400" />
               </button>
-
-              {activeDropdown === 'category' && (
-                <div className="absolute top-full left-0 mt-1 w-52 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-30 animate-in fade-in zoom-in-95 max-h-52 overflow-y-auto">
-                  {categoriesLoading && (
-                    <div className="px-3 py-2 text-xs text-slate-400 font-medium">Loading categories...</div>
-                  )}
-                  {!categoriesLoading && categoriesError && (
-                    <div className="px-3 py-2 text-xs text-red-600 space-y-1">
-                      <p>Unable to load categories.</p>
-                      <button
-                        onClick={() => loadRentalCategories(true)}
-                        className="px-2 py-0.5 bg-red-100 hover:bg-red-200 text-red-700 font-bold rounded text-[10px] inline-flex items-center gap-1"
-                      >
-                        <RefreshCw className="w-3 h-3" /> Retry
-                      </button>
-                    </div>
-                  )}
-                  {!categoriesLoading && !categoriesError && categoryOptions.length <= 1 && (
-                    <div className="px-3 py-2 text-xs text-slate-400 font-medium">
-                      No rental categories are available yet.
-                    </div>
-                  )}
-                  {!categoriesLoading && !categoriesError && categoryOptions.map((cat) => (
-                    <button
-                      key={cat}
-                      onClick={() => { setSelectedCategory(cat); setActiveDropdown(null); }}
-                      className="w-full px-3 py-1.5 text-left text-xs hover:bg-blue-50 text-slate-800 font-medium flex items-center justify-between cursor-pointer"
-                    >
-                      <span>{cat}</span>
-                      {selectedCategory === cat && <span className="text-[#1464F4] font-bold">✓</span>}
-                    </button>
-                  ))}
-                </div>
-              )}
             </div>
 
-            {/* Price Pill */}
             <div className="relative shrink-0">
               <button
-                onClick={() => setActiveDropdown(activeDropdown === 'price' ? null : 'price')}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-semibold"
+                onClick={() => setIsPriceModalOpen(true)}
+                className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl border text-xs font-semibold cursor-pointer transition-colors ${
+                  selectedPrice !== 'Any Price' 
+                    ? 'border-[#1464F4] bg-blue-50 text-[#1464F4]' 
+                    : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
+                }`}
               >
                 <span className="text-[#1464F4] font-bold text-xs">◆</span>
                 <span className="text-[10.5px]">Price:</span>
-                <span className="font-bold text-slate-900 truncate max-w-[65px]">{selectedPrice}</span>
+                <span className="font-bold text-slate-900 truncate max-w-[75px]">{selectedPrice}</span>
                 <ChevronDown className="w-3 h-3 text-slate-400" />
               </button>
-
-              {activeDropdown === 'price' && (
-                <div className="absolute top-full left-0 mt-1 w-44 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-30 animate-in fade-in zoom-in-95">
-                  {priceOptions.map((pr) => (
-                    <button
-                      key={pr}
-                      onClick={() => { setSelectedPrice(pr); setActiveDropdown(null); }}
-                      className="w-full px-3 py-1.5 text-left text-xs hover:bg-blue-50 text-slate-800 font-medium flex items-center justify-between"
-                    >
-                      <span>{pr}</span>
-                      {selectedPrice === pr && <span className="text-[#1464F4] font-bold">✓</span>}
-                    </button>
-                  ))}
-                </div>
-              )}
             </div>
 
-            {/* Period Pill */}
             <div className="relative shrink-0">
               <button
-                onClick={() => setActiveDropdown(activeDropdown === 'period' ? null : 'period')}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-semibold"
+                onClick={() => setIsPeriodModalOpen(true)}
+                className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl border text-xs font-semibold cursor-pointer transition-colors ${
+                  selectedPeriod !== 'Any Period' 
+                    ? 'border-[#1464F4] bg-blue-50 text-[#1464F4]' 
+                    : 'border-slate-200 bg-white hover:bg-slate-50 text-slate-700'
+                }`}
               >
-                <span className="text-[#1464F4] font-bold text-[10px]">📅</span>
+                <span className="text-[10px]">📅</span>
                 <span className="text-[10.5px]">Period:</span>
-                <span className="font-bold text-slate-900 truncate max-w-[65px]">{selectedPeriod}</span>
+                <span className="font-bold text-slate-900 truncate max-w-[75px]">{selectedPeriod}</span>
                 <ChevronDown className="w-3 h-3 text-slate-400" />
               </button>
-
-              {activeDropdown === 'period' && (
-                <div className="absolute top-full right-0 mt-1 w-40 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-30 animate-in fade-in zoom-in-95">
-                  {periodOptions.map((pd) => (
-                    <button
-                      key={pd}
-                      onClick={() => { setSelectedPeriod(pd); setActiveDropdown(null); }}
-                      className="w-full px-3 py-1.5 text-left text-xs hover:bg-blue-50 text-slate-800 font-medium flex items-center justify-between"
-                    >
-                      <span>{pd}</span>
-                      {selectedPeriod === pd && <span className="text-[#1464F4] font-bold">✓</span>}
-                    </button>
-                  ))}
-                </div>
-              )}
             </div>
 
-            {/* More Filters button */}
             <button
-              onClick={() => onNavigate('/filters')}
+              onClick={() => setIsCategoryModalOpen(true)}
               className="shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-[#1464F4] text-white font-bold tap-bounce shadow-xs cursor-pointer"
             >
               <SlidersHorizontal className="w-3 h-3" />
-              <span className="text-[10.5px]">More Filters</span>
+              <span className="text-[10.5px]">All Categories</span>
             </button>
           </div>
         </div>
 
-        {/* List Your Rental Banner matching Image 2 */}
+        {/* 3. ACTIVE FILTER CHIPS */}
+        {hasActiveFilters && (
+          <div className="flex items-center gap-1.5 flex-wrap bg-blue-50/80 p-2 rounded-xl border border-blue-100 text-xs">
+            <span className="text-[11px] font-bold text-slate-500 mr-1 flex items-center gap-1">
+              <Filter className="w-3 h-3 text-[#1464F4]" /> Active Filters:
+            </span>
+
+            {searchQuery && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white border border-blue-200 text-[#1464F4] font-bold text-[11px] shadow-xs">
+                Search: "{searchQuery}"
+                <button onClick={() => setSearchQuery('')} className="hover:text-red-600 ml-0.5">
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+
+            {selectedLocation !== 'All Sri Lanka' && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white border border-blue-200 text-[#1464F4] font-bold text-[11px] shadow-xs">
+                Location: {selectedLocation}
+                <button onClick={() => setSelectedLocation('All Sri Lanka')} className="hover:text-red-600 ml-0.5">
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+
+            {selectedCategory !== 'All Categories' && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white border border-blue-200 text-[#1464F4] font-bold text-[11px] shadow-xs">
+                Category: {selectedCategory}
+                <button onClick={() => setSelectedCategory('All Categories')} className="hover:text-red-600 ml-0.5">
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+
+            {selectedPrice !== 'Any Price' && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white border border-blue-200 text-[#1464F4] font-bold text-[11px] shadow-xs">
+                Price: {selectedPrice}
+                <button onClick={() => setSelectedPrice('Any Price')} className="hover:text-red-600 ml-0.5">
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+
+            {selectedPeriod !== 'Any Period' && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white border border-blue-200 text-[#1464F4] font-bold text-[11px] shadow-xs">
+                Period: {selectedPeriod}
+                <button onClick={() => setSelectedPeriod('Any Period')} className="hover:text-red-600 ml-0.5">
+                  <X className="w-3 h-3" />
+                </button>
+              </span>
+            )}
+
+            <button
+              onClick={clearAllFilters}
+              className="text-[11px] font-extrabold text-red-600 hover:underline ml-auto pl-2 cursor-pointer"
+            >
+              Clear All
+            </button>
+          </div>
+        )}
+
+        {/* 4. LIST YOUR RENTAL BANNER */}
         <div className="bg-gradient-to-r from-[#0D47A1] via-[#1464F4] to-[#1E88E5] text-white rounded-2xl p-3.5 flex items-center justify-between gap-3 shadow-md shadow-blue-500/20">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-xs flex items-center justify-center text-white shrink-0 border border-white/30">
@@ -331,39 +608,50 @@ export const RentalsPage: React.FC<RentalsPageProps> = ({
             </div>
             <div className="min-w-0">
               <h3 className="text-xs font-bold font-heading text-white">List Your Rental</h3>
-              <p className="text-[10px] text-blue-100 truncate max-w-[190px]">
-                Reach thousands of people looking to rent every day.
+              <p className="text-[10px] text-blue-100 truncate max-w-[190px] sm:max-w-xs">
+                Reach thousands of renters across Sri Lanka every day.
               </p>
             </div>
           </div>
           <button
-            onClick={() => onNavigate('/post')}
-            className="px-3 py-2 rounded-xl bg-white text-[#1464F4] hover:bg-blue-50 text-[11px] font-extrabold flex items-center gap-1 shrink-0 tap-bounce shadow-sm"
+            onClick={() => onNavigate('/post/rental')}
+            className="px-3 py-2 rounded-xl bg-white text-[#1464F4] hover:bg-blue-50 text-[11px] font-extrabold flex items-center gap-1 shrink-0 tap-bounce shadow-sm cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" /> List Your Rental <ArrowRight className="w-3 h-3" />
           </button>
         </div>
 
-        {/* Browse Categories matching Image 2 */}
+        {/* 5. BROWSE CATEGORIES */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-bold text-slate-900 font-heading">
               Browse Categories
             </h2>
             <button 
-              onClick={() => setSelectedCategory('All Categories')}
-              className="text-xs font-bold text-[#1464F4] hover:underline flex items-center gap-0.5"
+              onClick={() => setIsCategoryModalOpen(true)}
+              className="text-xs font-bold text-[#1464F4] hover:underline flex items-center gap-0.5 cursor-pointer"
             >
               View All <ArrowRight className="w-3 h-3" />
             </button>
           </div>
 
-          <div className="grid grid-cols-4 gap-2.5">
+          <div className="grid grid-cols-4 sm:grid-cols-8 gap-2.5">
             {CATEGORIES_DATA.map((cat) => (
               <button
                 key={cat.id}
-                onClick={() => setSelectedCategory(cat.name)}
-                className="flex flex-col items-center gap-1.5 p-2 rounded-2xl bg-white border border-slate-200/80 shadow-xs hover:border-[#1464F4] transition-all group tap-bounce"
+                onClick={() => {
+                  if (cat.id === 'more') {
+                    setIsCategoryModalOpen(true);
+                  } else {
+                    setSelectedCategory(cat.name);
+                    scrollToFeed();
+                  }
+                }}
+                className={`flex flex-col items-center gap-1.5 p-2 rounded-2xl bg-white border transition-all group tap-bounce cursor-pointer ${
+                  selectedCategory === cat.name 
+                    ? 'border-[#1464F4] ring-2 ring-blue-500/20 shadow-md' 
+                    : 'border-slate-200/80 shadow-xs hover:border-[#1464F4]'
+                }`}
               >
                 <div 
                   className="w-11 h-11 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-105"
@@ -379,169 +667,563 @@ export const RentalsPage: React.FC<RentalsPageProps> = ({
           </div>
         </div>
 
-        {/* Featured Rentals matching Image 2 */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold text-slate-900 font-heading">
-              Featured Rentals
-            </h2>
-            <button 
-              onClick={() => setSelectedCategory('All Categories')}
-              className="text-xs font-bold text-[#1464F4] hover:underline flex items-center gap-0.5"
-            >
-              View All <ArrowRight className="w-3 h-3" />
-            </button>
-          </div>
+        {/* 6. FEATURED RENTALS SECTION */}
+        {featuredRentals.length > 0 && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-bold text-slate-900 font-heading flex items-center gap-1.5">
+                <span>Featured Rentals</span>
+                <span className="px-2 py-0.5 rounded-full bg-blue-100 text-[#1464F4] text-[10px] font-black">
+                  {featuredRentals.length}
+                </span>
+              </h2>
+            </div>
 
-          <div className="flex gap-3 overflow-x-auto no-scrollbar pb-1 -mx-4 px-4">
-            {FEATURED_RENTALS.map((rental) => {
-              const isSaved = savedListings.includes(rental.id);
-              return (
-                <div
-                  key={rental.id}
-                  onClick={() => {
-                    if (onOpenListingDetail) {
-                      onOpenListingDetail(rental.id, 'rentals');
-                    } else {
-                      onNavigate('/rental-detail');
-                    }
-                  }}
-                  className="w-64 shrink-0 bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-sm flex flex-col cursor-pointer hover:shadow-md transition-shadow"
-                >
-                  {/* Photo & badges */}
-                  <div className="relative h-36 w-full bg-slate-100">
-                    <img
-                      src={rental.imageUrl}
-                      alt={rental.title}
-                      className="w-full h-full object-cover"
-                    />
-                    <div className="absolute top-2.5 left-2.5">
-                      <span className="px-2 py-0.5 rounded-md bg-[#1464F4] text-white text-[9.5px] font-black uppercase tracking-wider shadow-sm">
-                        FEATURED
-                      </span>
-                    </div>
+            <div className="flex gap-3 overflow-x-auto no-scrollbar pb-1 -mx-4 px-4">
+              {featuredRentals.map((rental) => {
+                const isSaved = localSavedListings.includes(rental.id);
+                return (
+                  <div
+                    key={rental.id}
+                    onClick={() => {
+                      if (onOpenListingDetail) {
+                        onOpenListingDetail(rental.id, 'rentals');
+                      } else {
+                        onNavigate('/rental-detail');
+                      }
+                    }}
+                    className="w-64 shrink-0 bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-sm flex flex-col cursor-pointer hover:shadow-md transition-shadow group"
+                  >
+                    <div className="relative h-36 w-full bg-slate-100 overflow-hidden">
+                      <img
+                        src={rental.imageUrl}
+                        alt={rental.title}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                      <div className="absolute top-2.5 left-2.5">
+                        <span className="px-2 py-0.5 rounded-md bg-[#1464F4] text-white text-[9.5px] font-black uppercase tracking-wider shadow-sm">
+                          FEATURED
+                        </span>
+                      </div>
 
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onToggleSave(rental.id);
-                      }}
-                      className="absolute top-2.5 right-2.5 w-7 h-7 rounded-full bg-black/40 text-white hover:bg-black/60 flex items-center justify-center backdrop-blur-xs tap-bounce"
-                      aria-label="Save listing"
-                    >
-                      <Heart className={`w-3.5 h-3.5 ${isSaved ? 'fill-red-500 text-red-500' : 'text-white'}`} />
-                    </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleToggleSaveListing(rental.id);
+                        }}
+                        className="absolute top-2.5 right-2.5 w-7 h-7 rounded-full bg-black/40 text-white hover:bg-black/60 flex items-center justify-center backdrop-blur-xs tap-bounce cursor-pointer"
+                        aria-label="Save listing"
+                      >
+                        <Heart className={`w-3.5 h-3.5 ${isSaved ? 'fill-red-500 text-red-500' : 'text-white'}`} />
+                      </button>
 
-                    <div className="absolute bottom-2 left-2.5">
-                      <span className="px-2 py-0.5 rounded bg-black/60 backdrop-blur-xs text-white text-[9px] font-bold uppercase">
-                        {rental.categoryType}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Body */}
-                  <div className="p-3 flex-1 flex flex-col justify-between space-y-2">
-                    <div>
-                      <h3 className="text-xs font-bold text-slate-900 truncate font-heading">
-                        {rental.title}
-                      </h3>
-                      <div className="flex items-center gap-1 text-[11px] text-slate-500 mt-0.5">
-                        <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
-                        <span className="truncate">{rental.location}</span>
+                      <div className="absolute bottom-2 left-2.5">
+                        <span className="px-2 py-0.5 rounded bg-black/60 backdrop-blur-xs text-white text-[9px] font-bold uppercase">
+                          {rental.category}
+                        </span>
                       </div>
                     </div>
 
-                    <div className="text-xs font-extrabold text-[#1464F4]">
-                      {rental.price} <span className="text-[10px] text-slate-500 font-normal">{rental.pricePeriod}</span>
+                    <div className="p-3 flex-1 flex flex-col justify-between space-y-2">
+                      <div>
+                        <h3 className="text-xs font-bold text-slate-900 truncate font-heading group-hover:text-[#1464F4] transition-colors">
+                          {rental.title}
+                        </h3>
+                        <div className="flex items-center gap-1 text-[11px] text-slate-500 mt-0.5">
+                          <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
+                          <span className="truncate">{rental.location}</span>
+                        </div>
+                      </div>
+
+                      <div className="text-xs font-extrabold text-[#1464F4]">
+                        {rental.price} <span className="text-[10px] text-slate-500 font-normal">{rental.pricePeriod}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* 7. NEAR YOU SECTION */}
+        {nearYouRentals.length > 0 && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-bold text-slate-900 font-heading flex items-center gap-1.5">
+                <span>Near You</span>
+                <span className="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[10px] font-bold">
+                  {nearYouRentals.length}
+                </span>
+              </h2>
+            </div>
+
+            <div className="flex gap-2.5 overflow-x-auto no-scrollbar pb-1 -mx-4 px-4">
+              {nearYouRentals.map((item) => {
+                const isSaved = localSavedListings.includes(item.id);
+                return (
+                  <div
+                    key={item.id}
+                    onClick={() => {
+                      if (onOpenListingDetail) {
+                        onOpenListingDetail(item.id, 'rentals');
+                      } else {
+                        onNavigate('/rental-detail');
+                      }
+                    }}
+                    className="w-40 shrink-0 bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-xs flex flex-col cursor-pointer hover:shadow-md transition-shadow group"
+                  >
+                    <div className="relative h-28 w-full bg-slate-100 overflow-hidden">
+                      <img
+                        src={item.imageUrl}
+                        alt={item.title}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleToggleSaveListing(item.id);
+                        }}
+                        className="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/40 text-white flex items-center justify-center tap-bounce cursor-pointer"
+                      >
+                        <Heart className={`w-3.5 h-3.5 ${isSaved ? 'fill-red-500 text-red-500' : 'text-white'}`} />
+                      </button>
+                      <div className="absolute bottom-1.5 left-2">
+                        <span className="px-1.5 py-0.5 rounded bg-black/60 text-white text-[8px] font-bold uppercase">
+                          {item.category}
+                        </span>
+                      </div>
                     </div>
 
-                    {/* Specs Pills matching Image 2 */}
-                    {rental.specs && (
-                      <div className="flex items-center gap-1.5 pt-1 border-t border-slate-100 text-[9.5px] text-slate-600 font-medium">
-                        {rental.specs.map((spec, i) => (
-                          <div key={i} className="flex items-center gap-0.5 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100">
-                            {getSpecIcon(spec.icon)}
-                            <span>{spec.label}</span>
+                    <div className="p-2.5 space-y-1">
+                      <h4 className="text-[11px] font-bold text-slate-900 truncate group-hover:text-[#1464F4] transition-colors">
+                        {item.title}
+                      </h4>
+                      <div className="flex items-center gap-0.5 text-[10px] text-slate-500">
+                        <MapPin className="w-2.5 h-2.5 text-slate-400 shrink-0" />
+                        <span className="truncate">{item.location}</span>
+                      </div>
+                      <div className="text-[11px] font-extrabold text-[#1464F4]">
+                        {item.price} <span className="text-[9px] text-slate-500 font-normal">{item.pricePeriod}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* 8. MAIN RENTAL LISTING FEED */}
+        <div ref={mainFeedRef} className="space-y-3 pt-2">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-extrabold text-slate-900 font-heading flex items-center gap-2">
+                <span>All Rental Listings</span>
+                <span className="px-2 py-0.5 rounded-full bg-blue-100 text-[#1464F4] text-xs font-black">
+                  {totalCount || rentalFeed.length}
+                </span>
+              </h2>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                {hasActiveFilters ? 'Filtered results for rental marketplace' : 'Newest available rentals across Sri Lanka'}
+              </p>
+            </div>
+
+            {hasActiveFilters && (
+              <button
+                onClick={clearAllFilters}
+                className="text-xs font-bold text-red-600 hover:underline cursor-pointer"
+              >
+                Reset Filters
+              </button>
+            )}
+          </div>
+
+          {isLoading ? (
+            <div className="py-12 text-center text-slate-400 flex flex-col items-center justify-center space-y-2">
+              <Loader2 className="w-6 h-6 animate-spin text-[#1464F4]" />
+              <p className="text-xs font-medium">Loading rentals from Supabase...</p>
+            </div>
+          ) : rentalFeed.length > 0 ? (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                {rentalFeed.map((rental) => {
+                  const isSaved = localSavedListings.includes(rental.id);
+                  return (
+                    <div
+                      key={rental.id}
+                      onClick={() => {
+                        if (onOpenListingDetail) {
+                          onOpenListingDetail(rental.id, 'rentals');
+                        } else {
+                          onNavigate('/rental-detail');
+                        }
+                      }}
+                      className="bg-white rounded-2xl overflow-hidden border border-slate-200/90 shadow-xs hover:shadow-md transition-all cursor-pointer flex flex-col group"
+                    >
+                      <div className="relative h-44 w-full bg-slate-100 overflow-hidden">
+                        <img
+                          src={rental.imageUrl}
+                          alt={rental.title}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                        <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5">
+                          <span className="px-2 py-0.5 rounded-md bg-[#1464F4] text-white text-[9.5px] font-black uppercase tracking-wider shadow-sm">
+                            {rental.badgeType || 'RENTAL'}
+                          </span>
+                        </div>
+
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleSaveListing(rental.id);
+                          }}
+                          className="absolute top-2.5 right-2.5 w-7 h-7 rounded-full bg-black/40 hover:bg-black/70 text-white flex items-center justify-center backdrop-blur-xs tap-bounce cursor-pointer"
+                          aria-label="Save listing"
+                        >
+                          <Heart className={`w-3.5 h-3.5 ${isSaved ? 'fill-red-500 text-red-500' : 'text-white'}`} />
+                        </button>
+
+                        <div className="absolute bottom-2.5 left-2.5">
+                          <span className="px-2 py-0.5 rounded bg-black/60 backdrop-blur-xs text-white text-[9.5px] font-bold uppercase">
+                            {rental.category}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="p-3.5 flex-1 flex flex-col justify-between space-y-2.5">
+                        <div>
+                          <h3 className="text-sm font-bold text-slate-900 group-hover:text-[#1464F4] transition-colors font-heading leading-snug">
+                            {rental.title}
+                          </h3>
+                          <div className="flex items-center gap-1 text-xs text-slate-500 mt-1">
+                            <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                            <span className="truncate">{rental.location}</span>
                           </div>
-                        ))}
+                        </div>
+
+                        <div className="flex items-baseline justify-between pt-1 border-t border-slate-100">
+                          <div className="text-sm font-extrabold text-[#1464F4]">
+                            {rental.price} <span className="text-xs text-slate-500 font-normal">{rental.pricePeriod}</span>
+                          </div>
+
+                          {rental.specs && rental.specs.length > 0 && (
+                            <div className="flex items-center gap-1 text-[10px] text-slate-600 font-medium">
+                              {rental.specs.slice(0, 2).map((spec, i) => (
+                                <div key={i} className="flex items-center gap-0.5 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100">
+                                  {getSpecIcon(spec.icon)}
+                                  <span>{spec.label}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Load More Rentals Pagination Control */}
+              {hasMore && (
+                <div className="pt-2 text-center space-y-2">
+                  <p className="text-xs text-slate-500 font-medium">
+                    Showing {rentalFeed.length} of {totalCount} Rentals
+                  </p>
+                  <button
+                    onClick={handleLoadMore}
+                    disabled={isMoreLoading}
+                    className="px-6 py-2.5 rounded-xl bg-white hover:bg-slate-100 text-[#1464F4] font-extrabold border border-blue-200 text-xs shadow-xs tap-bounce cursor-pointer inline-flex items-center gap-2"
+                  >
+                    {isMoreLoading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Loading more...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Load More Rentals</span>
+                        <ChevronDown className="w-4 h-4" />
+                      </>
                     )}
-                  </div>
+                  </button>
                 </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Near You Section matching Image 2 */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold text-slate-900 font-heading">
-              Near You
-            </h2>
-            <button 
-              onClick={() => setSelectedCategory('All Categories')}
-              className="text-xs font-bold text-[#1464F4] hover:underline flex items-center gap-0.5"
-            >
-              View All <ArrowRight className="w-3 h-3" />
-            </button>
-          </div>
-
-          <div className="flex gap-2.5 overflow-x-auto no-scrollbar pb-1 -mx-4 px-4">
-            {NEAR_YOU_RENTALS.map((item) => {
-              const isSaved = savedListings.includes(item.id);
-              return (
-                <div
-                  key={item.id}
-                  onClick={() => {
-                    if (onOpenListingDetail) {
-                      onOpenListingDetail(item.id, 'rentals');
-                    } else {
-                      onNavigate('/rental-detail');
-                    }
-                  }}
-                  className="w-40 shrink-0 bg-white rounded-2xl overflow-hidden border border-slate-200 shadow-xs flex flex-col cursor-pointer hover:shadow-md transition-shadow"
+              )}
+            </div>
+          ) : (
+            /* TRUTHFUL EMPTY STATE */
+            <div className="bg-white rounded-2xl p-8 border border-slate-200 text-center space-y-3.5 my-4 shadow-xs">
+              <div className="w-12 h-12 rounded-full bg-blue-50 text-[#1464F4] mx-auto flex items-center justify-center">
+                <AlertCircle className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-900 font-heading">No Rentals Found</h3>
+                <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1 leading-relaxed">
+                  No rental listings match your current search and filter criteria in our live database. Try clearing filters or list your item.
+                </p>
+              </div>
+              <div className="flex items-center justify-center gap-2">
+                <button
+                  onClick={clearAllFilters}
+                  className="px-4 py-2 rounded-xl bg-[#1464F4] hover:bg-blue-600 text-white text-xs font-bold tap-bounce shadow-sm inline-flex items-center gap-1.5 cursor-pointer"
                 >
-                  <div className="relative h-28 w-full bg-slate-100">
-                    <img
-                      src={item.imageUrl}
-                      alt={item.title}
-                      className="w-full h-full object-cover"
-                    />
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onToggleSave(item.id);
-                      }}
-                      className="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/40 text-white flex items-center justify-center tap-bounce"
-                    >
-                      <Heart className={`w-3.5 h-3.5 ${isSaved ? 'fill-red-500 text-red-500' : 'text-white'}`} />
-                    </button>
-                    <div className="absolute bottom-1.5 left-2">
-                      <span className="px-1.5 py-0.5 rounded bg-black/60 text-white text-[8px] font-bold uppercase">
-                        {item.categoryType}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="p-2.5 space-y-1">
-                    <h4 className="text-[11px] font-bold text-slate-900 truncate">
-                      {item.title}
-                    </h4>
-                    <div className="flex items-center gap-0.5 text-[10px] text-slate-500">
-                      <MapPin className="w-2.5 h-2.5 text-slate-400 shrink-0" />
-                      <span className="truncate">{item.location}</span>
-                    </div>
-                    <div className="text-[11px] font-extrabold text-[#1464F4]">
-                      {item.price} <span className="text-[9px] text-slate-500 font-normal">{item.pricePeriod}</span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Clear All Filters</span>
+                </button>
+                <button
+                  onClick={() => onNavigate('/post/rental')}
+                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold tap-bounce border border-slate-200 inline-flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>List Your Rental</span>
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* RENTAL CATEGORY SELECTOR MODAL */}
+      {isCategoryModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl w-full max-w-lg max-h-[85vh] flex flex-col shadow-2xl overflow-hidden border border-slate-100">
+            <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 font-heading flex items-center gap-2">
+                  <LayoutGrid className="w-4 h-4 text-[#1464F4]" />
+                  <span>Select Rental Category</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Showing approved rental categories only
+                </p>
+              </div>
+              <button
+                onClick={() => setIsCategoryModalOpen(false)}
+                className="w-8 h-8 rounded-full bg-slate-200/80 hover:bg-slate-300 text-slate-600 flex items-center justify-center cursor-pointer tap-bounce"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-3 border-b border-slate-100 bg-white">
+              <div className="flex items-center gap-2 bg-slate-50 rounded-xl px-3 py-1.5 border border-slate-200">
+                <Search className="w-4 h-4 text-slate-400 shrink-0" />
+                <input
+                  type="text"
+                  value={modalSearch}
+                  onChange={(e) => setModalSearch(e.target.value)}
+                  placeholder="Search rental categories..."
+                  className="w-full bg-transparent text-xs text-slate-800 focus:outline-none py-1"
+                />
+              </div>
+            </div>
+
+            <div className="p-3 overflow-y-auto flex-1 space-y-1.5 max-h-[50vh]">
+              <button
+                onClick={() => setDraftRentalCategory('All Categories')}
+                className={`w-full p-3 rounded-2xl border text-left flex items-center justify-between transition-colors cursor-pointer ${
+                  draftRentalCategory === 'All Categories'
+                    ? 'border-[#1464F4] bg-blue-50/80 text-[#1464F4] font-bold'
+                    : 'border-slate-100 hover:bg-slate-50 text-slate-800'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-lg">📦</span>
+                  <div>
+                    <p className="text-xs font-bold">All Rental Categories</p>
+                    <p className="text-[10px] text-slate-500">Show all rental listings</p>
+                  </div>
+                </div>
+                {draftRentalCategory === 'All Categories' && <span className="text-[#1464F4] font-bold">✓</span>}
+              </button>
+
+              {modalCategoriesFiltered.map((cat) => {
+                const isSelected = draftRentalCategory === cat.name;
+                return (
+                  <button
+                    key={cat.id}
+                    onClick={() => setDraftRentalCategory(cat.name)}
+                    className={`w-full p-3 rounded-2xl border text-left flex items-center justify-between transition-colors cursor-pointer ${
+                      isSelected
+                        ? 'border-[#1464F4] bg-blue-50/80 text-[#1464F4] font-bold'
+                        : 'border-slate-100 hover:bg-slate-50 text-slate-800'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-xl flex items-center justify-center">{cat.icon}</span>
+                      <div>
+                        <p className="text-xs font-bold text-slate-900">{cat.name}</p>
+                        <p className="text-[10px] text-slate-500 line-clamp-1">{cat.description}</p>
+                      </div>
+                    </div>
+                    {isSelected && <span className="text-[#1464F4] font-bold">✓</span>}
+                  </button>
+                );
+              })}
+
+              {modalCategoriesFiltered.length === 0 && (
+                <div className="p-6 text-center text-xs text-slate-500">
+                  No rental categories matching &quot;{modalSearch}&quot;.
+                </div>
+              )}
+            </div>
+
+            {/* Modal Sticky Footer with Apply Category */}
+            <div className="p-3.5 border-t border-slate-200/90 bg-white flex flex-col sm:flex-row items-center justify-between gap-3 shadow-lg shrink-0">
+              <div className="min-w-0 flex-1 w-full sm:w-auto">
+                <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400 block mb-0.5">
+                  SELECTED CATEGORY
+                </span>
+                <p className="text-xs sm:text-sm font-black text-slate-900 truncate">
+                  {draftRentalCategory}
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={() => setIsCategoryModalOpen(false)}
+                  className="px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors cursor-pointer shrink-0"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedCategory(draftRentalCategory);
+                    setIsCategoryModalOpen(false);
+                    scrollToFeed();
+                  }}
+                  className="flex-1 sm:flex-none py-2.5 px-5 rounded-xl text-white text-xs sm:text-sm font-black flex items-center justify-center gap-2 shadow-lg transition-all cursor-pointer bg-[#1464F4] hover:bg-[#0F4EC4] active:scale-[0.99]"
+                >
+                  <CheckCircle2 className="w-4 h-4 stroke-[2.5]" />
+                  <span className="truncate">Apply Category</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* LOCATION SELECTOR MODAL */}
+      <GlobalLocationModal
+        isOpen={isLocationModalOpen}
+        onClose={() => setIsLocationModalOpen(false)}
+        selectedLocation={selectedLocation}
+        onSelectLocation={(locStr) => {
+          setSelectedLocation(locStr);
+          setIsLocationModalOpen(false);
+          scrollToFeed();
+        }}
+        accentColor="#1464F4"
+        title="Select Rental Location"
+      />
+
+      {/* PRICE RANGE SELECTOR MODAL */}
+      {isPriceModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden border border-slate-100 flex flex-col">
+            <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+              <h3 className="text-base font-bold text-slate-900 font-heading flex items-center gap-2">
+                <span className="text-[#1464F4]">◆</span>
+                <span>Select Price Range</span>
+              </h3>
+              <button
+                onClick={() => setIsPriceModalOpen(false)}
+                className="w-8 h-8 rounded-full bg-slate-200/80 hover:bg-slate-300 text-slate-600 flex items-center justify-center cursor-pointer tap-bounce"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-3 space-y-1.5">
+              {priceOptions.map((pr) => {
+                const isSelected = selectedPrice === pr;
+                return (
+                  <button
+                    key={pr}
+                    onClick={() => {
+                      setSelectedPrice(pr);
+                      setIsPriceModalOpen(false);
+                      scrollToFeed();
+                    }}
+                    className={`w-full p-3 rounded-2xl border text-left flex items-center justify-between text-xs font-medium cursor-pointer transition-colors ${
+                      isSelected
+                        ? 'border-[#1464F4] bg-blue-50/80 text-[#1464F4] font-bold'
+                        : 'border-slate-100 hover:bg-slate-50 text-slate-800'
+                    }`}
+                  >
+                    <span>{pr}</span>
+                    {isSelected && <span className="text-[#1464F4] font-bold">✓</span>}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="p-3 border-t border-slate-100 bg-slate-50 text-right">
+              <button
+                onClick={() => setIsPriceModalOpen(false)}
+                className="px-4 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* RENTAL PERIOD SELECTOR MODAL */}
+      {isPeriodModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden border border-slate-100 flex flex-col">
+            <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+              <h3 className="text-base font-bold text-slate-900 font-heading flex items-center gap-2">
+                <span>📅</span>
+                <span>Select Rental Period</span>
+              </h3>
+              <button
+                onClick={() => setIsPeriodModalOpen(false)}
+                className="w-8 h-8 rounded-full bg-slate-200/80 hover:bg-slate-300 text-slate-600 flex items-center justify-center cursor-pointer tap-bounce"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-3 space-y-1.5">
+              {periodOptions.map((pd) => {
+                const isSelected = selectedPeriod === pd;
+                return (
+                  <button
+                    key={pd}
+                    onClick={() => {
+                      setSelectedPeriod(pd);
+                      setIsPeriodModalOpen(false);
+                      scrollToFeed();
+                    }}
+                    className={`w-full p-3 rounded-2xl border text-left flex items-center justify-between text-xs font-medium cursor-pointer transition-colors ${
+                      isSelected
+                        ? 'border-[#1464F4] bg-blue-50/80 text-[#1464F4] font-bold'
+                        : 'border-slate-100 hover:bg-slate-50 text-slate-800'
+                    }`}
+                  >
+                    <span>{pd}</span>
+                    {isSelected && <span className="text-[#1464F4] font-bold">✓</span>}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="p-3 border-t border-slate-100 bg-slate-50 text-right">
+              <button
+                onClick={() => setIsPeriodModalOpen(false)}
+                className="px-4 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

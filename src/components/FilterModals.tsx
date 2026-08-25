@@ -1,7 +1,8 @@
-import React from 'react';
-import { X, Check, MapPin, LayoutGrid, SlidersHorizontal, Bell, ShieldCheck } from 'lucide-react';
-import { SRI_LANKA_LOCATIONS, CATEGORIES_DATA } from '../data/mockData';
+import React, { useState, useMemo, useEffect } from 'react';
+import { X, Check, MapPin, LayoutGrid, SlidersHorizontal, Bell, ShieldCheck, CheckCircle2 } from 'lucide-react';
 import { FilterState } from '../types';
+import { GlobalLocationModal } from './common/GlobalLocationModal';
+import { CategoryService } from '../services/categoryService';
 
 // 1. LOCATION MODAL
 interface LocationModalProps {
@@ -17,54 +18,15 @@ export const LocationModal: React.FC<LocationModalProps> = ({
   selectedLocation,
   onSelect
 }) => {
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-md bg-white rounded-t-3xl sm:rounded-3xl p-5 shadow-2xl z-10 max-h-[85vh] flex flex-col animate-in slide-in-from-bottom duration-200">
-        <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-          <div className="flex items-center gap-2">
-            <MapPin className="w-5 h-5 text-[#1464F4]" />
-            <h3 className="text-base font-bold text-slate-900 font-heading">
-              Select Location
-            </h3>
-          </div>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        <div className="overflow-y-auto py-2 space-y-1.5 no-scrollbar mt-2">
-          {SRI_LANKA_LOCATIONS.map((loc) => {
-            const isSelected = selectedLocation.includes(loc.name) || (loc.name === 'All Sri Lanka' && !selectedLocation);
-            return (
-              <button
-                key={loc.name}
-                onClick={() => {
-                  onSelect(loc.name === 'All Sri Lanka' ? '' : `${loc.name}, ${loc.province}`);
-                  onClose();
-                }}
-                className={`w-full flex items-center justify-between p-3 rounded-xl text-left transition-all ${
-                  isSelected
-                    ? 'bg-[#1464F4]/10 text-[#1464F4] font-bold border border-[#1464F4]/20'
-                    : 'hover:bg-slate-50 text-slate-700 font-medium'
-                }`}
-              >
-                <div>
-                  <div className="text-[13px]">{loc.name}</div>
-                  <div className="text-[11px] text-slate-400 font-normal">{loc.province}</div>
-                </div>
-                {isSelected && <Check className="w-4 h-4 text-[#1464F4]" />}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-    </div>
+    <GlobalLocationModal
+      isOpen={isOpen}
+      onClose={onClose}
+      selectedLocation={selectedLocation}
+      onSelectLocation={(locStr) => {
+        onSelect(locStr === 'All Sri Lanka' ? '' : locStr);
+      }}
+    />
   );
 };
 
@@ -82,13 +44,35 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
   selectedCategory,
   onSelect
 }) => {
+  const [draftCategory, setDraftCategory] = useState(selectedCategory || '');
+
+  useEffect(() => {
+    if (isOpen) {
+      setDraftCategory(selectedCategory || '');
+    }
+  }, [isOpen, selectedCategory]);
+
+  const allMainCategories = useMemo(() => {
+    const sys = CategoryService.getCategorySystemData(false);
+    return [
+      ...sys.rentals.categories,
+      ...sys.jobs.categories,
+      ...sys.services.categories
+    ];
+  }, []);
+
   if (!isOpen) return null;
+
+  const handleApply = () => {
+    onSelect(draftCategory);
+    onClose();
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
       <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-md bg-white rounded-t-3xl sm:rounded-3xl p-5 shadow-2xl z-10 max-h-[85vh] flex flex-col animate-in slide-in-from-bottom duration-200">
-        <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+      <div className="relative w-full max-w-md bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl z-10 max-h-[85vh] flex flex-col animate-in slide-in-from-bottom duration-200 overflow-hidden">
+        <div className="flex items-center justify-between p-4 border-b border-slate-100">
           <div className="flex items-center gap-2">
             <LayoutGrid className="w-5 h-5 text-[#08A34F]" />
             <h3 className="text-base font-bold text-slate-900 font-heading">
@@ -97,56 +81,77 @@ export const CategoryModal: React.FC<CategoryModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500"
+            className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        <div className="overflow-y-auto py-2 space-y-1.5 no-scrollbar mt-2">
+        <div className="overflow-y-auto p-4 space-y-1.5 no-scrollbar flex-1">
           <button
-            onClick={() => {
-              onSelect('');
-              onClose();
-            }}
-            className={`w-full flex items-center justify-between p-3 rounded-xl text-left transition-all ${
-              !selectedCategory
+            onClick={() => setDraftCategory('')}
+            className={`w-full flex items-center justify-between p-3 rounded-xl text-left transition-all cursor-pointer ${
+              !draftCategory
                 ? 'bg-[#08A34F]/10 text-[#08A34F] font-bold border border-[#08A34F]/20'
                 : 'hover:bg-slate-50 text-slate-700 font-medium'
             }`}
           >
             <span className="text-[13px]">All Categories</span>
-            {!selectedCategory && <Check className="w-4 h-4 text-[#08A34F]" />}
+            {!draftCategory && <Check className="w-4 h-4 text-[#08A34F]" />}
           </button>
 
-          {CATEGORIES_DATA.map((cat) => {
-            const isSelected = selectedCategory === cat.name;
+          {allMainCategories.map((cat) => {
+            const isSelected = draftCategory === cat.name;
             return (
               <button
                 key={cat.id}
-                onClick={() => {
-                  onSelect(cat.name);
-                  onClose();
-                }}
-                className={`w-full flex items-center justify-between p-3 rounded-xl text-left transition-all ${
+                onClick={() => setDraftCategory(cat.name)}
+                className={`w-full flex items-center justify-between p-3 rounded-xl text-left transition-all cursor-pointer ${
                   isSelected
                     ? 'bg-[#08A34F]/10 text-[#08A34F] font-bold border border-[#08A34F]/20'
                     : 'hover:bg-slate-50 text-slate-700 font-medium'
                 }`}
               >
                 <div className="flex items-center gap-2.5">
-                  <div
-                    className="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold"
-                    style={{ backgroundColor: cat.bgColor, color: cat.color }}
-                  >
-                    •
+                  <div className="w-7 h-7 rounded-lg flex items-center justify-center text-sm bg-slate-100 shrink-0">
+                    {cat.icon || '📦'}
                   </div>
-                  <span className="text-[13px]">{cat.name}</span>
+                  <span className="text-[13px] font-semibold text-slate-800">{cat.name}</span>
                 </div>
                 {isSelected && <Check className="w-4 h-4 text-[#08A34F]" />}
               </button>
             );
           })}
+        </div>
+
+        {/* Modal Sticky Footer with Apply Category */}
+        <div className="p-3.5 border-t border-slate-200/90 bg-white flex items-center justify-between gap-3 shadow-lg shrink-0">
+          <div className="min-w-0 flex-1">
+            <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400 block mb-0.5">
+              SELECTED CATEGORY
+            </span>
+            <p className="text-xs font-black text-slate-900 truncate">
+              {draftCategory || 'All Categories'}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-3.5 py-2 rounded-xl border border-slate-200 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors cursor-pointer shrink-0"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleApply}
+              className="py-2 px-4 rounded-xl text-white text-xs font-black flex items-center justify-center gap-1.5 shadow-lg transition-all cursor-pointer bg-[#08A34F] hover:bg-[#068640] active:scale-[0.99]"
+            >
+              <CheckCircle2 className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span className="truncate">Apply Category</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>

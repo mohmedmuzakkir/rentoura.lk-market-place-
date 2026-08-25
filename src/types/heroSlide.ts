@@ -3,6 +3,7 @@ import { AppRoute } from '../types';
 export interface HeroSlide {
   id: string;
   title: string;
+  titleHighlight?: string;
   subtitle?: string;
   description: string;
   imageUrl: string;
@@ -11,10 +12,12 @@ export interface HeroSlide {
   themeColor: string; // e.g. '#1464F4', '#08A34F', '#FF650A', '#7C3AED'
   ctaLabel: string;
   ctaRoute: AppRoute;
+  ctaAction?: string;
   overlayStrength?: number; // 0.0 to 1.0
   textAlignment?: 'left' | 'center' | 'right';
   isEnabled: boolean;
   displayOrder: number;
+  durationMs?: number;
   autoplayDurationMs?: number; // Optional override per slide
   createdAt?: string;
   updatedAt?: string;

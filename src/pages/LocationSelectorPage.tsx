@@ -16,23 +16,29 @@ import {
   Loader2,
   Info
 } from 'lucide-react';
-import { LocationService, CanonicalLocation } from '../services/locationService';
+import { LocationService, CanonicalLocation, LocationValueModel } from '../services/locationService';
 import { AppRoute } from '../types';
 
-interface LocationSelectorPageProps {
+export interface LocationSelectorPageProps {
   onNavigate: (route: AppRoute) => void;
-  onSelectLocation: (locationStr: string, locationObj?: any) => void;
+  returnTo?: AppRoute;
+  onSelectLocation?: (locationStr: string, locationObj?: any) => void;
+  onApplyLocation?: (locationModel: LocationValueModel, displayName: string) => void;
+  onCancel?: () => void;
   initialLocation?: string;
   savedCount?: number;
 }
 
 export const LocationSelectorPage: React.FC<LocationSelectorPageProps> = ({
   onNavigate,
+  returnTo = '/',
   onSelectLocation,
+  onApplyLocation,
+  onCancel,
   initialLocation = '',
   savedCount = 0
 }) => {
-  // DB Locations State
+  // DB Locations State (loaded from Supabase public.locations)
   const [provinces, setProvinces] = useState<CanonicalLocation[]>([]);
   const [districts, setDistricts] = useState<CanonicalLocation[]>([]);
   const [cities, setCities] = useState<CanonicalLocation[]>([]);
@@ -56,6 +62,15 @@ export const LocationSelectorPage: React.FC<LocationSelectorPageProps> = ({
   // GPS State
   const [isLocating, setIsLocating] = useState(false);
   const [geoNotice, setGeoNotice] = useState<string | null>(null);
+
+  // Handle Cancel / Back / Close (X)
+  const handleCancel = () => {
+    if (onCancel) {
+      onCancel();
+    } else {
+      onNavigate(returnTo || '/');
+    }
+  };
 
   // Load Provinces on Mount
   useEffect(() => {
@@ -126,18 +141,18 @@ export const LocationSelectorPage: React.FC<LocationSelectorPageProps> = ({
     return () => { isMounted = false; };
   }, [selectedCity]);
 
-  // Debounced Search Query Effect
+  // Live Location Search Query Handler
   useEffect(() => {
+    let isMounted = true;
     if (!searchQuery.trim()) {
       setSearchResults([]);
       setIsSearching(false);
       return;
     }
 
-    let isMounted = true;
     setIsSearching(true);
     const timer = setTimeout(async () => {
-      const results = await LocationService.searchLocations(searchQuery);
+      const results = await LocationService.searchLocations(searchQuery, { limit: 25 });
       if (isMounted) {
         setSearchResults(results);
         setIsSearching(false);
@@ -241,23 +256,6 @@ export const LocationSelectorPage: React.FC<LocationSelectorPageProps> = ({
     setIsLoadingLocations(false);
   };
 
-  // Apply Location Selection
-  const handleApply = () => {
-    const formatted = LocationService.formatLocationPath({
-      provinceName: selectedProvince?.name,
-      districtName: selectedDistrict?.name,
-      cityName: selectedCity?.name,
-      areaName: selectedArea?.name,
-    });
-    onSelectLocation(formatted, {
-      province: selectedProvince,
-      district: selectedDistrict,
-      city: selectedCity,
-      area: selectedArea
-    });
-    onNavigate('/search');
-  };
-
   // Current formatted location breadcrumb
   const currentBreadcrumb = useMemo(() => {
     return LocationService.formatLocationPath({
@@ -267,6 +265,37 @@ export const LocationSelectorPage: React.FC<LocationSelectorPageProps> = ({
       areaName: selectedArea?.name,
     });
   }, [selectedProvince, selectedDistrict, selectedCity, selectedArea]);
+
+  // Apply Location Selection
+  const handleApply = () => {
+    const formatted = currentBreadcrumb;
+    const valueModel: LocationValueModel = {
+      displayName: formatted,
+      provinceId: selectedProvince?.id,
+      provinceName: selectedProvince?.name,
+      districtId: selectedDistrict?.id,
+      districtName: selectedDistrict?.name,
+      cityId: selectedCity?.id,
+      cityName: selectedCity?.name,
+      areaId: selectedArea?.id,
+      areaName: selectedArea?.name,
+      type: selectedArea ? 'area' : selectedCity ? 'city' : selectedDistrict ? 'district' : selectedProvince ? 'province' : 'country'
+    };
+
+    if (onApplyLocation) {
+      onApplyLocation(valueModel, formatted);
+    } else if (onSelectLocation) {
+      onSelectLocation(formatted, {
+        province: selectedProvince,
+        district: selectedDistrict,
+        city: selectedCity,
+        area: selectedArea,
+        model: valueModel
+      });
+    }
+
+    onNavigate(returnTo || '/');
+  };
 
   // Request Geolocation
   const handleUseCurrentLocation = () => {
@@ -280,14 +309,7 @@ export const LocationSelectorPage: React.FC<LocationSelectorPageProps> = ({
     navigator.geolocation.getCurrentPosition(
       async () => {
         setIsLocating(false);
-        if (provinces.length > 0) {
-          const western = provinces.find(p => p.name.toLowerCase().includes('western')) || provinces[0];
-          setSelectedProvince(western);
-          const dists = await LocationService.getDistricts(western.id);
-          if (dists.length > 0) {
-            setSelectedDistrict(dists[0]);
-          }
-        }
+        setGeoNotice('GPS position detected. Exact neighborhood reverse geocoding is not mapped yet — please choose your district or city from the list below.');
       },
       () => {
         setIsLocating(false);
@@ -332,564 +354,450 @@ export const LocationSelectorPage: React.FC<LocationSelectorPageProps> = ({
   };
 
   return (
-    <div className="bg-slate-50 h-[100dvh] max-h-[100dvh] w-full flex flex-col overflow-hidden relative select-none">
+    <div className="bg-slate-50 min-h-screen w-full flex flex-col relative select-none">
       {/* 1. STICKY TOP HEADER */}
-      <header className="sticky top-0 z-30 bg-white border-b border-slate-200/90 shadow-2xs px-3.5 pt-3 pb-2.5 shrink-0 flex flex-col gap-2 max-w-md mx-auto w-full">
-        {/* Navigation Bar Row */}
-        <div className="flex items-center justify-between">
-          <button
-            onClick={() => onNavigate('/search')}
-            className="w-10 h-10 -ml-1.5 flex items-center justify-center text-slate-800 hover:text-black rounded-xl active:bg-slate-100 transition-colors shrink-0"
-            aria-label="Back"
-          >
-            <ArrowLeft className="w-5 h-5 stroke-[2.3]" />
-          </button>
+      <header className="sticky top-0 z-30 bg-white border-b border-slate-200/90 shadow-2xs px-3.5 pt-3 pb-2.5 shrink-0 flex flex-col gap-2 w-full">
+        <div className="max-w-3xl lg:max-w-4xl mx-auto w-full flex flex-col gap-2">
+          {/* Navigation Bar Row */}
+          <div className="flex items-center justify-between">
+            <button
+              type="button"
+              onClick={handleCancel}
+              className="w-10 h-10 -ml-1.5 flex items-center justify-center text-slate-800 hover:text-black rounded-xl active:bg-slate-100 transition-colors shrink-0 cursor-pointer"
+              aria-label="Back"
+            >
+              <ArrowLeft className="w-5 h-5 stroke-[2.3]" />
+            </button>
 
-          <div className="text-center min-w-0 px-2">
-            <h1 className="text-[17px] font-black text-slate-900 tracking-tight leading-none truncate">
-              Choose Location
-            </h1>
-            <p className="text-[11px] font-medium text-slate-500 mt-0.5 truncate">
-              Select Sri Lanka administrative area
-            </p>
+            <div className="text-center min-w-0 px-2">
+              <h1 className="text-[17px] font-black text-slate-900 tracking-tight leading-none truncate">
+                Choose Location
+              </h1>
+              <p className="text-[11px] font-medium text-slate-500 mt-0.5 truncate">
+                Select Sri Lanka administrative area
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleCancel}
+              className="w-10 h-10 -mr-1.5 flex items-center justify-center text-slate-600 hover:text-black rounded-xl active:bg-slate-100 transition-colors shrink-0 cursor-pointer"
+              aria-label="Cancel and close"
+            >
+              <X className="w-5 h-5 stroke-[2]" />
+            </button>
           </div>
 
-          <button
-            onClick={() => onNavigate('/')}
-            className="w-10 h-10 -mr-1.5 flex items-center justify-center text-slate-600 hover:text-black rounded-xl active:bg-slate-100 transition-colors shrink-0"
-            aria-label="Close"
-          >
-            <X className="w-5 h-5 stroke-[2]" />
-          </button>
-        </div>
+          {/* Search Bar Input */}
+          <div className="relative w-full">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search province, district, city or area..."
+              className="w-full pl-9 pr-9 py-2.5 bg-slate-100 border border-slate-200/90 rounded-xl text-[13px] font-medium text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#1464F4] focus:bg-white focus:ring-2 focus:ring-[#1464F4]/20 transition-all shadow-2xs"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1.5 rounded-lg active:bg-slate-200/60 cursor-pointer"
+                aria-label="Clear search"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
 
-        {/* Search Bar Input */}
-        <div className="relative w-full">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search province, district, city or area..."
-            className="w-full pl-9 pr-9 py-2.5 bg-slate-100 border border-slate-200/90 rounded-xl text-[13px] font-medium text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#1464F4] focus:bg-white focus:ring-2 focus:ring-[#1464F4]/20 transition-all shadow-2xs"
-          />
-          {searchQuery && (
+          {/* Quick Actions Row */}
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-0.5">
             <button
-              onClick={() => setSearchQuery('')}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1.5 rounded-lg active:bg-slate-200/60"
-              aria-label="Clear search"
+              type="button"
+              onClick={handleResetAll}
+              className={`shrink-0 px-3 py-2 rounded-xl text-[12px] font-bold border transition-all flex items-center gap-1.5 min-h-[38px] cursor-pointer ${
+                !selectedProvince && !selectedDistrict && !selectedCity && !selectedArea
+                  ? 'bg-[#1464F4] text-white border-[#1464F4] shadow-2xs'
+                  : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
+              }`}
             >
-              <X className="w-4 h-4" />
+              <Compass className="w-3.5 h-3.5 stroke-[2.2]" />
+              <span>All Sri Lanka</span>
             </button>
-          )}
+
+            <button
+              type="button"
+              onClick={handleUseCurrentLocation}
+              disabled={isLocating}
+              className="shrink-0 px-3 py-2 rounded-xl text-[12px] font-bold bg-emerald-50 text-[#08A34F] border border-emerald-200/80 hover:bg-emerald-100 transition-all flex items-center gap-1.5 min-h-[38px] cursor-pointer"
+            >
+              {isLocating ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Navigation className="w-3.5 h-3.5 stroke-[2.2]" />
+              )}
+              <span>{isLocating ? 'Locating...' : 'Use Current Location'}</span>
+            </button>
+          </div>
         </div>
+      </header>
 
-        {/* Quick Actions Row */}
-        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-0.5">
-          <button
-            onClick={handleResetAll}
-            className={`shrink-0 px-3 py-2 rounded-xl text-[12px] font-bold border transition-all flex items-center gap-1.5 min-h-[38px] ${
-              !selectedProvince && !selectedDistrict && !selectedCity && !selectedArea
-                ? 'bg-[#1464F4] text-white border-[#1464F4] shadow-2xs'
-                : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
-            }`}
-          >
-            <Compass className="w-3.5 h-3.5 stroke-[2.2]" />
-            <span>All Sri Lanka</span>
-          </button>
-
-          <button
-            onClick={handleResetAll}
-            className="shrink-0 px-3 py-2 rounded-xl text-[12px] font-bold bg-white text-slate-700 hover:bg-slate-100 border border-slate-200 transition-all flex items-center gap-1.5 min-h-[38px]"
-          >
-            <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
-            <span>Reset</span>
-          </button>
-
-          <button
-            onClick={handleUseCurrentLocation}
-            disabled={isLocating}
-            className="shrink-0 px-3 py-2 rounded-xl text-[12px] font-bold bg-blue-50/80 text-[#1464F4] border border-blue-200 hover:bg-blue-100 transition-all flex items-center gap-1.5 min-h-[38px]"
-          >
-            <Navigation className={`w-3.5 h-3.5 stroke-[2.2] ${isLocating ? 'animate-spin' : ''}`} />
-            <span>GPS</span>
-          </button>
-        </div>
-
+      {/* 2. MAIN SCROLLABLE CONTENT */}
+      <main className="flex-1 max-w-3xl lg:max-w-4xl mx-auto w-full px-3.5 py-4 space-y-3 pb-48 lg:pb-36">
+        {/* Geolocation Notice Banner */}
         {geoNotice && (
-          <div className="p-2.5 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-[11.5px] leading-relaxed flex items-start gap-2 mt-1">
+          <div className="p-3 bg-amber-50 border border-amber-200/90 rounded-2xl flex items-start gap-2.5 text-xs font-semibold text-amber-900 animate-in fade-in duration-150">
             <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-            <p className="flex-1">{geoNotice}</p>
-            <button onClick={() => setGeoNotice(null)} className="text-amber-500 hover:text-amber-700 p-0.5">
+            <span className="flex-1 leading-snug">{geoNotice}</span>
+            <button 
+              type="button" 
+              onClick={() => setGeoNotice(null)} 
+              className="text-amber-500 hover:text-amber-800 p-0.5 cursor-pointer"
+            >
               <X className="w-3.5 h-3.5" />
             </button>
           </div>
         )}
-      </header>
 
-      {/* 2. SCROLLABLE LOCATION CONTENT CONTAINER */}
-      <main className="flex-1 min-h-0 overflow-y-auto px-3.5 py-3 space-y-3.5 max-w-md mx-auto w-full no-scrollbar pb-40 lg:pb-28">
-        {/* A. SEARCH RESULTS MODE */}
+        {/* Selected Breadcrumb Preview */}
+        <div className="p-3.5 bg-white border border-slate-200/80 rounded-2xl shadow-2xs flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-8 h-8 rounded-xl bg-blue-50 text-[#1464F4] flex items-center justify-center shrink-0">
+              <MapPin className="w-4 h-4 stroke-[2.2]" />
+            </div>
+            <div className="min-w-0">
+              <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">
+                Target Area
+              </span>
+              <p className="text-xs sm:text-sm font-black text-slate-900 truncate">
+                {currentBreadcrumb}
+              </p>
+            </div>
+          </div>
+
+          {(selectedProvince || selectedDistrict || selectedCity || selectedArea) && (
+            <button
+              type="button"
+              onClick={handleResetAll}
+              className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer shrink-0"
+            >
+              <RotateCcw className="w-3 h-3" />
+              <span>Reset</span>
+            </button>
+          )}
+        </div>
+
+        {/* SEARCH RESULTS VIEW */}
         {searchQuery.trim() ? (
-          <div className="bg-white border border-slate-200/90 rounded-2xl p-3 shadow-sm space-y-2">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-2 px-1">
-              <div className="text-[11px] font-black text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-                {isSearching ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin text-[#1464F4]" />
-                    <span>Searching database...</span>
-                  </>
-                ) : (
-                  <>
-                    <span>Matching Locations</span>
-                    <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full text-[10px]">
-                      {searchResults.length}
-                    </span>
-                  </>
-                )}
-              </div>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between px-1">
+              <span className="text-xs font-bold text-slate-500">
+                {isSearching ? 'Searching...' : `Found ${searchResults.length} location matches`}
+              </span>
             </div>
 
             {isSearching ? (
-              <div className="py-8 text-center text-xs text-slate-400 flex flex-col items-center gap-2">
-                <Loader2 className="w-5 h-5 animate-spin text-[#1464F4]" />
-                <span>Searching Sri Lanka locations...</span>
+              <div className="py-12 text-center text-slate-400 space-y-2">
+                <Loader2 className="w-6 h-6 animate-spin mx-auto text-[#1464F4]" />
+                <p className="text-xs font-semibold">Searching locations database...</p>
               </div>
             ) : searchResults.length === 0 ? (
-              <div className="py-8 text-center text-xs text-slate-500 px-4">
-                No locations match "<span className="font-semibold text-slate-800">{searchQuery}</span>".
-                <p className="text-[11px] text-slate-400 mt-1">
-                  Try searching for a province (e.g. Western), district (e.g. Kandy), city (e.g. Peradeniya), or area name.
-                </p>
+              <div className="py-12 bg-white rounded-2xl border border-slate-200/80 text-center p-6 space-y-2">
+                <p className="text-sm font-bold text-slate-700">No matching locations found</p>
+                <p className="text-xs text-slate-400">Try searching for a province name, district, major city, or neighborhood.</p>
               </div>
             ) : (
-              <div className="space-y-1 divide-y divide-slate-100">
-                {searchResults.map((res) => (
+              <div className="bg-white rounded-2xl border border-slate-200/80 divide-y divide-slate-100 overflow-hidden shadow-2xs">
+                {searchResults.map((loc) => (
                   <button
-                    key={res.id}
-                    onClick={() => handleSelectSearchResult(res)}
-                    className="w-full flex items-center justify-between p-2.5 rounded-xl hover:bg-blue-50/70 active:bg-blue-100 text-left transition-colors group min-h-[48px]"
+                    key={loc.id}
+                    type="button"
+                    onClick={() => handleSelectSearchResult(loc)}
+                    className="w-full p-3.5 text-left hover:bg-slate-50 active:bg-blue-50/50 flex items-center justify-between gap-3 transition-colors cursor-pointer"
                   >
-                    <div className="flex items-center gap-2.5 min-w-0 flex-1 pr-2">
-                      <MapPin className="w-4 h-4 text-[#1464F4] shrink-0" />
-                      <div className="min-w-0 flex-1">
-                        <div className="text-[13.5px] font-bold text-slate-900 group-hover:text-[#1464F4] truncate">
-                          {res.name}
-                        </div>
-                        <div className="text-[11px] text-slate-500 truncate">
-                          {getBreadcrumbPath(res)}
-                        </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-black text-slate-900 truncate">
+                          {loc.name}
+                        </span>
+                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${getTypeBadgeStyle(loc.type)}`}>
+                          {getTypeLabel(loc.type)}
+                        </span>
                       </div>
+                      <p className="text-[11px] font-medium text-slate-400 mt-0.5 truncate">
+                        {getBreadcrumbPath(loc)}
+                      </p>
                     </div>
-                    <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full border shrink-0 ${getTypeBadgeStyle(res.type)}`}>
-                      {getTypeLabel(res.type)}
-                    </span>
+
+                    <ChevronDown className="w-4 h-4 text-slate-300 shrink-0 -rotate-90" />
                   </button>
                 ))}
               </div>
             )}
           </div>
         ) : (
-          /* B. CASCADING HIERARCHY ACCORDION MODE */
-          <>
-            {/* Step Progress Bar */}
-            <div className="bg-white border border-slate-200/80 rounded-2xl p-2.5 shadow-2xs">
-              <div className="flex items-center justify-between px-1">
-                {/* Step 1: Province */}
-                <button 
-                  onClick={() => setExpandedStep(1)}
-                  className="flex flex-col items-center gap-0.5 min-w-[56px] tap-bounce"
-                >
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
-                    selectedProvince ? 'bg-[#1464F4] text-white' : 'bg-slate-100 text-slate-400 border border-slate-200'
-                  }`}>
-                    1
-                  </div>
-                  <span className={`text-[10px] font-bold ${selectedProvince ? 'text-[#1464F4]' : 'text-slate-500'}`}>
-                    Province
-                  </span>
-                </button>
-
-                <div className="flex-1 h-[2px] mx-1 border-b-2 border-dotted border-slate-300"></div>
-
-                {/* Step 2: District */}
-                <button 
-                  onClick={() => selectedProvince && setExpandedStep(2)}
-                  disabled={!selectedProvince}
-                  className="flex flex-col items-center gap-0.5 min-w-[56px] tap-bounce disabled:opacity-50"
-                >
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
-                    selectedDistrict ? 'bg-[#08A34F] text-white' : 'bg-slate-100 text-slate-400 border border-slate-200'
-                  }`}>
-                    2
-                  </div>
-                  <span className={`text-[10px] font-bold ${selectedDistrict ? 'text-[#08A34F]' : 'text-slate-500'}`}>
-                    District
-                  </span>
-                </button>
-
-                <div className="flex-1 h-[2px] mx-1 border-b-2 border-dotted border-slate-300"></div>
-
-                {/* Step 3: City */}
-                <button 
-                  onClick={() => selectedDistrict && setExpandedStep(3)}
-                  disabled={!selectedDistrict}
-                  className="flex flex-col items-center gap-0.5 min-w-[56px] tap-bounce disabled:opacity-50"
-                >
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
-                    selectedCity ? 'bg-[#8B5CF6] text-white' : 'bg-slate-100 text-slate-400 border border-slate-200'
-                  }`}>
-                    3
-                  </div>
-                  <span className={`text-[10px] font-bold ${selectedCity ? 'text-[#8B5CF6]' : 'text-slate-500'}`}>
-                    City
-                  </span>
-                </button>
-
-                <div className="flex-1 h-[2px] mx-1 border-b-2 border-dotted border-slate-300"></div>
-
-                {/* Step 4: Area */}
-                <button 
-                  onClick={() => selectedCity && setExpandedStep(4)}
-                  disabled={!selectedCity}
-                  className="flex flex-col items-center gap-0.5 min-w-[56px] tap-bounce disabled:opacity-50"
-                >
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${
-                    selectedArea ? 'bg-[#FF650A] text-white' : 'bg-slate-100 text-slate-400 border border-slate-200'
-                  }`}>
-                    4
-                  </div>
-                  <span className={`text-[10px] font-bold ${selectedArea ? 'text-[#FF650A]' : 'text-slate-500'}`}>
-                    Area
-                  </span>
-                </button>
-              </div>
-            </div>
-
-            {/* STEP 1: PROVINCE CARD */}
-            <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden transition-all">
-              <div 
+          /* CASCADING STEP ACCORDIONS */
+          <div className="space-y-2.5">
+            {/* STEP 1: PROVINCES (9 Total) */}
+            <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-2xs">
+              <button
+                type="button"
                 onClick={() => setExpandedStep(expandedStep === 1 ? null : 1)}
-                className="p-3 flex gap-2.5 items-center cursor-pointer select-none"
+                className="w-full p-3.5 bg-slate-50/80 hover:bg-slate-100/80 flex items-center justify-between text-left transition-colors cursor-pointer"
               >
-                <div className="relative w-10 h-10 bg-blue-50 border border-blue-100 rounded-xl flex items-center justify-center text-[#1464F4] shrink-0">
-                  <Landmark className="w-5 h-5 stroke-[2]" />
-                  <span className="absolute -top-1 -left-1 w-4 h-4 bg-[#1464F4] text-white text-[9.5px] font-black rounded-full flex items-center justify-center shadow-xs">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs ${
+                    selectedProvince ? 'bg-[#1464F4] text-white' : 'bg-slate-200 text-slate-600'
+                  }`}>
                     1
-                  </span>
+                  </div>
+                  <div className="min-w-0">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                      Step 1 · Province
+                    </span>
+                    <p className="text-xs font-extrabold text-slate-900 truncate">
+                      {selectedProvince ? selectedProvince.name : 'All Sri Lanka (Any Province)'}
+                    </p>
+                  </div>
                 </div>
 
-                <div className="flex-1 min-w-0">
-                  <span className="text-[9px] font-extrabold text-[#1464F4] tracking-wider uppercase">
-                    PROVINCE
-                  </span>
-                  <h3 className="text-[14px] font-black text-slate-900 truncate">
-                    {selectedProvince ? selectedProvince.name : 'Select Province'}
-                  </h3>
-                  <p className="text-[10.5px] text-slate-500 truncate">
-                    {isLoadingLocations ? 'Loading provinces...' : `${provinces.length} Active Provinces`}
-                  </p>
-                </div>
-
-                <button 
-                  className="w-8 h-8 flex items-center justify-center rounded-xl bg-slate-50 text-slate-600 shrink-0"
-                  aria-label="Toggle Province Section"
-                >
-                  {expandedStep === 1 ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                </button>
-              </div>
+                {expandedStep === 1 ? <ChevronUp className="w-4 h-4 text-slate-400 shrink-0" /> : <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />}
+              </button>
 
               {expandedStep === 1 && (
-                <div className="px-3 pb-3 pt-1 border-t border-slate-100">
+                <div className="p-3 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-[320px] overflow-y-auto no-scrollbar">
                   {isLoadingLocations ? (
-                    <div className="flex items-center gap-2 text-xs text-slate-500 py-3">
+                    <div className="col-span-2 py-8 text-center text-slate-400 text-xs font-semibold flex items-center justify-center gap-2">
                       <Loader2 className="w-4 h-4 animate-spin text-[#1464F4]" />
-                      <span>Loading real provinces from database...</span>
+                      <span>Loading Sri Lanka provinces...</span>
                     </div>
                   ) : (
-                    <div className="flex flex-wrap gap-1.5 pt-1">
-                      {provinces.map((prov) => {
-                        const isSelected = selectedProvince?.id === prov.id;
-                        return (
-                          <button
-                            key={prov.id}
-                            onClick={() => handleSelectProvince(prov)}
-                            className={`px-3 py-2 rounded-xl border text-left transition-all min-h-[40px] flex items-center gap-1.5 ${
-                              isSelected
-                                ? 'border-[#1464F4] bg-blue-50 text-[#1464F4] font-bold ring-1 ring-[#1464F4]'
-                                : 'border-slate-200/90 bg-white text-slate-700 hover:border-slate-300'
-                            }`}
-                          >
-                            {isSelected && (
-                              <Check className="w-3.5 h-3.5 stroke-[3] text-[#1464F4] shrink-0" />
-                            )}
-                            <span className="text-[11.5px] font-bold leading-none">
-                              {prov.name.replace(' Province', '')}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
+                    provinces.map((prov) => {
+                      const isSelected = selectedProvince?.id === prov.id;
+                      return (
+                        <button
+                          key={prov.id}
+                          type="button"
+                          onClick={() => handleSelectProvince(prov)}
+                          className={`w-full p-3 rounded-xl text-left border text-xs font-bold transition-all flex items-center justify-between cursor-pointer ${
+                            isSelected
+                              ? 'bg-blue-50/80 border-[#1464F4] text-[#1464F4] shadow-2xs'
+                              : 'bg-white border-slate-200/80 text-slate-800 hover:border-slate-300'
+                          }`}
+                        >
+                          <span className="truncate">{prov.name}</span>
+                          {isSelected && <Check className="w-4 h-4 text-[#1464F4] stroke-[2.5] shrink-0" />}
+                        </button>
+                      );
+                    })
                   )}
                 </div>
               )}
             </div>
 
-            {/* STEP 2: DISTRICT CARD */}
-            <div className={`bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden transition-all ${
-              !selectedProvince ? 'opacity-65' : ''
+            {/* STEP 2: DISTRICTS (25 Total) */}
+            <div className={`bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-2xs transition-opacity ${
+              !selectedProvince ? 'opacity-60 pointer-events-none' : 'opacity-100'
             }`}>
-              <div 
+              <button
+                type="button"
                 onClick={() => selectedProvince && setExpandedStep(expandedStep === 2 ? null : 2)}
-                className={`p-3 flex gap-2.5 items-center select-none ${selectedProvince ? 'cursor-pointer' : 'cursor-not-allowed'}`}
+                className="w-full p-3.5 bg-slate-50/80 hover:bg-slate-100/80 flex items-center justify-between text-left transition-colors cursor-pointer"
               >
-                <div className="relative w-10 h-10 bg-emerald-50 border border-emerald-100 rounded-xl flex items-center justify-center text-[#08A34F] shrink-0">
-                  <Building2 className="w-5 h-5 stroke-[2]" />
-                  <span className="absolute -top-1 -left-1 w-4 h-4 bg-[#08A34F] text-white text-[9.5px] font-black rounded-full flex items-center justify-center shadow-xs">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs ${
+                    selectedDistrict ? 'bg-[#08A34F] text-white' : 'bg-slate-200 text-slate-600'
+                  }`}>
                     2
-                  </span>
+                  </div>
+                  <div className="min-w-0">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                      Step 2 · District
+                    </span>
+                    <p className="text-xs font-extrabold text-slate-900 truncate">
+                      {selectedDistrict ? selectedDistrict.name : selectedProvince ? `All ${selectedProvince.name} Districts` : 'Select Province First'}
+                    </p>
+                  </div>
                 </div>
 
-                <div className="flex-1 min-w-0">
-                  <span className="text-[9px] font-extrabold text-[#08A34F] tracking-wider uppercase">
-                    DISTRICT
-                  </span>
-                  <h3 className="text-[14px] font-black text-slate-900 truncate">
-                    {selectedDistrict ? selectedDistrict.name : (selectedProvince ? 'Select District' : 'Select Province First')}
-                  </h3>
-                  <p className="text-[10.5px] text-slate-500 truncate">
-                    {selectedDistrict ? 'Selected District' : (selectedProvince ? `${districts.length} Districts in ${selectedProvince.name}` : 'Locked')}
-                  </p>
-                </div>
-
-                <button 
-                  disabled={!selectedProvince}
-                  className="w-8 h-8 flex items-center justify-center rounded-xl bg-slate-50 text-slate-600 shrink-0 disabled:opacity-40"
-                  aria-label="Toggle District Section"
-                >
-                  {expandedStep === 2 ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                </button>
-              </div>
+                {expandedStep === 2 ? <ChevronUp className="w-4 h-4 text-slate-400 shrink-0" /> : <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />}
+              </button>
 
               {expandedStep === 2 && selectedProvince && (
-                <div className="px-3 pb-3 pt-1 border-t border-slate-100">
-                  {districts.length === 0 ? (
-                    <div className="text-xs text-slate-500 py-2">
-                      No districts registered for this province.
-                    </div>
-                  ) : (
-                    <div className="flex flex-wrap gap-1.5 pt-1">
-                      {districts.map((dist) => {
-                        const isSelected = selectedDistrict?.id === dist.id;
-                        return (
-                          <button
-                            key={dist.id}
-                            onClick={() => handleSelectDistrict(dist)}
-                            className={`px-3 py-2 rounded-xl border transition-all min-h-[40px] flex items-center gap-1.5 ${
-                              isSelected
-                                ? 'border-[#08A34F] bg-emerald-50 text-[#08A34F] font-bold ring-1 ring-[#08A34F]'
-                                : 'border-slate-200/90 bg-white text-slate-700 hover:border-slate-300'
-                            }`}
-                          >
-                            {isSelected && (
-                              <Check className="w-3.5 h-3.5 stroke-[3] text-[#08A34F] shrink-0" />
-                            )}
-                            <span className="text-[11.5px] font-bold leading-none">
-                              {dist.name}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
+                <div className="p-3 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-[300px] overflow-y-auto no-scrollbar">
+                  {districts.map((dist) => {
+                    const isSelected = selectedDistrict?.id === dist.id;
+                    return (
+                      <button
+                        key={dist.id}
+                        type="button"
+                        onClick={() => handleSelectDistrict(dist)}
+                        className={`w-full p-3 rounded-xl text-left border text-xs font-bold transition-all flex items-center justify-between cursor-pointer ${
+                          isSelected
+                            ? 'bg-emerald-50/80 border-[#08A34F] text-[#08A34F] shadow-2xs'
+                            : 'bg-white border-slate-200/80 text-slate-800 hover:border-slate-300'
+                        }`}
+                      >
+                        <span className="truncate">{dist.name}</span>
+                        {isSelected && <Check className="w-4 h-4 text-[#08A34F] stroke-[2.5] shrink-0" />}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>
 
-            {/* STEP 3: CITY CARD */}
-            <div className={`bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden transition-all ${
-              !selectedDistrict ? 'opacity-65' : ''
+            {/* STEP 3: CITIES / TOWNS (96 Total) */}
+            <div className={`bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-2xs transition-opacity ${
+              !selectedDistrict ? 'opacity-60 pointer-events-none' : 'opacity-100'
             }`}>
-              <div 
+              <button
+                type="button"
                 onClick={() => selectedDistrict && setExpandedStep(expandedStep === 3 ? null : 3)}
-                className={`p-3 flex gap-2.5 items-center select-none ${selectedDistrict ? 'cursor-pointer' : 'cursor-not-allowed'}`}
+                className="w-full p-3.5 bg-slate-50/80 hover:bg-slate-100/80 flex items-center justify-between text-left transition-colors cursor-pointer"
               >
-                <div className="relative w-10 h-10 bg-purple-50 border border-purple-100 rounded-xl flex items-center justify-center text-[#8B5CF6] shrink-0">
-                  <Building2 className="w-5 h-5 stroke-[2]" />
-                  <span className="absolute -top-1 -left-1 w-4 h-4 bg-[#8B5CF6] text-white text-[9.5px] font-black rounded-full flex items-center justify-center shadow-xs">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs ${
+                    selectedCity ? 'bg-[#8B5CF6] text-white' : 'bg-slate-200 text-slate-600'
+                  }`}>
                     3
-                  </span>
+                  </div>
+                  <div className="min-w-0">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                      Step 3 · City / Major Town
+                    </span>
+                    <p className="text-xs font-extrabold text-slate-900 truncate">
+                      {selectedCity ? selectedCity.name : selectedDistrict ? `All ${selectedDistrict.name} Cities` : 'Select District First'}
+                    </p>
+                  </div>
                 </div>
 
-                <div className="flex-1 min-w-0">
-                  <span className="text-[9px] font-extrabold text-[#8B5CF6] tracking-wider uppercase">
-                    CITY / TOWN
-                  </span>
-                  <h3 className="text-[14px] font-black text-slate-900 truncate">
-                    {selectedCity ? selectedCity.name : (selectedDistrict ? 'Select City / Town' : 'Select District First')}
-                  </h3>
-                  <p className="text-[10.5px] text-slate-500 truncate">
-                    {selectedCity ? 'Selected City' : (selectedDistrict ? (cities.length > 0 ? `${cities.length} Cities Available` : 'No cities in DB') : 'Locked')}
-                  </p>
-                </div>
-
-                <button 
-                  disabled={!selectedDistrict}
-                  className="w-8 h-8 flex items-center justify-center rounded-xl bg-slate-50 text-slate-600 shrink-0 disabled:opacity-40"
-                  aria-label="Toggle City Section"
-                >
-                  {expandedStep === 3 ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                </button>
-              </div>
+                {expandedStep === 3 ? <ChevronUp className="w-4 h-4 text-slate-400 shrink-0" /> : <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />}
+              </button>
 
               {expandedStep === 3 && selectedDistrict && (
-                <div className="px-3 pb-3 pt-1 border-t border-slate-100">
+                <div className="p-3 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-[300px] overflow-y-auto no-scrollbar">
                   {cities.length === 0 ? (
-                    <div className="text-xs text-slate-500 bg-slate-50 border border-slate-200/60 rounded-xl p-2.5 flex items-start gap-2">
-                      <Info className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
-                      <span>No specific cities registered in DB for {selectedDistrict.name} District. Selection continues at District level.</span>
+                    <div className="col-span-2 py-6 text-center text-slate-400 text-xs font-semibold">
+                      No specific city breakdown for this district. You can proceed with District level selection.
                     </div>
                   ) : (
-                    <div className="flex flex-wrap gap-1.5 pt-1">
-                      {cities.map((city) => {
-                        const isSelected = selectedCity?.id === city.id;
-                        return (
-                          <button
-                            key={city.id}
-                            onClick={() => handleSelectCity(city)}
-                            className={`px-3 py-2 rounded-xl border transition-all min-h-[40px] flex items-center gap-1.5 ${
-                              isSelected
-                                ? 'border-[#8B5CF6] bg-purple-50 text-[#8B5CF6] font-bold ring-1 ring-[#8B5CF6]'
-                                : 'border-slate-200/90 bg-white text-slate-700 hover:border-slate-300'
-                            }`}
-                          >
-                            {isSelected && (
-                              <Check className="w-3.5 h-3.5 stroke-[3] text-[#8B5CF6] shrink-0" />
-                            )}
-                            <span className="text-[11.5px] font-bold leading-none">
-                              {city.name}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
+                    cities.map((city) => {
+                      const isSelected = selectedCity?.id === city.id;
+                      return (
+                        <button
+                          key={city.id}
+                          type="button"
+                          onClick={() => handleSelectCity(city)}
+                          className={`w-full p-3 rounded-xl text-left border text-xs font-bold transition-all flex items-center justify-between cursor-pointer ${
+                            isSelected
+                              ? 'bg-purple-50/80 border-[#8B5CF6] text-[#8B5CF6] shadow-2xs'
+                              : 'bg-white border-slate-200/80 text-slate-800 hover:border-slate-300'
+                          }`}
+                        >
+                          <span className="truncate">{city.name}</span>
+                          {isSelected && <Check className="w-4 h-4 text-[#8B5CF6] stroke-[2.5] shrink-0" />}
+                        </button>
+                      );
+                    })
                   )}
                 </div>
               )}
             </div>
 
-            {/* STEP 4: AREA CARD */}
-            <div className={`bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden transition-all ${
-              !selectedCity ? 'opacity-65' : ''
+            {/* STEP 4: AREAS / VILLAGES */}
+            <div className={`bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-2xs transition-opacity ${
+              !selectedCity ? 'opacity-60 pointer-events-none' : 'opacity-100'
             }`}>
-              <div 
+              <button
+                type="button"
                 onClick={() => selectedCity && setExpandedStep(expandedStep === 4 ? null : 4)}
-                className={`p-3 flex gap-2.5 items-center select-none ${selectedCity ? 'cursor-pointer' : 'cursor-not-allowed'}`}
+                className="w-full p-3.5 bg-slate-50/80 hover:bg-slate-100/80 flex items-center justify-between text-left transition-colors cursor-pointer"
               >
-                <div className="relative w-10 h-10 bg-orange-50 border border-orange-100 rounded-xl flex items-center justify-center text-[#FF650A] shrink-0">
-                  <MapPin className="w-5 h-5 stroke-[2]" />
-                  <span className="absolute -top-1 -left-1 w-4 h-4 bg-[#FF650A] text-white text-[9.5px] font-black rounded-full flex items-center justify-center shadow-xs">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs ${
+                    selectedArea ? 'bg-[#FF650A] text-white' : 'bg-slate-200 text-slate-600'
+                  }`}>
                     4
-                  </span>
+                  </div>
+                  <div className="min-w-0">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                      Step 4 · Area / Neighborhood
+                    </span>
+                    <p className="text-xs font-extrabold text-slate-900 truncate">
+                      {selectedArea ? selectedArea.name : selectedCity ? `All ${selectedCity.name} Areas (Optional)` : 'Select City First'}
+                    </p>
+                  </div>
                 </div>
 
-                <div className="flex-1 min-w-0">
-                  <span className="text-[9px] font-extrabold text-[#FF650A] tracking-wider uppercase">
-                    AREA / VILLAGE
-                  </span>
-                  <h3 className="text-[14px] font-black text-slate-900 truncate">
-                    {selectedArea ? selectedArea.name : (selectedCity ? 'Select Sub-Area (Optional)' : 'Select City First')}
-                  </h3>
-                  <p className="text-[10.5px] text-slate-500 truncate">
-                    {selectedArea ? 'Selected Area' : (selectedCity ? (areas.length > 0 ? `${areas.length} Areas Available` : 'No sub-areas in DB') : 'Locked')}
-                  </p>
-                </div>
-
-                <button 
-                  disabled={!selectedCity}
-                  className="w-8 h-8 flex items-center justify-center rounded-xl bg-slate-50 text-slate-600 shrink-0 disabled:opacity-40"
-                  aria-label="Toggle Area Section"
-                >
-                  {expandedStep === 4 ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                </button>
-              </div>
+                {expandedStep === 4 ? <ChevronUp className="w-4 h-4 text-slate-400 shrink-0" /> : <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />}
+              </button>
 
               {expandedStep === 4 && selectedCity && (
-                <div className="px-3 pb-3 pt-1 border-t border-slate-100">
+                <div className="p-3 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-[300px] overflow-y-auto no-scrollbar">
                   {areas.length === 0 ? (
-                    <div className="text-xs text-slate-500 bg-slate-50 border border-slate-200/60 rounded-xl p-2.5 flex items-start gap-2">
-                      <Info className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
-                      <span>No specific sub-areas registered for {selectedCity.name}. Selection continues at City level.</span>
+                    <div className="col-span-2 py-6 text-center text-slate-400 text-xs font-semibold">
+                      Entire {selectedCity.name} selected. No further micro-neighborhood division required.
                     </div>
                   ) : (
-                    <div className="flex flex-wrap gap-1.5 pt-1">
-                      {areas.map((area) => {
-                        const isSelected = selectedArea?.id === area.id;
-                        return (
-                          <button
-                            key={area.id}
-                            onClick={() => handleSelectArea(area)}
-                            className={`px-3 py-2 rounded-xl border transition-all min-h-[40px] flex items-center gap-1.5 ${
-                              isSelected
-                                ? 'border-[#FF650A] bg-orange-50 text-[#FF650A] font-bold ring-1 ring-[#FF650A]'
-                                : 'border-slate-200/90 bg-white text-slate-700 hover:border-slate-300'
-                            }`}
-                          >
-                            {isSelected && (
-                              <Check className="w-3.5 h-3.5 stroke-[3] text-[#FF650A] shrink-0" />
-                            )}
-                            <span className="text-[11.5px] font-bold leading-none">
-                              {area.name}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
+                    areas.map((area) => {
+                      const isSelected = selectedArea?.id === area.id;
+                      return (
+                        <button
+                          key={area.id}
+                          type="button"
+                          onClick={() => handleSelectArea(area)}
+                          className={`w-full p-3 rounded-xl text-left border text-xs font-bold transition-all flex items-center justify-between cursor-pointer ${
+                            isSelected
+                              ? 'bg-orange-50/80 border-[#FF650A] text-[#FF650A] shadow-2xs'
+                              : 'bg-white border-slate-200/80 text-slate-800 hover:border-slate-300'
+                          }`}
+                        >
+                          <span className="truncate">{area.name}</span>
+                          {isSelected && <Check className="w-4 h-4 text-[#FF650A] stroke-[2.5] shrink-0" />}
+                        </button>
+                      );
+                    })
                   )}
                 </div>
               )}
             </div>
-          </>
+          </div>
         )}
       </main>
 
-      {/* 3. STICKY / FIXED SELECTED LOCATION SUMMARY & APPLY FOOTER */}
-      <footer className="fixed bottom-[58px] lg:bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/90 p-3 shadow-xl">
-        <div className="max-w-md mx-auto space-y-2">
-          {/* Summary Row */}
-          <div className="flex items-center justify-between px-1">
-            <div className="flex items-center gap-2 min-w-0">
-              <div className="w-7 h-7 rounded-full bg-blue-50 border border-blue-200 flex items-center justify-center shrink-0">
-                <MapPin className="w-3.5 h-3.5 text-[#1464F4]" />
-              </div>
-              <div className="min-w-0">
-                <div className="text-[9.5px] font-black text-slate-400 uppercase tracking-wider">
-                  SELECTED LOCATION
-                </div>
-                <div className="text-[13px] font-black text-slate-900 truncate">
-                  {currentBreadcrumb}
-                </div>
-              </div>
-            </div>
-
-            {(selectedProvince || selectedDistrict || selectedCity || selectedArea) && (
-              <button
-                onClick={handleResetAll}
-                className="text-[11.5px] font-bold text-slate-500 hover:text-slate-800 shrink-0 px-2 py-1 rounded-lg hover:bg-slate-100"
-              >
-                Clear
-              </button>
-            )}
+      {/* 3. STICKY BOTTOM APPLY FOOTER */}
+      <footer className="fixed bottom-16 lg:bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/90 p-3 sm:p-4 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+        <div className="max-w-3xl lg:max-w-4xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <span className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400 block mb-0.5">
+              SELECTED LOCATION
+            </span>
+            <p className="text-xs sm:text-sm font-black text-slate-900 truncate">
+              {currentBreadcrumb || 'All Sri Lanka'}
+            </p>
           </div>
 
-          {/* Apply Button */}
-          <button
-            onClick={handleApply}
-            className="w-full py-3 bg-[#1464F4] hover:bg-[#0c4cc2] active:scale-[0.98] text-white text-[14px] font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-2 min-h-[46px]"
-          >
-            <CheckCircle2 className="w-4.5 h-4.5 stroke-[2.2]" />
-            <span>Apply Location ({currentBreadcrumb})</span>
-          </button>
+          <div className="flex items-center gap-2.5 shrink-0 w-full sm:w-auto">
+            <button
+              type="button"
+              onClick={handleCancel}
+              className="px-4 py-3 rounded-xl border border-slate-200 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors cursor-pointer shrink-0"
+            >
+              Cancel
+            </button>
+
+            <button
+              type="button"
+              onClick={handleApply}
+              className="flex-1 sm:flex-none py-3 px-6 rounded-xl bg-[#1464F4] hover:bg-blue-600 text-white text-xs sm:text-sm font-black flex items-center justify-center gap-2 shadow-lg shadow-blue-500/25 active:scale-[0.99] transition-all cursor-pointer"
+            >
+              <CheckCircle2 className="w-4 h-4 stroke-[2.5]" />
+              <span className="truncate">
+                {currentBreadcrumb === 'All Sri Lanka' ? 'Apply Location (All Sri Lanka)' : 'Apply Location'}
+              </span>
+            </button>
+          </div>
         </div>
       </footer>
     </div>

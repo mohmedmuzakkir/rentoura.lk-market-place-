@@ -136,6 +136,40 @@ export default function App() {
   // Category Selector Detailed State
   const [selectedCategoryState, setSelectedCategoryState] = useState<SelectedCategoryState | null>(null);
 
+  // Origin & Return Navigation Context for Selectors
+  const [selectorOrigin, setSelectorOrigin] = useState<{
+    returnTo: AppRoute;
+    module?: 'all' | 'rentals' | 'jobs' | 'services' | 'rental' | 'job' | 'service';
+    initialLocation?: string;
+    initialCategoryPath?: string;
+  }>({ returnTo: '/' });
+
+  const handleOpenLocationSelector = (opts?: {
+    returnTo?: AppRoute;
+    module?: 'all' | 'rentals' | 'jobs' | 'services' | 'rental' | 'job' | 'service';
+    initialLocation?: string;
+  }) => {
+    setSelectorOrigin({
+      returnTo: opts?.returnTo || currentRoute || '/',
+      module: opts?.module || 'all',
+      initialLocation: opts?.initialLocation || filterState.selectedLocation
+    });
+    handleNavigate('/select-location');
+  };
+
+  const handleOpenCategorySelector = (opts?: {
+    returnTo?: AppRoute;
+    module?: 'all' | 'rentals' | 'jobs' | 'services' | 'rental' | 'job' | 'service';
+    initialCategoryPath?: string;
+  }) => {
+    setSelectorOrigin({
+      returnTo: opts?.returnTo || currentRoute || '/',
+      module: opts?.module || 'all',
+      initialCategoryPath: opts?.initialCategoryPath || filterState.selectedCategory
+    });
+    handleNavigate('/select-category');
+  };
+
   // Saved Listings State (syncs strictly with Supabase saved_listings for authenticated users)
   const [savedListings, setSavedListings] = useState<string[]>([]);
 
@@ -854,8 +888,8 @@ export default function App() {
             selectedCategoryPath={filterState.selectedCategory}
             filterState={filterState}
             onUpdateFilterState={(newFilters) => setFilterState(prev => ({ ...prev, ...newFilters }))}
-            onOpenLocationSelector={() => handleNavigate('/select-location')}
-            onOpenCategorySelector={() => handleNavigate('/select-category')}
+            onOpenLocationSelector={() => handleOpenLocationSelector({ returnTo: '/search' })}
+            onOpenCategorySelector={() => handleOpenCategorySelector({ returnTo: '/search' })}
             onOpenFilterModal={() => handleNavigate('/filters')}
             onOpenListingDetail={handleOpenListingDetail}
           />
@@ -864,10 +898,32 @@ export default function App() {
         return (
           <LocationSelectorPage
             onNavigate={handleNavigate}
-            initialLocation={filterState.selectedLocation}
+            returnTo={selectorOrigin.returnTo || '/'}
+            initialLocation={selectorOrigin.initialLocation || filterState.selectedLocation}
             savedCount={savedListings.length}
-            onSelectLocation={(locStr) => {
-              setFilterState(prev => ({ ...prev, selectedLocation: locStr }));
+            onApplyLocation={(locModel, displayName) => {
+              setFilterState(prev => ({ ...prev, selectedLocation: displayName }));
+              const targetRoute = selectorOrigin.returnTo || '/';
+              if (targetRoute === '/filters') {
+                setAdvancedFilterState(prev => ({
+                  ...prev,
+                  location: {
+                    ...prev.location,
+                    provinceId: locModel.provinceId,
+                    provinceName: locModel.provinceName,
+                    districtId: locModel.districtId,
+                    districtName: locModel.districtName,
+                    cityId: locModel.cityId,
+                    cityName: locModel.cityName,
+                    areaId: locModel.areaId,
+                    areaName: locModel.areaName,
+                    displayName: displayName
+                  }
+                }));
+              }
+            }}
+            onCancel={() => {
+              handleNavigate(selectorOrigin.returnTo || '/');
             }}
           />
         );
@@ -875,12 +931,31 @@ export default function App() {
         return (
           <CategorySelectorPage
             onNavigate={handleNavigate}
-            initialModule="rentals"
-            initialCategoryPath={filterState.selectedCategory}
+            returnTo={selectorOrigin.returnTo || '/'}
+            initialModule={selectorOrigin.module || 'all'}
+            initialCategoryPath={selectorOrigin.initialCategoryPath || filterState.selectedCategory}
             savedCount={savedListings.length}
             onApplyCategory={(categoryPath, state) => {
               setFilterState(prev => ({ ...prev, selectedCategory: categoryPath }));
               setSelectedCategoryState(state);
+              const targetRoute = selectorOrigin.returnTo || '/';
+              if (targetRoute === '/filters') {
+                setAdvancedFilterState(prev => ({
+                  ...prev,
+                  category: {
+                    mainCatId: state.selectedMainCat?.id || state.mainCategory?.id,
+                    mainCatName: state.selectedMainCat?.name || state.mainCategory?.name,
+                    subCatId: state.selectedSubCat?.id || state.subCategory?.id,
+                    subCatName: state.selectedSubCat?.name || state.subCategory?.name,
+                    thirdLevelId: state.selectedThirdLevel?.id || state.thirdLevel?.id,
+                    thirdLevelName: state.selectedThirdLevel?.name || state.thirdLevel?.name,
+                    fullPath: categoryPath
+                  }
+                }));
+              }
+            }}
+            onCancel={() => {
+              handleNavigate(selectorOrigin.returnTo || '/');
             }}
           />
         );
@@ -1154,8 +1229,8 @@ export default function App() {
             filterState={filterState}
             setFilterState={setFilterState}
             onNavigate={handleNavigate}
-            onOpenLocationModal={() => handleNavigate('/select-location')}
-            onOpenCategoryModal={() => handleNavigate('/select-category')}
+            onOpenLocationModal={() => handleOpenLocationSelector({ returnTo: '/', module: 'all' })}
+            onOpenCategoryModal={() => handleOpenCategorySelector({ returnTo: '/', module: 'all' })}
             onOpenFilterModal={() => handleNavigate('/filters')}
             onOpenLearnMore={() => setIsLearnMoreModalOpen(true)}
             onToggleSave={handleToggleSave}

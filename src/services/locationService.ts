@@ -25,6 +25,19 @@ export interface LocationRecord {
   updated_at?: string;
 }
 
+export interface LocationValueModel {
+  displayName: string;
+  provinceId?: string;
+  provinceName?: string;
+  districtId?: string;
+  districtName?: string;
+  cityId?: string;
+  cityName?: string;
+  areaId?: string;
+  areaName?: string;
+  type?: LocationType;
+}
+
 export interface CanonicalLocation {
   id: string;
   name: string;
@@ -391,7 +404,7 @@ export class LocationService {
   /**
    * Searches locations by text query across name, code, postal code, and localized names
    */
-  static async searchLocations(query: string): Promise<CanonicalLocation[]> {
+  static async searchLocations(query: string, options?: { limit?: number }): Promise<CanonicalLocation[]> {
     if (!query || !query.trim()) return [];
     const q = query.trim().toLowerCase();
     const records = await this.loadLocationsFromDB();
@@ -405,7 +418,11 @@ export class LocationService {
         (r.name_ta && r.name_ta.toLowerCase().includes(q))
       )
     );
-    return matches.map(m => this.transformToCanonical(m, records));
+    const results = matches.map(m => this.transformToCanonical(m, records));
+    if (options?.limit && options.limit > 0) {
+      return results.slice(0, options.limit);
+    }
+    return results;
   }
 
   /**
@@ -669,4 +686,72 @@ export class LocationService {
     if (parts.length === 0) return 'All Sri Lanka';
     return parts.join(', ');
   }
+}
+
+/**
+ * Global normalized location matcher across all marketplace feeds
+ */
+export function matchesLocation(
+  itemLocationStr: string | null | undefined,
+  selectedLoc: string | LocationValueModel | null | undefined
+): boolean {
+  if (!selectedLoc) return true;
+
+  const selDisplay = typeof selectedLoc === 'string' ? selectedLoc : selectedLoc.displayName;
+  if (!selDisplay || selDisplay === 'All Sri Lanka' || selDisplay === 'Islandwide' || selDisplay.trim() === '') {
+    return true;
+  }
+
+  if (!itemLocationStr || itemLocationStr.trim() === '') {
+    return false;
+  }
+
+  const itemLower = itemLocationStr.toLowerCase().trim();
+  const selLower = selDisplay.toLowerCase().trim();
+
+  // Direct substring matches
+  if (itemLower.includes(selLower) || selLower.includes(itemLower)) {
+    return true;
+  }
+
+  // Handle object properties if available
+  if (typeof selectedLoc === 'object') {
+    const targets = [
+      selectedLoc.areaName,
+      selectedLoc.cityName,
+      selectedLoc.districtName,
+      selectedLoc.provinceName
+    ].filter(Boolean).map(s => s!.toLowerCase().trim());
+
+    for (const target of targets) {
+      if (itemLower.includes(target) || target.includes(itemLower)) {
+        return true;
+      }
+    }
+  }
+
+  // Clean alpha-numeric string comparison
+  const itemClean = itemLower.replace(/[^a-z0-9]/g, '');
+  const selClean = selLower.replace(/[^a-z0-9]/g, '');
+  if (itemClean.includes(selClean) || selClean.includes(itemClean)) {
+    return true;
+  }
+
+  // Tokenized word matching (e.g. "Kandy" in "Kandy, Central Province" or "Central" in "Central Province")
+  const stopWords = new Set(['province', 'district', 'city', 'town', 'sri', 'lanka', 'islandwide']);
+  const selTokens = selLower
+    .split(/[\s,]+/)
+    .map(t => t.trim())
+    .filter(t => t.length >= 3 && !stopWords.has(t));
+
+  const itemTokens = itemLower
+    .split(/[\s,]+/)
+    .map(t => t.trim())
+    .filter(t => t.length >= 3 && !stopWords.has(t));
+
+  if (selTokens.length > 0 && selTokens.some(st => itemTokens.some(it => it.includes(st) || st.includes(it)))) {
+    return true;
+  }
+
+  return false;
 }
