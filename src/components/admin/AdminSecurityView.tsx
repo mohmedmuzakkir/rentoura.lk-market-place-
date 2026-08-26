@@ -77,11 +77,17 @@ export const AdminSecurityView: React.FC<AdminSecurityViewProps> = ({ staff }) =
       {/* Staff Account Info Card */}
       <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <img
-            src={staff.avatarUrl}
-            alt={staff.fullName}
-            className="w-12 h-12 rounded-2xl object-cover ring-2 ring-[#1464F4]"
-          />
+          {staff.avatarUrl ? (
+            <img
+              src={staff.avatarUrl}
+              alt={staff.fullName}
+              className="w-12 h-12 rounded-2xl object-cover ring-2 ring-[#1464F4]"
+            />
+          ) : (
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-[#1464F4] to-cyan-500 text-white font-black text-base flex items-center justify-center ring-2 ring-[#1464F4] shrink-0">
+              {staff.fullName ? staff.fullName.charAt(0).toUpperCase() : 'S'}
+            </div>
+          )}
           <div>
             <div className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
               <span>{staff.fullName}</span>

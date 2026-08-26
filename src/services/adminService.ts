@@ -6,7 +6,9 @@ import {
   SystemHealthStatus, 
   PlatformAnnouncement,
   UserAccountStatus,
-  RegisteredUser
+  RegisteredUser,
+  HomeSlideItem,
+  JobCompanyItem
 } from '../types/adminTypes';
 import { UserListingItem, UserProfile } from '../types/profileTypes';
 import { ListingReport, ReportService } from './reportService';
@@ -1157,5 +1159,578 @@ export class AdminService {
       details: `Permanently removed listing from platform.`
     });
   }
+
+  // ==========================================
+  // REAL SUPABASE ASYNC CONTROL PLANE METHODS
+  // ==========================================
+
+  /**
+   * Real Supabase KPI metrics query
+   */
+  static async getKpiMetricsAsync(moduleFilter: 'all' | 'rentals' | 'jobs' | 'services' = 'all'): Promise<AdminKpiMetrics> {
+    try {
+      // 1. Fetch listings summary directly from public.listings
+      let listingsQuery = supabase
+        .from('listings')
+        .select('id, module, status, views_count, inquiries_count');
+
+      if (moduleFilter !== 'all') {
+        listingsQuery = listingsQuery.eq('module', moduleFilter);
+      }
+      const { data: listings } = await listingsQuery;
+
+      const allListings = listings || [];
+      const totalListings = allListings.length;
+      const activeListings = allListings.filter(l => l.status === 'active').length;
+      const pendingListings = allListings.filter(l => l.status === 'pending').length;
+      const rejectedListings = allListings.filter(l => l.status === 'rejected').length;
+      const expiredListings = allListings.filter(l => l.status === 'expired').length;
+      const featuredListings = allListings.filter(l => l.status === 'active').length;
+
+      const rentalsCount = allListings.filter(l => l.module === 'rentals').length;
+      const jobsCount = allListings.filter(l => l.module === 'jobs').length;
+      const servicesCount = allListings.filter(l => l.module === 'services').length;
+
+      const totalViews = allListings.reduce((sum, l) => sum + (l.views_count || 0), 0);
+      const totalMessages = allListings.reduce((sum, l) => sum + (l.inquiries_count || 0), 0);
+
+      // 2. Fetch profiles summary directly from public.profiles
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, is_identity_verified, account_status');
+
+      const allProfiles = profiles || [];
+      const totalUsers = allProfiles.length;
+      const verifiedUsers = allProfiles.filter(p => p.is_identity_verified).length;
+      const bannedUsers = allProfiles.filter(p => p.account_status === 'banned' || p.account_status === 'suspended').length;
+
+      // 3. Fetch reports summary if table exists
+      let reportedListings = 0;
+      try {
+        const { count } = await supabase.from('listing_reports').select('id', { count: 'exact', head: true });
+        reportedListings = count || 0;
+      } catch (e) {}
+
+      // 4. Fetch reviews summary if table exists
+      let totalReviews = 0;
+      try {
+        const { count } = await supabase.from('listing_reviews').select('id', { count: 'exact', head: true });
+        totalReviews = count || 0;
+      } catch (e) {}
+
+      return {
+        totalListings,
+        activeListings,
+        pendingListings,
+        rejectedListings,
+        reportedListings,
+        featuredListings,
+        expiredListings,
+        totalUsers,
+        verifiedUsers,
+        bannedUsers,
+        totalViews,
+        totalMessages,
+        totalReviews,
+        totalRevenue: 0,
+        rentalsCount,
+        jobsCount,
+        servicesCount
+      };
+    } catch (e) {
+      console.warn('[AdminService] Fallback to zero KPI metrics:', e);
+      return {
+        totalListings: 0,
+        activeListings: 0,
+        pendingListings: 0,
+        rejectedListings: 0,
+        reportedListings: 0,
+        featuredListings: 0,
+        expiredListings: 0,
+        totalUsers: 0,
+        verifiedUsers: 0,
+        bannedUsers: 0,
+        totalViews: 0,
+        totalMessages: 0,
+        totalReviews: 0,
+        totalRevenue: 0,
+        rentalsCount: 0,
+        jobsCount: 0,
+        servicesCount: 0
+      };
+    }
+  }
+
+  /**
+   * Real Supabase Audit Logs
+   */
+  static async getAuditLogsAsync(): Promise<AuditLogItem[]> {
+    try {
+      const { data, error } = await supabase
+        .from('audit_logs')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(200);
+
+      if (error || !data) {
+        return this.getAuditLogs();
+      }
+
+      return data.map(item => ({
+        id: item.id,
+        actorId: item.actor_id || '',
+        actorName: item.actor_name,
+        actorRole: (item.actor_role?.toUpperCase() || 'MODERATOR') as StaffRole,
+        action: item.action,
+        targetType: item.target_type || 'listing',
+        targetId: item.target_id || '',
+        targetTitle: item.target_title || '',
+        details: item.details || '',
+        timestamp: new Date(item.created_at).getTime(),
+        createdAt: item.created_at
+      }));
+    } catch (e) {
+      return this.getAuditLogs();
+    }
+  }
+
+  static async addAuditLogAsync(entry: Omit<AuditLogItem, 'id' | 'timestamp' | 'createdAt'>): Promise<void> {
+    this.addAuditLog(entry);
+    try {
+      await supabase.from('audit_logs').insert({
+        actor_id: entry.actorId || null,
+        actor_name: entry.actorName,
+        actor_role: entry.actorRole,
+        action: entry.action,
+        target_type: entry.targetType,
+        target_id: entry.targetId,
+        target_title: entry.targetTitle,
+        details: entry.details
+      });
+    } catch (e) {
+      console.warn('[AdminService] Could not persist audit log to DB:', e);
+    }
+  }
+
+  /**
+   * Real Supabase Announcements
+   */
+  static async getAnnouncementsAsync(targetModule?: string): Promise<PlatformAnnouncement[]> {
+    try {
+      let query = supabase
+        .from('announcements')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (targetModule && targetModule !== 'all') {
+        query = query.or(`target_module.eq.${targetModule},target_module.eq.all`);
+      }
+
+      const { data, error } = await query;
+
+      if (error || !data) {
+        return this.getAnnouncements();
+      }
+
+      return data.map(a => ({
+        id: a.id,
+        title: a.title,
+        message: a.message,
+        targetModule: (a.target_module || 'all') as any,
+        priority: (a.priority || 'normal') as any,
+        createdAt: a.created_at,
+        createdBy: a.created_by || 'Staff',
+        active: a.is_active
+      }));
+    } catch (e) {
+      return this.getAnnouncements();
+    }
+  }
+
+  static async createAnnouncementAsync(
+    announcement: Omit<PlatformAnnouncement, 'id' | 'createdAt' | 'active'>,
+    staff: StaffAccount
+  ): Promise<PlatformAnnouncement> {
+    try {
+      const { data, error } = await supabase
+        .from('announcements')
+        .insert({
+          title: announcement.title,
+          message: announcement.message,
+          target_module: announcement.targetModule,
+          priority: announcement.priority,
+          is_active: true,
+          created_by: staff.fullName
+        })
+        .select('*')
+        .single();
+
+      if (error || !data) {
+        return this.createAnnouncement(announcement, staff);
+      }
+
+      const created: PlatformAnnouncement = {
+        id: data.id,
+        title: data.title,
+        message: data.message,
+        targetModule: data.target_module as any,
+        priority: data.priority as any,
+        createdAt: data.created_at,
+        createdBy: data.created_by,
+        active: data.is_active
+      };
+
+      await this.addAuditLogAsync({
+        actorId: staff.id,
+        actorName: staff.fullName,
+        actorRole: staff.role,
+        action: 'ANNOUNCEMENT_CREATED',
+        targetType: 'announcement',
+        targetId: created.id,
+        targetTitle: created.title,
+        details: `Broadcasted announcement to ${created.targetModule} module.`
+      });
+
+      return created;
+    } catch (e) {
+      return this.createAnnouncement(announcement, staff);
+    }
+  }
+
+  static async toggleAnnouncementActiveAsync(id: string, staff: StaffAccount): Promise<void> {
+    try {
+      const announcements = await this.getAnnouncementsAsync();
+      const current = announcements.find(a => a.id === id);
+      if (!current) return;
+
+      const newStatus = !current.active;
+      const { error } = await supabase
+        .from('announcements')
+        .update({ is_active: newStatus, updated_at: new Date().toISOString() })
+        .eq('id', id);
+
+      if (error) {
+        this.toggleAnnouncementActive(id, staff);
+        return;
+      }
+
+      await this.addAuditLogAsync({
+        actorId: staff.id,
+        actorName: staff.fullName,
+        actorRole: staff.role,
+        action: 'ANNOUNCEMENT_UPDATED',
+        targetType: 'announcement',
+        targetId: id,
+        targetTitle: current.title,
+        details: `Toggled active status to ${newStatus}`
+      });
+    } catch (e) {
+      this.toggleAnnouncementActive(id, staff);
+    }
+  }
+
+  static async deleteAnnouncementAsync(id: string, staff: StaffAccount): Promise<void> {
+    try {
+      const announcements = await this.getAnnouncementsAsync();
+      const current = announcements.find(a => a.id === id);
+
+      const { error } = await supabase.from('announcements').delete().eq('id', id);
+      if (error) {
+        this.deleteAnnouncement(id, staff);
+        return;
+      }
+
+      if (current) {
+        await this.addAuditLogAsync({
+          actorId: staff.id,
+          actorName: staff.fullName,
+          actorRole: staff.role,
+          action: 'ANNOUNCEMENT_DELETED',
+          targetType: 'announcement',
+          targetId: id,
+          targetTitle: current.title,
+          details: 'Deleted announcement from platform.'
+        });
+      }
+    } catch (e) {
+      this.deleteAnnouncement(id, staff);
+    }
+  }
+
+  /**
+   * Site Assets (Slide images & logos) File Upload to `site-assets` bucket
+   */
+  static async uploadSiteAssetAsync(file: File, folder: string = 'slides'): Promise<{ url?: string; error?: string }> {
+    try {
+      const fileExt = file.name.split('.').pop() || 'jpg';
+      const filePath = `${folder}/${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from('site-assets')
+        .upload(filePath, file, { cacheControl: '3600', upsert: true });
+
+      if (uploadError) {
+        return { error: uploadError.message };
+      }
+
+      const { data } = supabase.storage.from('site-assets').getPublicUrl(filePath);
+      return { url: data.publicUrl };
+    } catch (e: any) {
+      return { error: e?.message || 'Upload failed' };
+    }
+  }
+
+  /**
+   * Real Supabase Home Slides Manager
+   */
+  static async getHomeSlidesAsync(placementFilter?: string): Promise<HomeSlideItem[]> {
+    try {
+      let query = supabase.from('home_slides').select('*').order('display_order', { ascending: true });
+      if (placementFilter && placementFilter !== 'all') {
+        query = query.or(`placement.eq.${placementFilter},module.eq.${placementFilter}`);
+      }
+      const { data, error } = await query;
+      if (error || !data) return [];
+
+      return data.map(s => ({
+        id: s.id,
+        title: s.title,
+        subtitle: s.subtitle,
+        description: s.description,
+        imageUrl: s.image_url,
+        mobileImageUrl: s.mobile_image_url,
+        module: s.module || 'home',
+        placement: s.placement || s.module || 'home',
+        ctaText: s.cta_text,
+        ctaRoute: s.cta_route,
+        displayOrder: s.display_order ?? 0,
+        durationMs: s.duration_ms,
+        overlayStrength: s.overlay_strength,
+        isActive: s.is_active ?? true,
+        createdAt: s.created_at,
+        updatedAt: s.updated_at
+      }));
+    } catch (e) {
+      console.error('Failed to load home slides:', e);
+      return [];
+    }
+  }
+
+  static async saveHomeSlideAsync(slide: Partial<HomeSlideItem>, staff: StaffAccount): Promise<{ success: boolean; data?: HomeSlideItem; error?: string }> {
+    try {
+      const payload = {
+        title: slide.title,
+        subtitle: slide.subtitle || null,
+        description: slide.description || null,
+        image_url: slide.imageUrl || null,
+        mobile_image_url: slide.mobileImageUrl || null,
+        module: slide.module || 'home',
+        placement: slide.placement || slide.module || 'home',
+        cta_text: slide.ctaText || null,
+        cta_route: slide.ctaRoute || null,
+        display_order: slide.displayOrder ?? 0,
+        duration_ms: slide.durationMs || null,
+        overlay_strength: slide.overlayStrength || null,
+        is_active: slide.isActive ?? true,
+        updated_at: new Date().toISOString()
+      };
+
+      if (slide.id) {
+        const { data, error } = await supabase
+          .from('home_slides')
+          .update(payload)
+          .eq('id', slide.id)
+          .select('*')
+          .single();
+        if (error) return { success: false, error: error.message };
+
+        await this.addAuditLogAsync({
+          actorId: staff.id,
+          actorName: staff.fullName,
+          actorRole: staff.role,
+          action: 'SLIDE_UPDATED',
+          targetType: 'settings',
+          targetId: slide.id,
+          targetTitle: slide.title,
+          details: `Updated marketplace slide "${slide.title}".`
+        });
+        return { success: true };
+      } else {
+        const { data, error } = await supabase
+          .from('home_slides')
+          .insert(payload)
+          .select('*')
+          .single();
+        if (error) return { success: false, error: error.message };
+
+        await this.addAuditLogAsync({
+          actorId: staff.id,
+          actorName: staff.fullName,
+          actorRole: staff.role,
+          action: 'SLIDE_CREATED',
+          targetType: 'settings',
+          targetId: data.id,
+          targetTitle: data.title,
+          details: `Created new slide "${data.title}" for placement ${data.placement}.`
+        });
+        return { success: true };
+      }
+    } catch (e: any) {
+      return { success: false, error: e?.message || 'Failed to save slide.' };
+    }
+  }
+
+  static async deleteHomeSlideAsync(slideId: string, staff: StaffAccount): Promise<{ success: boolean; error?: string }> {
+    try {
+      const { error } = await supabase.from('home_slides').delete().eq('id', slideId);
+      if (error) return { success: false, error: error.message };
+
+      await this.addAuditLogAsync({
+        actorId: staff.id,
+        actorName: staff.fullName,
+        actorRole: staff.role,
+        action: 'SLIDE_DELETED',
+        targetType: 'settings',
+        targetId: slideId,
+        details: `Deleted slide ID ${slideId}.`
+      });
+      return { success: true };
+    } catch (e: any) {
+      return { success: false, error: e?.message || 'Failed to delete slide.' };
+    }
+  }
+
+  /**
+   * Real Supabase Job Companies Manager
+   */
+  static async getJobCompaniesAsync(): Promise<JobCompanyItem[]> {
+    try {
+      const { data, error } = await supabase
+        .from('job_companies')
+        .select('*')
+        .order('display_order', { ascending: true })
+        .order('name', { ascending: true });
+
+      if (error || !data) return [];
+
+      return data.map(c => ({
+        id: c.id,
+        name: c.name,
+        slug: c.slug,
+        logoUrl: c.logo_url,
+        websiteUrl: c.website_url,
+        shortDescription: c.short_description,
+        subtitle: c.subtitle,
+        brandKey: c.brand_key || 'custom',
+        isFeatured: c.is_featured ?? false,
+        displayOrder: c.display_order ?? 0,
+        isActive: c.is_active ?? true,
+        createdAt: c.created_at,
+        updatedAt: c.updated_at
+      }));
+    } catch (e) {
+      console.error('Failed to load job companies:', e);
+      return [];
+    }
+  }
+
+  static async saveJobCompanyAsync(company: Partial<JobCompanyItem>, staff: StaffAccount): Promise<{ success: boolean; error?: string }> {
+    try {
+      const cleanSlug = (company.name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+      const payload = {
+        name: company.name,
+        slug: company.slug || cleanSlug,
+        logo_url: company.logoUrl || null,
+        website_url: company.websiteUrl || null,
+        short_description: company.shortDescription || null,
+        subtitle: company.subtitle || null,
+        brand_key: company.brandKey || 'custom',
+        is_featured: company.isFeatured ?? false,
+        display_order: company.displayOrder ?? 0,
+        is_active: company.isActive ?? true,
+        updated_at: new Date().toISOString()
+      };
+
+      if (company.id) {
+        const { error } = await supabase
+          .from('job_companies')
+          .update(payload)
+          .eq('id', company.id);
+        if (error) return { success: false, error: error.message };
+
+        await this.addAuditLogAsync({
+          actorId: staff.id,
+          actorName: staff.fullName,
+          actorRole: staff.role,
+          action: 'COMPANY_UPDATED',
+          targetType: 'settings',
+          targetId: company.id,
+          targetTitle: company.name,
+          details: `Updated hiring company profile for ${company.name}.`
+        });
+        return { success: true };
+      } else {
+        const { data, error } = await supabase
+          .from('job_companies')
+          .insert(payload)
+          .select('id')
+          .single();
+        if (error) return { success: false, error: error.message };
+
+        await this.addAuditLogAsync({
+          actorId: staff.id,
+          actorName: staff.fullName,
+          actorRole: staff.role,
+          action: 'COMPANY_CREATED',
+          targetType: 'settings',
+          targetId: data.id,
+          targetTitle: company.name,
+          details: `Created new hiring company profile for ${company.name}.`
+        });
+        return { success: true };
+      }
+    } catch (e: any) {
+      return { success: false, error: e?.message || 'Failed to save company.' };
+    }
+  }
+
+  static async deleteJobCompanyAsync(companyId: string, staff: StaffAccount): Promise<{ success: boolean; error?: string }> {
+    try {
+      const { error } = await supabase.from('job_companies').delete().eq('id', companyId);
+      if (error) return { success: false, error: error.message };
+
+      await this.addAuditLogAsync({
+        actorId: staff.id,
+        actorName: staff.fullName,
+        actorRole: staff.role,
+        action: 'COMPANY_DELETED',
+        targetType: 'settings',
+        targetId: companyId,
+        details: `Deleted company ID ${companyId}.`
+      });
+      return { success: true };
+    } catch (e: any) {
+      return { success: false, error: e?.message || 'Failed to delete company.' };
+    }
+  }
+
+  /**
+   * Real Support Tickets Summary
+   */
+  static async getSupportTicketsSummaryAsync(): Promise<{ total: number; open: number; unread: number }> {
+    try {
+      const { data, error } = await supabase.from('support_tickets').select('id, status, is_read');
+      if (error || !data) return { total: 0, open: 0, unread: 0 };
+
+      const total = data.length;
+      const open = data.filter(t => t.status === 'open' || t.status === 'pending').length;
+      const unread = data.filter(t => !t.is_read).length;
+
+      return { total, open, unread };
+    } catch (e) {
+      return { total: 0, open: 0, unread: 0 };
+    }
+  }
 }
+
 

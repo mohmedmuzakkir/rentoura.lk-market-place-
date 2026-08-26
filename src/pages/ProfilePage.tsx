@@ -1,6 +1,8 @@
 import React from 'react';
 import { ArrowLeft, User, ShieldCheck, Settings, HelpCircle, PhoneCall, LogOut, ChevronRight, FileText, Heart, ShieldAlert, Plus, LayoutDashboard } from 'lucide-react';
 import { AppRoute } from '../types';
+import { AuthService } from '../services/authService';
+import { isStaff } from '../utils/roleUtils';
 
 interface ProfilePageProps {
   onNavigate: (route: AppRoute) => void;
@@ -9,6 +11,7 @@ interface ProfilePageProps {
 
 export const ProfilePage: React.FC<ProfilePageProps> = ({ onNavigate, onLogout }) => {
   const [isLoggingOut, setIsLoggingOut] = React.useState(false);
+  const currentProfile = AuthService.getCurrentProfile();
 
   const handleLogout = async () => {
     if (isLoggingOut) return;
@@ -114,21 +117,23 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onNavigate, onLogout }
               <ChevronRight className="w-5 h-5 text-slate-400 group-hover:translate-x-1 transition-transform" />
             </button>
 
-            <button
-              onClick={() => onNavigate('/admin')}
-              className="w-full p-4 hover:bg-slate-50 flex items-center justify-between text-left transition-colors group"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-slate-900 text-white flex items-center justify-center font-bold">
-                  <LayoutDashboard className="w-5 h-5 text-sky-400" />
+            {isStaff(currentProfile) && (
+              <button
+                onClick={() => onNavigate('/admin')}
+                className="w-full p-4 hover:bg-slate-50 flex items-center justify-between text-left transition-colors group"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-slate-900 text-white flex items-center justify-center font-bold">
+                    <LayoutDashboard className="w-5 h-5 text-sky-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900 group-hover:text-[#1464F4] transition-colors">Staff Dashboard</h3>
+                    <p className="text-xs text-slate-500">Platform operations, listings moderation & analytics</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-sm font-bold text-slate-900 group-hover:text-[#1464F4] transition-colors">Admin Dashboard</h3>
-                  <p className="text-xs text-slate-500">Platform operations, listings moderation & analytics</p>
-                </div>
-              </div>
-              <ChevronRight className="w-5 h-5 text-slate-400 group-hover:translate-x-1 transition-transform" />
-            </button>
+                <ChevronRight className="w-5 h-5 text-slate-400 group-hover:translate-x-1 transition-transform" />
+              </button>
+            )}
 
             <button
               onClick={() => onNavigate('/help')}

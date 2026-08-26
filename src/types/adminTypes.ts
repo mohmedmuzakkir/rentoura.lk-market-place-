@@ -91,3 +91,38 @@ export interface RegisteredUser {
   suspendedBy?: string;
 }
 
+export interface HomeSlideItem {
+  id: string;
+  title: string;
+  subtitle?: string;
+  description?: string;
+  imageUrl?: string;
+  mobileImageUrl?: string;
+  module?: string;
+  placement?: string;
+  ctaText?: string;
+  ctaRoute?: string;
+  displayOrder: number;
+  durationMs?: number;
+  overlayStrength?: number;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface JobCompanyItem {
+  id: string;
+  name: string;
+  slug?: string;
+  logoUrl?: string;
+  websiteUrl?: string;
+  shortDescription?: string;
+  subtitle?: string;
+  brandKey?: string;
+  isFeatured: boolean;
+  displayOrder: number;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+

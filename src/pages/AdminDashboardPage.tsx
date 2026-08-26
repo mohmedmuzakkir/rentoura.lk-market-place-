@@ -28,7 +28,9 @@ import {
   FolderTree,
   MapPin,
   Inbox,
-  KeyRound
+  KeyRound,
+  Sliders,
+  Building2
 } from 'lucide-react';
 import { AppRoute } from '../types';
 import { StaffAccount, AuditLogItem, AdminKpiMetrics, PlatformAnnouncement } from '../types/adminTypes';
@@ -50,6 +52,8 @@ import { AdminListingReview } from '../components/admin/AdminListingReview';
 import { AdminCategoryView } from '../components/admin/AdminCategoryView';
 import { AdminLocationView } from '../components/admin/AdminLocationView';
 import { AdminSecurityView } from '../components/admin/AdminSecurityView';
+import { AdminSlidesView } from '../components/admin/AdminSlidesView';
+import { AdminCompaniesView } from '../components/admin/AdminCompaniesView';
 
 interface AdminDashboardPageProps {
   staff: StaffAccount;
@@ -69,6 +73,8 @@ type ActiveSection =
   | 'all-users' 
   | 'staff-roles' 
   | 'security'
+  | 'slides'
+  | 'companies'
   | 'announcements' 
   | 'notifications' 
   | 'reviews' 
@@ -109,17 +115,25 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
   const [newAncPriority, setNewAncPriority] = useState<'normal' | 'urgent'>('normal');
 
   // Refresh single source of truth data
-  const refreshDashboardData = () => {
+  const refreshDashboardData = async () => {
     const updatedListings = ProfileService.getUserListings();
     const updatedReports = ReportService.getReports();
-    const updatedLogs = AdminService.getAuditLogs();
-    const updatedAncs = AdminService.getAnnouncements();
 
     setListings(updatedListings);
     setReports(updatedReports);
-    setAuditLogs(updatedLogs);
-    setAnnouncements(updatedAncs);
-    setKpiMetrics(AdminService.getKpiMetrics(moduleFilter));
+
+    try {
+      const metrics = await AdminService.getKpiMetricsAsync(moduleFilter);
+      setKpiMetrics(metrics);
+
+      const updatedLogs = await AdminService.getAuditLogsAsync();
+      setAuditLogs(updatedLogs);
+
+      const updatedAncs = await AdminService.getAnnouncementsAsync(moduleFilter);
+      setAnnouncements(updatedAncs);
+    } catch (err) {
+      console.error('Failed to refresh async Supabase metrics:', err);
+    }
   };
 
   useEffect(() => {
@@ -173,6 +187,9 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
       case 'locations': return 'Location Management';
       case 'all-users': return 'User Directory & Moderation';
       case 'staff-roles': return 'Staff Account Management';
+      case 'security': return 'Security & Challenge Settings';
+      case 'slides': return 'Marketplace Hero Slides';
+      case 'companies': return 'Top Hiring Companies';
       case 'announcements': return 'Platform Broadcast Announcements';
       case 'reviews': return 'Reviews & Rating Moderation';
       case 'reports': return 'Community Violations Reports';
@@ -334,6 +351,34 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
                   <div className="flex items-center gap-2.5">
                     <MapPin className="w-4 h-4 text-emerald-400 shrink-0" />
                     {!isCollapsed && <span>Locations</span>}
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleNavClick('slides')}
+                  title="Hero Slides Manager"
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all ${
+                    activeSection === 'slides' ? 'bg-[#1464F4] text-white font-bold' : 'hover:bg-slate-800/60 text-slate-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Sliders className="w-4 h-4 text-[#00C2FF] shrink-0" />
+                    {!isCollapsed && <span>Hero Slides</span>}
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleNavClick('companies')}
+                  title="Hiring Companies Manager"
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all ${
+                    activeSection === 'companies' ? 'bg-[#1464F4] text-white font-bold' : 'hover:bg-slate-800/60 text-slate-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Building2 className="w-4 h-4 text-[#08A34F] shrink-0" />
+                    {!isCollapsed && <span>Hiring Companies</span>}
                   </div>
                 </button>
               </>
@@ -573,11 +618,17 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
 
           {/* Current Staff Avatar */}
           <div className="flex items-center gap-2.5 pl-2 sm:pl-3 border-l border-slate-800">
-            <img
-              src={staff.avatarUrl}
-              alt={staff.fullName}
-              className="w-8 h-8 rounded-full object-cover ring-2 ring-[#1464F4] shrink-0"
-            />
+            {staff.avatarUrl ? (
+              <img
+                src={staff.avatarUrl}
+                alt={staff.fullName}
+                className="w-8 h-8 rounded-full object-cover ring-2 ring-[#1464F4] shrink-0"
+              />
+            ) : (
+              <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#1464F4] to-cyan-500 text-white font-black text-xs flex items-center justify-center ring-2 ring-[#1464F4] shrink-0">
+                {staff.fullName ? staff.fullName.charAt(0).toUpperCase() : 'S'}
+              </div>
+            )}
             <div className="hidden md:block text-left">
               <div className="text-xs font-extrabold text-white leading-none">{staff.displayName || staff.fullName}</div>
               <div className="text-[10px] text-cyan-400 font-semibold mt-0.5">{staff.role.replace('_', ' ')}</div>
@@ -609,11 +660,17 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
             <div className="p-4 border-b border-slate-800/80">
               <div className="flex items-center gap-3">
                 <div className="relative shrink-0">
-                  <img
-                    src={staff.avatarUrl}
-                    alt={staff.fullName}
-                    className="w-10 h-10 rounded-2xl object-cover ring-2 ring-[#1464F4]"
-                  />
+                  {staff.avatarUrl ? (
+                    <img
+                      src={staff.avatarUrl}
+                      alt={staff.fullName}
+                      className="w-10 h-10 rounded-2xl object-cover ring-2 ring-[#1464F4]"
+                    />
+                  ) : (
+                    <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-[#1464F4] to-cyan-500 text-white font-black text-sm flex items-center justify-center ring-2 ring-[#1464F4] shrink-0">
+                      {staff.fullName ? staff.fullName.charAt(0).toUpperCase() : 'S'}
+                    </div>
+                  )}
                   <span className="w-2.5 h-2.5 bg-emerald-500 border-2 border-[#041C43] rounded-full absolute -bottom-0.5 -right-0.5" />
                 </div>
                 <div className="overflow-hidden">
@@ -627,12 +684,21 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
             </div>
           ) : (
             <div className="p-3 border-b border-slate-800/80 flex justify-center">
-              <img
-                src={staff.avatarUrl}
-                alt={staff.fullName}
-                className="w-9 h-9 rounded-2xl object-cover ring-2 ring-[#1464F4]"
-                title={staff.fullName}
-              />
+              {staff.avatarUrl ? (
+                <img
+                  src={staff.avatarUrl}
+                  alt={staff.fullName}
+                  className="w-9 h-9 rounded-2xl object-cover ring-2 ring-[#1464F4]"
+                  title={staff.fullName}
+                />
+              ) : (
+                <div 
+                  className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-[#1464F4] to-cyan-500 text-white font-black text-xs flex items-center justify-center ring-2 ring-[#1464F4]"
+                  title={staff.fullName}
+                >
+                  {staff.fullName ? staff.fullName.charAt(0).toUpperCase() : 'S'}
+                </div>
+              )}
             </div>
           )}
 
@@ -699,11 +765,17 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
                 {/* Staff Profile Card inside Drawer */}
                 <div className="p-4 bg-slate-800/50 border-b border-slate-800">
                   <div className="flex items-center gap-3">
-                    <img
-                      src={staff.avatarUrl}
-                      alt={staff.fullName}
-                      className="w-10 h-10 rounded-2xl object-cover ring-2 ring-[#1464F4] shrink-0"
-                    />
+                    {staff.avatarUrl ? (
+                      <img
+                        src={staff.avatarUrl}
+                        alt={staff.fullName}
+                        className="w-10 h-10 rounded-2xl object-cover ring-2 ring-[#1464F4] shrink-0"
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-[#1464F4] to-cyan-500 text-white font-black text-sm flex items-center justify-center ring-2 ring-[#1464F4] shrink-0">
+                        {staff.fullName ? staff.fullName.charAt(0).toUpperCase() : 'S'}
+                      </div>
+                    )}
                     <div className="overflow-hidden">
                       <div className="text-xs font-extrabold text-white truncate">{staff.fullName}</div>
                       <div className="text-[10px] text-cyan-400 font-semibold">{staff.role.replace('_', ' ')}</div>
@@ -784,6 +856,10 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
             )
           ) : activeSection === 'security' ? (
             <AdminSecurityView staff={staff} />
+          ) : activeSection === 'slides' ? (
+            <AdminSlidesView staff={staff} />
+          ) : activeSection === 'companies' ? (
+            <AdminCompaniesView staff={staff} />
           ) : activeSection === 'all-listings' || activeSection === 'active-listings' || activeSection === 'rejected-listings' ? (
             <AdminListingsView 
               staff={staff} 
