@@ -26,66 +26,62 @@ export const JobPostFlow: React.FC<JobPostFlowProps> = ({
 }) => {
   const accentColor = '#08A34F'; // Vibrant emerald green theme for jobs
 
-  // Initialize draft from localStorage or create new
+  // Initialize draft from localStorage or create new blank draft
   const [draft, setDraft] = useState<ListingDraft>(() => {
     const existing = PostDraftService.getDraft('jobs');
     if (existing) {
       return {
         ...existing,
-        categoryId: existing.categoryId || 'it-tech',
-        categoryName: existing.categoryName || 'IT & Technology',
-        subcategoryId: existing.subcategoryId || 'software-dev',
-        subcategoryName: existing.subcategoryName || 'Software Developer',
-        categoryPath: existing.categoryPath || 'Jobs > IT & Technology > Software Developer'
+        module: 'jobs'
       };
     }
     const initial = PostDraftService.createInitialDraft('jobs');
     return {
       ...initial,
-      categoryId: 'it-tech',
-      categoryName: 'IT & Technology',
-      subcategoryId: 'software-dev',
-      subcategoryName: 'Software Developer',
-      categoryPath: 'Jobs > IT & Technology > Software Developer',
+      module: 'jobs',
       formValues: {
-        title: 'Senior React / Full-Stack Engineer',
-        description: 'We are seeking a talented Senior React / Full-Stack Engineer to lead frontend development for our high-scale Sri Lankan marketplace platform. Minimum 3+ years experience with React, TypeScript, and modern Node.js services.',
+        title: '',
+        description: '',
         employmentType: 'full-time',
         experienceLevel: 'mid',
-        vacancies: 2,
+        vacancies: 1,
         employerType: 'company',
-        companyName: 'Synapse Tech Solutions (Pvt) Ltd',
-        industry: 'Information Technology & Software',
+        companyName: '',
+        industry: '',
         workMode: 'onsite',
         workingDays: 'mon-fri',
         shiftType: 'day',
-        educationLevel: 'degree',
-        skills: ['React', 'TypeScript', 'Node.js', 'Tailwind CSS', 'REST APIs'],
+        educationLevel: 'diploma',
+        skills: [],
         languages: ['English', 'Sinhala'],
         salaryStructure: 'monthly-range',
-        minSalary: 150000,
-        maxSalary: 250000,
+        minSalary: 0,
+        maxSalary: 0,
         showSalary: true,
-        benefits: ['meals', 'transport', 'insurance', 'bonus', 'flexible_hours'],
-        appMethods: ['direct', 'phone', 'email'],
+        benefits: [],
+        appMethods: ['direct'],
         reqCv: true
       },
       location: {
-        provinceId: 'central',
-        provinceName: 'Central',
-        districtId: 'kandy',
-        districtName: 'Kandy',
-        cityId: 'kandy-city',
-        cityName: 'Kandy City',
-        address: 'No. 120, Peradeniya Road, Kandy'
+        provinceId: '',
+        provinceName: '',
+        districtId: '',
+        districtName: '',
+        cityId: '',
+        cityName: '',
+        areaId: '',
+        areaName: '',
+        address: '',
+        hideExactAddress: false
       },
       contactPreferences: {
+        contactName: '',
         showPhone: true,
-        phone: '0771234567',
-        showWhatsApp: true,
-        whatsappNumber: '0771234567',
+        phone: '',
+        showWhatsApp: false,
+        whatsappNumber: '',
         allowDirectChat: true,
-        email: 'careers@synapsetech.lk'
+        email: ''
       }
     };
   });
@@ -187,6 +183,13 @@ export const JobPostFlow: React.FC<JobPostFlowProps> = ({
         const phoneCheck = validateSriLankanPhone(draft.contactPreferences.phone);
         if (!phoneCheck.isValid) {
           errors.phone = phoneCheck.error || 'Please enter a valid Sri Lankan mobile number';
+        }
+      }
+      if (appMethods.includes('email')) {
+        const emailVal = (draft.contactPreferences.email || '').trim();
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailVal || !emailRegex.test(emailVal)) {
+          errors.email = 'Please enter a valid contact email address';
         }
       }
     }

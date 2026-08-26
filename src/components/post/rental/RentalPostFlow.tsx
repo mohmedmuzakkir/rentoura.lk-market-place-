@@ -33,19 +33,19 @@ export const RentalPostFlow: React.FC<RentalPostFlowProps> = ({
       return {
         ...existing,
         pricing: existing.pricing || {
-          rate: existing.formValues?.price || 12500,
+          rate: 0,
           ratePeriod: 'day',
-          depositRequired: true,
-          depositAmount: 25000,
+          depositRequired: false,
+          depositAmount: 0,
           minRentalDuration: '1 day',
           bookingType: 'inquire',
           availableImmediately: true
         },
         rules: existing.rules || {
-          requiredDocuments: ['nic', 'driving_license'],
+          requiredDocuments: ['nic'],
           smokingAllowed: false,
           petsAllowed: false,
-          commercialUsageAllowed: true,
+          commercialUsageAllowed: false,
           handoverMode: 'both',
           cancellationPolicy: 'flexible'
         }
@@ -189,7 +189,7 @@ export const RentalPostFlow: React.FC<RentalPostFlowProps> = ({
         ...draft,
         formValues: {
           ...draft.formValues,
-          price: draft.pricing?.rate || 12500,
+          price: draft.pricing?.rate || 0,
           rentalPeriod: draft.pricing?.ratePeriod || 'day'
         }
       };
@@ -333,10 +333,10 @@ export const RentalPostFlow: React.FC<RentalPostFlowProps> = ({
         {currentStep === 3 && (
           <RentalPricingStep
             pricing={draft.pricing || {
-              rate: 12500,
+              rate: 0,
               ratePeriod: 'day',
-              depositRequired: true,
-              depositAmount: 25000,
+              depositRequired: false,
+              depositAmount: 0,
               minRentalDuration: '1 day',
               bookingType: 'inquire',
               availableImmediately: true

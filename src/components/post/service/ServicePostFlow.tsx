@@ -55,41 +55,41 @@ export const ServicePostFlow: React.FC<ServicePostFlowProps> = ({
     return {
       ...fresh,
       module: 'services',
-      categoryId: 'electrical-services',
-      categoryName: 'Electrical Services',
-      subcategoryId: 'house-wiring-full',
-      subcategoryName: 'House & Building Wiring',
-      categoryPath: 'Services > Electrical Services > House & Building Wiring',
+      categoryId: '',
+      categoryName: '',
+      subcategoryId: '',
+      subcategoryName: '',
+      categoryPath: '',
       formValues: {
-        title: 'Professional House Wiring & Electrical Repair Service',
-        shortDescription: 'Certified electrical service for homes, apartments, offices and commercial shops.',
-        description: 'Experienced electrician providing comprehensive electrical solutions across Kandy and Central Province. Services include complete house wiring, tripping fault finding, DB board setup, switch socket fitting, inverter connection, and 24/7 emergency power restoration.',
+        title: '',
+        shortDescription: '',
+        description: '',
         providerType: 'individual',
-        providerName: 'Muzakkir M.',
-        yearsExperience: '5-10',
+        providerName: '',
+        yearsExperience: '1-3',
         pricingModel: 'hourly',
-        price: 2500,
+        price: 0,
         serviceMode: 'customer_location',
         serviceRadius: '25km',
-        emergencyAvailable: true,
+        emergencyAvailable: false,
         minAdvanceNotice: '1-hour'
       },
       location: {
-        provinceId: 'central',
-        provinceName: 'Central Province',
-        districtId: 'kandy',
-        districtName: 'Kandy District',
-        cityId: 'kandy-city',
-        cityName: 'Kandy',
-        address: 'Peradeniya Road, Kandy',
+        provinceId: '',
+        provinceName: '',
+        districtId: '',
+        districtName: '',
+        cityId: '',
+        cityName: '',
+        address: '',
         hideExactAddress: false
       },
       contactPreferences: {
-        contactName: 'Muzakkir M.',
+        contactName: '',
         showPhone: true,
-        phone: '077 123 4567',
-        showWhatsApp: true,
-        whatsappNumber: '077 123 4567',
+        phone: '',
+        showWhatsApp: false,
+        whatsappNumber: '',
         allowDirectChat: true
       }
     };
@@ -142,7 +142,7 @@ export const ServicePostFlow: React.FC<ServicePostFlowProps> = ({
     }
 
     if (step === 3) {
-      if (!draft.location?.cityId && !draft.location?.cityName) {
+      if (draft.formValues.serviceMode !== 'remote_online' && !draft.location?.cityId && !draft.location?.cityName) {
         newErrors.location = 'Please select your primary city or town';
       }
     }

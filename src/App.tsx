@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { ShieldCheck } from 'lucide-react';
 import { Header } from './components/Header';
 import { BottomNavigation } from './components/BottomNavigation';
 import { NavigationDrawer } from './components/NavigationDrawer';
 import { SavedListingService } from './services/savedListingService';
+import { MessagingService } from './services/messagingService';
 import { 
   LocationModal, 
   CategoryModal, 
@@ -175,6 +176,26 @@ export default function App() {
   const [reviewsTargetListingId, setReviewsTargetListingId] = useState<string | null>(null);
   const [previousRoute, setPreviousRoute] = useState<AppRoute>('/');
   const [reportTargetListing, setReportTargetListing] = useState<ReportListingTarget | null>(null);
+  const [pendingAgreementRoute, setPendingAgreementRoute] = useState<AppRoute | null>(null);
+
+  const UNGATED_ROUTES: string[] = [
+    '/',
+    '/login',
+    '/register',
+    '/forgot-password',
+    '/reset-password',
+    '/user-agreement',
+    '/privacy-policy',
+    '/safety',
+    '/help'
+  ];
+
+  const isGatedMarketplaceRoute = (route: string): boolean => {
+    if (UNGATED_ROUTES.includes(route)) {
+      return false;
+    }
+    return true;
+  };
 
   // Filter State
   const [filterState, setFilterState] = useState<FilterState>({
@@ -229,62 +250,107 @@ export default function App() {
     handleNavigate('/select-category');
   };
 
+  // Profile State (Synced strictly with AuthService & Supabase public.profiles)
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+
+  // Active Conversation ID (from URL query or selected)
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    return searchParams.get('conversation') || searchParams.get('id') || null;
+  });
+
   // Saved Listings State (syncs strictly with Supabase saved_listings for authenticated users)
   const [savedListings, setSavedListings] = useState<string[]>([]);
 
-  // Messaging / Conversations State
-  const [conversations, setConversations] = useState<Conversation[]>(() => {
-    const saved = localStorage.getItem('rentoura_conversations');
-    if (saved) {
-      try { return JSON.parse(saved); } catch (e) {}
+  // Messaging / Conversations State (backed by real Supabase messaging tables)
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+
+  const loadConversations = React.useCallback(async () => {
+    if (userProfile) {
+      const data = await MessagingService.getConversations();
+      setConversations(data);
+    } else {
+      setConversations([]);
     }
-    return INITIAL_CONVERSATIONS;
-  });
+  }, [userProfile]);
 
   useEffect(() => {
-    localStorage.setItem('rentoura_conversations', JSON.stringify(conversations));
-  }, [conversations]);
+    loadConversations();
+  }, [userProfile, currentRoute, loadConversations]);
 
-  // Notifications State with Persistence
-  const [notifications, setNotifications] = useState<AppNotification[]>(() => {
-    return NotificationService.getNotifications();
+  // Notifications State with Supabase Backend & Realtime
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferences>({
+    messages: true,
+    listingUpdates: true,
+    jobUpdates: true,
+    serviceUpdates: true,
+    reviews: true,
+    systemAnnouncements: true,
+    promotions: true
   });
+
+  const loadNotifications = useCallback(async () => {
+    if (userProfile?.id) {
+      const data = await NotificationService.fetchNotifications();
+      setNotifications(data);
+    } else {
+      setNotifications([]);
+    }
+  }, [userProfile?.id]);
+
+  const loadNotificationPreferences = useCallback(async () => {
+    if (userProfile?.id) {
+      const prefs = await NotificationService.getPreferences();
+      setNotificationPreferences(prefs);
+    }
+  }, [userProfile?.id]);
 
   useEffect(() => {
-    NotificationService.saveNotifications(notifications);
-  }, [notifications]);
+    loadNotifications();
+    loadNotificationPreferences();
+  }, [loadNotifications, loadNotificationPreferences, currentRoute]);
 
-  // Notification Preferences State
-  const [notificationPreferences, setNotificationPreferences] = useState<NotificationPreferences>(() => {
-    return NotificationService.getPreferences();
-  });
+  // Real-time notifications subscription
+  useEffect(() => {
+    if (userProfile?.id) {
+      const unsubscribe = NotificationService.subscribeToNotifications(userProfile.id, () => {
+        loadNotifications();
+      });
+      return () => {
+        unsubscribe();
+      };
+    }
+  }, [userProfile?.id, loadNotifications]);
 
-  const handleSaveNotificationPreferences = (prefs: NotificationPreferences) => {
+  const handleSaveNotificationPreferences = async (prefs: NotificationPreferences) => {
     setNotificationPreferences(prefs);
-    NotificationService.savePreferences(prefs);
+    await NotificationService.savePreferences(prefs);
   };
 
-  const handleMarkNotificationRead = (id: string) => {
+  const handleMarkNotificationRead = async (id: string) => {
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    await NotificationService.markAsRead(id);
+    await loadNotifications();
   };
 
-  const handleMarkAllNotificationsRead = () => {
+  const handleMarkAllNotificationsRead = async () => {
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    await NotificationService.markAllAsRead();
+    await loadNotifications();
   };
 
-  const handleDeleteNotification = (id: string) => {
+  const handleDeleteNotification = async (id: string) => {
     setNotifications(prev => prev.filter(n => n.id !== id));
+    await NotificationService.deleteNotification(id);
+    await loadNotifications();
   };
 
-  const handleClearReadNotifications = () => {
+  const handleClearReadNotifications = async () => {
     setNotifications(prev => prev.filter(n => !n.read));
+    await NotificationService.clearReadNotifications();
+    await loadNotifications();
   };
-
-  // Active Conversation ID
-  const [activeConversationId, setActiveConversationId] = useState<string>('conv-nimal-perera');
-
-  // Profile State (Synced strictly with AuthService & Supabase public.profiles)
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
 
   const [userListings, setUserListings] = useState<UserListingItem[]>([]);
   const [userReviews, setUserReviews] = useState<UserReviewItem[]>([]);
@@ -301,19 +367,43 @@ export default function App() {
     }
   };
 
-  const handleDeleteUserListing = (listingId: string) => {
-    const updated = ProfileService.deleteListing(listingId);
-    setUserListings(updated);
+  const handleDeleteUserListing = async (listingId: string) => {
+    if (userProfile?.id) {
+      const res = await ProfileService.deleteListingInSupabase(listingId, userProfile.id);
+      if (res.success) {
+        setUserListings(prev => prev.filter(item => item.id !== listingId));
+      } else {
+        console.error('Failed to delete listing in Supabase:', res.error);
+      }
+    } else {
+      setUserListings(prev => prev.filter(item => item.id !== listingId));
+    }
   };
 
-  const handleUpdateUserListing = (updatedListing: UserListingItem) => {
-    const updated = ProfileService.updateListing(updatedListing);
-    setUserListings(updated);
+  const handleUpdateUserListing = async (updatedListing: UserListingItem) => {
+    if (userProfile?.id) {
+      const res = await ProfileService.updateListingInSupabase(updatedListing, userProfile.id);
+      if (res.success) {
+        setUserListings(prev => prev.map(item => item.id === updatedListing.id ? updatedListing : item));
+      } else {
+        console.error('Failed to update listing in Supabase:', res.error);
+      }
+    } else {
+      setUserListings(prev => prev.map(item => item.id === updatedListing.id ? updatedListing : item));
+    }
   };
 
-  const handleUpdateListingStatus = (listingId: string, status: UserListingItem['status'], note?: string) => {
-    const updated = ProfileService.updateListingStatus(listingId, status, note);
-    setUserListings(updated);
+  const handleUpdateListingStatus = async (listingId: string, status: UserListingItem['status'], note?: string) => {
+    if (userProfile?.id) {
+      const res = await ProfileService.updateListingStatusInSupabase(listingId, userProfile.id, status, note);
+      if (res.success) {
+        setUserListings(prev => prev.map(item => item.id === listingId ? { ...item, status, statusNote: note } : item));
+      } else {
+        console.error('Failed to update listing status in Supabase:', res.error);
+      }
+    } else {
+      setUserListings(prev => prev.map(item => item.id === listingId ? { ...item, status, statusNote: note } : item));
+    }
   };
 
   // Single source of truth auth listener
@@ -350,29 +440,37 @@ export default function App() {
         if (isMounted) setSavedListings(ids);
       });
 
+      // Asynchronously fetch user listings, reviews, and reports from Supabase
+      const loadUserData = async (userId: string) => {
+        try {
+          const [listings, reviews, reports] = await Promise.all([
+            ProfileService.fetchUserListings(userId),
+            ProfileService.fetchUserReviews(userId),
+            ProfileService.fetchUserReports(userId)
+          ]);
+          if (isMounted) {
+            setUserListings(listings);
+            setUserReviews(reviews);
+            setUserReports(reports);
+          }
+        } catch (e) {
+          console.warn('Error fetching user profile data from Supabase:', e);
+        }
+      };
+
       if (profile) {
         setUserProfile(profile);
-        setUserListings(ProfileService.getUserListings());
-        setUserReviews(ProfileService.getReviews());
-        setUserReports(ProfileService.getReports());
         setIsProfileLoading(false);
+        loadUserData(user.id);
       } else {
         setIsProfileLoading(true);
         const fresh = await AuthService.fetchUserProfile(user.id);
         if (isMounted) {
           setUserProfile(fresh);
-          if (fresh) {
-            setUserListings(ProfileService.getUserListings());
-            setUserReviews(ProfileService.getReviews());
-            setUserReports(ProfileService.getReports());
-          }
           setIsProfileLoading(false);
-          console.log('[DIAGNOSTIC] App fetched fresh profile from DB:', {
-            id: fresh?.id,
-            email: fresh?.email,
-            role: fresh?.role,
-            accountStatus: fresh?.accountStatus
-          });
+          if (fresh) {
+            loadUserData(user.id);
+          }
         }
       }
     });
@@ -515,7 +613,33 @@ export default function App() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
+  // Gate check effect for direct URL or auth state changes
+  useEffect(() => {
+    if (!isAuthLoading && !isProfileLoading) {
+      if (isGatedMarketplaceRoute(currentRoute) && !AuthService.hasAcceptedCurrentAgreement(userProfile)) {
+        setPendingAgreementRoute(currentRoute);
+        setCurrentRoute('/user-agreement');
+        if (window.location.pathname !== '/user-agreement') {
+          window.history.replaceState({}, '', '/user-agreement');
+        }
+      }
+    }
+  }, [isAuthLoading, isProfileLoading, userProfile, currentRoute]);
+
   const handleNavigate = (route: AppRoute) => {
+    if (isGatedMarketplaceRoute(route) && !AuthService.hasAcceptedCurrentAgreement(userProfile)) {
+      setPendingAgreementRoute(route);
+      if (currentRoute !== '/user-agreement' && !['/rental-detail', '/job-detail', '/service-detail'].includes(currentRoute) && !currentRoute.startsWith('/rentals/') && !currentRoute.startsWith('/jobs/') && !currentRoute.startsWith('/services/')) {
+        setPreviousRoute(currentRoute);
+      }
+      setCurrentRoute('/user-agreement');
+      if (window.location.pathname !== '/user-agreement') {
+        window.history.pushState({}, '', '/user-agreement');
+      }
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+
     if (currentRoute !== route && !['/rental-detail', '/job-detail', '/service-detail'].includes(currentRoute) && !currentRoute.startsWith('/rentals/') && !currentRoute.startsWith('/jobs/') && !currentRoute.startsWith('/services/')) {
       setPreviousRoute(currentRoute);
     }
@@ -531,9 +655,6 @@ export default function App() {
     id: string, 
     moduleHint?: 'rentals' | 'jobs' | 'services' | 'rental' | 'job' | 'service'
   ) => {
-    setSelectedListingId(id);
-    setPreviousRoute(currentRoute);
-
     const normHint = moduleHint?.toLowerCase();
     let canonicalPath = `/rentals/${id}`;
     let targetRoute: AppRoute = `/rentals/${id}` as AppRoute;
@@ -545,6 +666,20 @@ export default function App() {
       targetRoute = `/services/${id}` as AppRoute;
       canonicalPath = `/services/${id}`;
     }
+
+    if (!AuthService.hasAcceptedCurrentAgreement(userProfile)) {
+      setPendingAgreementRoute(targetRoute);
+      setPreviousRoute(currentRoute);
+      setCurrentRoute('/user-agreement');
+      if (window.location.pathname !== '/user-agreement') {
+        window.history.pushState({}, '', '/user-agreement');
+      }
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
+
+    setSelectedListingId(id);
+    setPreviousRoute(currentRoute);
 
     if (window.location.pathname !== canonicalPath) {
       window.history.pushState({ id }, '', canonicalPath);
@@ -562,26 +697,32 @@ export default function App() {
     }
   };
 
-  const handleToggleSave = async (listingId: string) => {
+  const handleToggleSave = async (listingId: string): Promise<boolean> => {
     if (!userProfile) {
       handleNavigate('/login');
-      return;
+      return false;
     }
     const result = await SavedListingService.toggleSaveListing(listingId);
     if (result.requiresLogin) {
       handleNavigate('/login');
-      return;
+      return false;
+    }
+    if (result.error) {
+      throw new Error(result.error);
     }
     setSavedListings(prev => 
       result.saved
         ? (prev.includes(listingId) ? prev : [...prev, listingId])
         : prev.filter(id => id !== listingId)
     );
+    return result.saved;
   };
 
   // Select conversation from inbox
-  const handleSelectConversation = (convId: string) => {
+  const handleSelectConversation = async (convId: string) => {
     setActiveConversationId(convId);
+    window.history.pushState({}, '', `/chat?conversation=${convId}`);
+    await MessagingService.markAsRead(convId);
     setConversations(prev => prev.map(c => 
       c.id === convId ? { ...c, unreadCount: 0 } : c
     ));
@@ -589,149 +730,88 @@ export default function App() {
   };
 
   // Send message
-  const handleSendMessage = (
+  const handleSendMessage = async (
     convId: string, 
     text: string, 
     type: 'text' | 'location' | 'contact' = 'text'
   ) => {
-    const newMsg: ChatMessage = {
-      id: `msg-${Date.now()}`,
-      sender: 'me',
-      text,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      timestamp: Date.now(),
-      type
-    };
-
-    setConversations(prev => {
-      const convIndex = prev.findIndex(c => c.id === convId);
-      if (convIndex === -1) return prev;
-
-      const targetConv = prev[convIndex];
-      const updatedConv: Conversation = {
-        ...targetConv,
-        messages: [...targetConv.messages, newMsg],
-        lastMessage: text,
-        lastMessageTime: 'Just now',
-        lastMessageTimestamp: Date.now()
-      };
-
-      const rest = prev.filter(c => c.id !== convId);
-      return [updatedConv, ...rest];
-    });
-
-    // Realistic auto-reply simulation from seller / employer / provider after 1.8s
-    setTimeout(() => {
-      setConversations(prev => {
-        const convIndex = prev.findIndex(c => c.id === convId);
-        if (convIndex === -1) return prev;
-        const targetConv = prev[convIndex];
-
-        let replyText = 'Thanks for your message! We will get back to you shortly.';
-        if (text.toLowerCase().includes('available')) {
-          replyText = 'Yes, this is still available! Would you like to schedule an inspection?';
-        } else if (text.toLowerCase().includes('visit') || text.toLowerCase().includes('schedule')) {
-          replyText = 'Sure! We can arrange a visit this weekend. What time works best for you?';
-        } else if (text.toLowerCase().includes('price') || text.toLowerCase().includes('cost')) {
-          replyText = `The current price is ${targetConv.listing.price}. We can also discuss flexible terms.`;
-        } else if (text.toLowerCase().includes('location')) {
-          replyText = `Got your location! We are located at ${targetConv.listing.location || 'Kandy, Sri Lanka'}.`;
-        } else if (text.toLowerCase().includes('contact')) {
-          replyText = `Thanks for sharing your contact info. I will call you soon!`;
-        }
-
-        const replyMsg: ChatMessage = {
-          id: `reply-${Date.now()}`,
-          sender: 'them',
-          text: replyText,
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          timestamp: Date.now(),
-          isRead: false
-        };
-
-        const updatedWithReply: Conversation = {
-          ...targetConv,
-          messages: [...targetConv.messages, replyMsg],
-          lastMessage: replyText,
-          lastMessageTime: 'Just now',
-          lastMessageTimestamp: Date.now(),
-          unreadCount: (activeConversationId === convId && currentRoute === '/chat') ? 0 : (targetConv.unreadCount || 0) + 1
-        };
-
-        const otherConvs = prev.filter(c => c.id !== convId);
-        return [updatedWithReply, ...otherConvs];
-      });
-    }, 1800);
+    const createdMsg = await MessagingService.sendMessage(convId, text, type);
+    if (createdMsg) {
+      const updatedList = await MessagingService.getConversations();
+      setConversations(updatedList);
+    }
   };
 
-  // Start chat from any listing detail page
-  const handleStartChatFromListing = (listingInfo: {
+  // Actions: Mark all read, Toggle Archive, Toggle Mute, Mark Unread
+  const handleMarkAllAsRead = async () => {
+    for (const c of conversations) {
+      if (c.unreadCount > 0) {
+        await MessagingService.markAsRead(c.id);
+      }
+    }
+    await loadConversations();
+  };
+
+  const handleToggleArchive = async (convId: string, isArchived: boolean) => {
+    await MessagingService.toggleArchive(convId, isArchived);
+    await loadConversations();
+  };
+
+  const handleToggleMute = async (convId: string, isMuted: boolean) => {
+    await MessagingService.toggleMute(convId, isMuted);
+    await loadConversations();
+  };
+
+  const handleMarkUnread = async (convId: string) => {
+    await MessagingService.markAsUnread(convId);
+    await loadConversations();
+  };
+
+  // Start chat from any listing detail page (with real listing owner)
+  const handleStartChatFromListing = async (listingInfo: {
     id: string;
-    title: string;
+    title?: string;
     module: 'rentals' | 'jobs' | 'services';
-    price: string;
+    ownerId?: string;
+    price?: string;
     location?: string;
     imageUrl?: string;
-    participantName?: string;
-    participantAvatar?: string;
-    phone?: string;
   }) => {
-    // Check if an existing conversation exists for this listing
-    const existing = conversations.find(c => c.listing.id === listingInfo.id);
-    if (existing) {
-      handleSelectConversation(existing.id);
+    if (!userProfile) {
+      handleNavigate('/login');
       return;
     }
 
-    // Create new conversation associated with this listing
-    const newConvId = `conv-${listingInfo.id}-${Date.now()}`;
-    const newConv: Conversation = {
-      id: newConvId,
-      module: listingInfo.module,
-      participant: {
-        id: `usr-${listingInfo.id}`,
-        name: listingInfo.participantName || (listingInfo.module === 'jobs' ? 'Hiring Manager' : 'Listing Owner'),
-        avatarUrl: listingInfo.participantAvatar,
-        isOnline: true,
-        memberSince: 'Member since 2024',
-        location: listingInfo.location || 'Sri Lanka',
-        phone: listingInfo.phone,
-        verified: true
-      },
-      listing: {
-        id: listingInfo.id,
-        title: listingInfo.title,
-        price: listingInfo.price,
-        location: listingInfo.location,
-        imageUrl: listingInfo.imageUrl,
-        badge: (listingInfo.module === 'jobs' ? 'JOB' : listingInfo.module === 'services' ? 'SERVICE' : 'RENTAL') as any,
-        badgeColor: listingInfo.module === 'jobs' ? '#08A34F' : listingInfo.module === 'services' ? '#FF650A' : '#1464F4',
-        module: listingInfo.module
-      },
-      lastMessage: 'Conversation started',
-      lastMessageTime: 'Just now',
-      lastMessageTimestamp: Date.now(),
-      unreadCount: 0,
-      quickReplies: listingInfo.module === 'jobs' 
-        ? ['Is this position available?', 'How can I apply?', 'Can you share more details?']
-        : listingInfo.module === 'services'
-        ? ['Are you available?', "What's the price?", 'Can I book?']
-        : ['Is it available?', 'Can I visit?', "What's the price?"],
-      messages: [
-        {
-          id: `msg-init-${Date.now()}`,
-          sender: 'them',
-          text: `Hello! Thank you for inquiring about "${listingInfo.title}". How can we help you?`,
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          timestamp: Date.now(),
-          isRead: true
-        }
-      ]
-    };
+    let targetOwnerId = listingInfo.ownerId;
+    if (!targetOwnerId) {
+      const detail = await ListingDetailService.getListingDetail(listingInfo.id, listingInfo.module);
+      if ((detail as any)?.owner?.id) {
+        targetOwnerId = (detail as any).owner.id;
+      }
+    }
 
-    setConversations(prev => [newConv, ...prev]);
-    setActiveConversationId(newConvId);
-    handleNavigate('/chat');
+    if (targetOwnerId && targetOwnerId === userProfile.id) {
+      alert('You cannot send messages to your own listing.');
+      return;
+    }
+
+    if (!targetOwnerId) {
+      alert('Unable to identify the listing owner. Please try again later.');
+      return;
+    }
+
+    try {
+      const convId = await MessagingService.getOrCreateConversation(listingInfo.id, targetOwnerId);
+      if (convId) {
+        const freshList = await MessagingService.getConversations();
+        setConversations(freshList);
+        setActiveConversationId(convId);
+        window.history.pushState({}, '', `/chat?conversation=${convId}`);
+        handleNavigate('/chat');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Could not start conversation');
+    }
   };
 
   const handleApplyFilters = (newFilters: Partial<FilterState>) => {
@@ -1126,6 +1206,9 @@ export default function App() {
           />
         );
       case '/post':
+        if (!userProfile) {
+          return <LoginPage onNavigate={handleNavigate} returnUrl="/post" />;
+        }
         return (
           <PostPage
             onNavigate={handleNavigate}
@@ -1135,6 +1218,9 @@ export default function App() {
           />
         );
       case '/post/rental':
+        if (!userProfile) {
+          return <LoginPage onNavigate={handleNavigate} returnUrl="/post/rental" />;
+        }
         return (
           <PostFlowContainer
             module="rentals"
@@ -1145,6 +1231,9 @@ export default function App() {
           />
         );
       case '/post/job':
+        if (!userProfile) {
+          return <LoginPage onNavigate={handleNavigate} returnUrl="/post/job" />;
+        }
         return (
           <PostFlowContainer
             module="jobs"
@@ -1155,6 +1244,9 @@ export default function App() {
           />
         );
       case '/post/service':
+        if (!userProfile) {
+          return <LoginPage onNavigate={handleNavigate} returnUrl="/post/service" />;
+        }
         return (
           <PostFlowContainer
             module="services"
@@ -1171,9 +1263,29 @@ export default function App() {
             onSelectConversation={handleSelectConversation}
             onNavigate={handleNavigate}
             onOpenListingDetail={handleOpenListingDetail}
+            onRefreshInbox={loadConversations}
+            onMarkAllAsRead={handleMarkAllAsRead}
+            onToggleArchive={handleToggleArchive}
+            onToggleMute={handleToggleMute}
+            onMarkUnread={handleMarkUnread}
           />
         );
       case '/chat':
+        if (!activeConversation) {
+          return (
+            <MessagesPage
+              conversations={conversations}
+              onSelectConversation={handleSelectConversation}
+              onNavigate={handleNavigate}
+              onOpenListingDetail={handleOpenListingDetail}
+              onRefreshInbox={loadConversations}
+              onMarkAllAsRead={handleMarkAllAsRead}
+              onToggleArchive={handleToggleArchive}
+              onToggleMute={handleToggleMute}
+              onMarkUnread={handleMarkUnread}
+            />
+          );
+        }
         return (
           <ChatPage
             conversation={activeConversation}
@@ -1182,6 +1294,11 @@ export default function App() {
             onOpenListingDetail={handleOpenListingDetail}
             onSendMessage={handleSendMessage}
             notificationCount={unreadNotificationsCount}
+            userProfile={userProfile}
+            onRefreshMessages={loadConversations}
+            onToggleMute={handleToggleMute}
+            onToggleArchive={handleToggleArchive}
+            onMarkUnread={handleMarkUnread}
           />
         );
       case '/profile':
@@ -1269,12 +1386,11 @@ export default function App() {
         return (
           <UserAgreementPage
             onNavigate={handleNavigate}
+            userProfile={userProfile}
             onAgreeAndContinue={() => {
-              if (previousRoute && previousRoute !== '/user-agreement') {
-                handleNavigate(previousRoute);
-              } else {
-                handleNavigate('/');
-              }
+              const target = pendingAgreementRoute || (previousRoute && previousRoute !== '/user-agreement' ? previousRoute : '/');
+              setPendingAgreementRoute(null);
+              handleNavigate(target);
             }}
           />
         );

@@ -24,22 +24,34 @@ export const ServiceGalleryStep: React.FC<ServiceGalleryStepProps> = ({
     if (!files || files.length === 0) return;
     setUploadError(null);
 
-    const newImages: UploadedImage[] = [];
+    if (images.length >= 5) {
+      setUploadError('Maximum of 5 photos allowed per service listing.');
+      return;
+    }
 
-    Array.from(files).forEach((file, index) => {
+    const newImages: UploadedImage[] = [];
+    const incomingFiles = Array.from(files);
+
+    for (let i = 0; i < incomingFiles.length; i++) {
+      if (images.length + newImages.length >= 5) {
+        setUploadError('Maximum of 5 photos allowed per service listing.');
+        break;
+      }
+      const file = incomingFiles[i];
+
       // Validate file type
       if (!file.type.startsWith('image/')) {
         setUploadError('Please select valid image files (JPG, PNG, WEBP).');
-        return;
+        continue;
       }
-      // Validate file size (max 10MB)
-      if (file.size > 10 * 1024 * 1024) {
-        setUploadError(`File "${file.name}" exceeds 10MB limit.`);
-        return;
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        setUploadError(`File "${file.name}" exceeds 5MB limit.`);
+        continue;
       }
 
       const objectUrl = URL.createObjectURL(file);
-      const isCover = images.length === 0 && index === 0;
+      const isCover = images.length === 0 && newImages.length === 0;
 
       newImages.push({
         id: `img-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
@@ -49,7 +61,7 @@ export const ServiceGalleryStep: React.FC<ServiceGalleryStepProps> = ({
         file: file,
         isCover
       });
-    });
+    }
 
     if (newImages.length > 0) {
       onChange({
@@ -123,7 +135,7 @@ export const ServiceGalleryStep: React.FC<ServiceGalleryStepProps> = ({
               Drag & Drop your project photos here, or <span className="text-amber-600 underline">Browse Files</span>
             </p>
             <p className="text-[11px] text-slate-400 mt-1">
-              Supports JPG, PNG, WEBP up to 10MB each. Up to 10 photos recommended.
+              Supports JPG, PNG, WEBP up to 5MB each. Up to 5 photos allowed.
             </p>
           </label>
         </div>

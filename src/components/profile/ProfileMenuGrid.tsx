@@ -90,18 +90,9 @@ export const ProfileMenuGrid: React.FC<ProfileMenuGridProps> = ({
       onClick: onOpenReviewsModal
     },
     {
-      id: 'verification',
-      label: 'Verification',
-      subtitle: 'Request verification badge',
-      icon: ShieldCheck,
-      iconColor: 'text-[#08A34F]',
-      iconBg: 'bg-emerald-50',
-      onClick: onOpenVerificationModal
-    },
-    {
       id: 'payments',
       label: 'Payments & Ads',
-      subtitle: 'Manage payments & ads',
+      subtitle: 'Manage payments & ad promotions',
       icon: Wallet,
       iconColor: 'text-indigo-600',
       iconBg: 'bg-indigo-50',

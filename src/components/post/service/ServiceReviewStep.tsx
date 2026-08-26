@@ -101,8 +101,8 @@ export const ServiceReviewStep: React.FC<ServiceReviewStepProps> = ({
           </div>
           <div className="text-xs space-y-1 pt-1">
             <p><strong className="text-slate-900">Type:</strong> {draft.formValues.providerType === 'business' ? 'Registered Business / Team' : 'Individual / Freelancer'}</p>
-            <p><strong className="text-slate-900">Name:</strong> {draft.formValues.providerName || draft.formValues.businessName || draft.contactPreferences.contactName}</p>
-            <p><strong className="text-slate-900">Experience:</strong> {draft.formValues.yearsExperience || '3-5 years'}</p>
+            <p><strong className="text-slate-900">Name:</strong> {draft.formValues.providerName || draft.formValues.businessName || draft.contactPreferences?.contactName || 'Not specified'}</p>
+            <p><strong className="text-slate-900">Experience:</strong> {draft.formValues.yearsExperience || 'Not specified'}</p>
           </div>
         </div>
 
@@ -121,9 +121,9 @@ export const ServiceReviewStep: React.FC<ServiceReviewStepProps> = ({
             </button>
           </div>
           <div className="text-xs space-y-1 pt-1">
-            <p><strong className="text-slate-900">City & District:</strong> {draft.location?.cityName || 'Kandy'}, {draft.location?.districtName || 'Kandy District'}</p>
-            <p><strong className="text-slate-900">Service Mode:</strong> {draft.formValues.serviceMode || 'At Customer Location'}</p>
-            <p><strong className="text-slate-900">Travel Radius:</strong> {draft.formValues.serviceRadius || '25 km'}</p>
+            <p><strong className="text-slate-900">Location:</strong> {draft.formValues.serviceMode === 'remote_online' ? 'Islandwide (Remote / Online)' : (draft.location?.cityName ? `${draft.location.cityName}${draft.location.districtName ? `, ${draft.location.districtName}` : ''}` : 'Not specified')}</p>
+            <p><strong className="text-slate-900">Service Mode:</strong> {draft.formValues.serviceMode === 'remote_online' ? 'Remote / Online' : (draft.formValues.serviceMode === 'my_location' ? 'At Provider Workshop' : 'At Customer Location')}</p>
+            <p><strong className="text-slate-900">Travel Radius:</strong> {draft.formValues.serviceRadius || 'Not specified'}</p>
           </div>
         </div>
 
@@ -143,7 +143,7 @@ export const ServiceReviewStep: React.FC<ServiceReviewStepProps> = ({
           </div>
           <div className="text-xs space-y-1 pt-1">
             <p><strong className="text-slate-900">Emergency Call-outs:</strong> {draft.formValues.emergencyAvailable ? 'Yes (Supported)' : 'No'}</p>
-            <p><strong className="text-slate-900">Advance Notice:</strong> {draft.formValues.minAdvanceNotice || '1 Hour'}</p>
+            <p><strong className="text-slate-900">Advance Notice:</strong> {draft.formValues.minAdvanceNotice || 'Not specified'}</p>
           </div>
         </div>
 

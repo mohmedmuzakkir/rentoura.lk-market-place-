@@ -76,11 +76,11 @@ export const ProTipBanner: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex items-start gap-3 p-3 rounded-2xl bg-purple-50/70 border border-purple-100">
-                <Phone className="w-4 h-4 text-purple-600 mt-0.5 flex-shrink-0" />
+              <div className="flex items-start gap-3 p-3 rounded-2xl bg-amber-50/70 border border-amber-100">
+                <Phone className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
                 <div>
-                  <h4 className="font-bold text-slate-900 mb-0.5">Verified Contact Channels</h4>
-                  <p>Keep your phone number and WhatsApp active to receive instant calls and inquiries directly from interested parties.</p>
+                  <h4 className="font-bold text-slate-900 mb-0.5">Safe Contact & No Advance Pay</h4>
+                  <p>Use clear, safe contact methods. Never make or request advance payments or deposits before physical inspection or contract verification.</p>
                 </div>
               </div>
             </div>

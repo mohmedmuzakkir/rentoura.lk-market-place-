@@ -21,12 +21,14 @@ interface ServiceContentSectionsProps {
   service: ServiceListingDetail;
   onOpenMap: () => void;
   onOpenPortfolioLightbox?: () => void;
+  onOpenReviews?: () => void;
 }
 
 export const ServiceContentSections: React.FC<ServiceContentSectionsProps> = ({
   service,
   onOpenMap,
-  onOpenPortfolioLightbox
+  onOpenPortfolioLightbox,
+  onOpenReviews
 }) => {
   const [isDescExpanded, setIsDescExpanded] = useState(false);
 
@@ -405,6 +407,14 @@ export const ServiceContentSections: React.FC<ServiceContentSectionsProps> = ({
           <div className="bg-white rounded-3xl border border-slate-100 p-4 shadow-xs flex flex-col justify-between">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-bold text-slate-900">Customer Reviews</span>
+              {onOpenReviews && (
+                <button
+                  onClick={onOpenReviews}
+                  className="text-[11px] font-bold text-[#FF650A] hover:underline"
+                >
+                  View All
+                </button>
+              )}
             </div>
 
             <div className="space-y-2">

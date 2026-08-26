@@ -22,7 +22,7 @@ export const JobReviewStep: React.FC<JobReviewStepProps> = ({
   const [agreementChecked, setAgreementChecked] = useState(false);
 
   const title = draft.formValues.title || 'Untitled Job Opportunity';
-  const companyName = draft.formValues.companyName || 'Hiring Employer';
+  const companyName = draft.formValues.companyName || 'Not specified';
   const logoUrl = draft.formValues.logoUrl;
   const description = draft.formValues.description || '';
   const employmentType = draft.formValues.employmentType || 'full-time';
@@ -30,25 +30,30 @@ export const JobReviewStep: React.FC<JobReviewStepProps> = ({
   const vacancies = draft.formValues.vacancies || 1;
 
   const workMode = draft.formValues.workMode || 'onsite';
-  const locationCity = draft.location.cityName || 'Kandy';
-  const locationDistrict = draft.location.districtName || 'Kandy';
-  const locationProvince = draft.location.provinceName || 'Central';
-  const formattedLocation = workMode === 'remote'
-    ? 'Remote (Islandwide Sri Lanka)'
-    : `${locationCity}, ${locationDistrict}`;
+  const locationCity = draft.location.cityName || '';
+  const locationDistrict = draft.location.districtName || '';
+  
+  let formattedLocation = 'Location Not Specified';
+  if (workMode === 'remote') {
+    formattedLocation = 'Remote (Islandwide Sri Lanka)';
+  } else if (locationCity || locationDistrict) {
+    formattedLocation = locationCity && locationDistrict 
+      ? `${locationCity}, ${locationDistrict}` 
+      : (locationCity || locationDistrict);
+  }
 
   const salaryStructure = draft.formValues.salaryStructure || 'monthly-range';
-  const minSalary = draft.formValues.minSalary || 120000;
-  const maxSalary = draft.formValues.maxSalary || 180000;
+  const minSalary = Number(draft.formValues.minSalary) || 0;
+  const maxSalary = Number(draft.formValues.maxSalary) || 0;
   const showSalary = draft.formValues.showSalary !== false;
 
   const { formatted: minFormatted } = normalizeNumericPrice(minSalary);
   const { formatted: maxFormatted } = normalizeNumericPrice(maxSalary);
 
   let salaryDisplay = 'Negotiable';
-  if (showSalary) {
+  if (showSalary && minSalary > 0) {
     if (salaryStructure === 'monthly-range') {
-      salaryDisplay = `${minFormatted} - ${maxFormatted} / mo`;
+      salaryDisplay = maxSalary > minSalary ? `${minFormatted} - ${maxFormatted} / mo` : `${minFormatted} / mo`;
     } else if (salaryStructure === 'monthly-fixed') {
       salaryDisplay = `${minFormatted} / mo`;
     } else if (salaryStructure === 'hourly') {

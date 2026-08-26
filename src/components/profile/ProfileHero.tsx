@@ -1,6 +1,5 @@
 import React from 'react';
 import { 
-  ShieldCheck, 
   Mail, 
   Phone, 
   Calendar, 
@@ -22,13 +21,15 @@ export const ProfileHero: React.FC<ProfileHeroProps> = ({
   onAvatarClick
 }) => {
   const getInitials = (name: string) => {
-    if (!name) return 'LK';
+    if (!name || !name.trim()) return 'U';
     const parts = name.trim().split(' ');
     if (parts.length >= 2) {
       return (parts[0][0] + parts[1][0]).toUpperCase();
     }
     return name.slice(0, 2).toUpperCase();
   };
+
+  const displayNameStr = profile?.fullName || profile?.displayName || 'Member';
 
   return (
     <div className="bg-[#041C43] text-white p-5 sm:p-6 rounded-b-[28px] shadow-lg relative overflow-hidden">
@@ -46,17 +47,16 @@ export const ProfileHero: React.FC<ProfileHeroProps> = ({
                 {profile.avatarUrl ? (
                   <img
                     src={profile.avatarUrl}
-                    alt={profile.fullName}
+                    alt={displayNameStr}
                     className="w-full h-full object-cover"
                     referrerPolicy="no-referrer"
                     onError={(e) => {
-                      // Fallback to initials if broken image
                       (e.target as HTMLElement).style.display = 'none';
                     }}
                   />
                 ) : (
                   <span className="text-2xl sm:text-3xl font-extrabold text-white tracking-wider">
-                    {getInitials(profile.fullName)}
+                    {getInitials(displayNameStr)}
                   </span>
                 )}
               </div>
@@ -70,15 +70,12 @@ export const ProfileHero: React.FC<ProfileHeroProps> = ({
               </div>
             </div>
 
-            {/* Mobile View: Name & Edit Button right beside Avatar */}
+            {/* Mobile View: Name & Role Badge right beside Avatar */}
             <div className="ml-4 sm:hidden flex-1 min-w-0">
               <div className="flex items-center gap-1.5 flex-wrap">
                 <h2 className="text-lg font-black text-white font-heading truncate">
-                  {profile.fullName}
+                  {displayNameStr}
                 </h2>
-                {profile.isVerified && (
-                  <ShieldCheck className="w-4 h-4 text-[#00D2FF] shrink-0" />
-                )}
                 {isSuperAdmin(profile) && (
                   <span className="px-2 py-0.5 rounded-md bg-purple-500/30 text-purple-200 border border-purple-400/40 text-[9px] font-extrabold uppercase tracking-wide">Super Admin</span>
                 )}
@@ -89,16 +86,10 @@ export const ProfileHero: React.FC<ProfileHeroProps> = ({
                   <span className="px-2 py-0.5 rounded-md bg-emerald-500/30 text-emerald-200 border border-emerald-400/40 text-[9px] font-extrabold uppercase tracking-wide">Moderator</span>
                 )}
               </div>
-              {profile.displayName && profile.displayName !== profile.fullName && (
+              {profile.displayName && profile.displayName !== displayNameStr && (
                 <p className="text-xs text-blue-200 font-medium truncate">
                   @{profile.displayName}
                 </p>
-              )}
-              {profile.isVerified && (
-                <div className="mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border border-emerald-500/30">
-                  <ShieldCheck className="w-3 h-3" />
-                  Verified Account
-                </div>
               )}
             </div>
           </div>
@@ -110,11 +101,8 @@ export const ProfileHero: React.FC<ProfileHeroProps> = ({
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <h1 className="text-xl font-black text-white font-heading">
-                    {profile.fullName}
+                    {displayNameStr}
                   </h1>
-                  {profile.isVerified && (
-                    <ShieldCheck className="w-5 h-5 text-[#00D2FF]" />
-                  )}
                   {isSuperAdmin(profile) && (
                     <span className="px-2.5 py-0.5 rounded-md bg-purple-500/30 text-purple-200 border border-purple-400/40 text-[10px] font-extrabold uppercase tracking-wide">Super Admin</span>
                   )}
@@ -125,16 +113,10 @@ export const ProfileHero: React.FC<ProfileHeroProps> = ({
                     <span className="px-2.5 py-0.5 rounded-md bg-emerald-500/30 text-emerald-200 border border-emerald-400/40 text-[10px] font-extrabold uppercase tracking-wide">Moderator</span>
                   )}
                 </div>
-                {profile.displayName && profile.displayName !== profile.fullName && (
+                {profile.displayName && profile.displayName !== displayNameStr && (
                   <p className="text-xs text-blue-200 font-medium mt-0.5">
                     @{profile.displayName}
                   </p>
-                )}
-                {profile.isVerified && (
-                  <div className="mt-1 inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[11px] font-bold border border-emerald-500/30">
-                    <ShieldCheck className="w-3.5 h-3.5" />
-                    Verified Account
-                  </div>
                 )}
               </div>
 
@@ -200,3 +182,4 @@ export const ProfileHero: React.FC<ProfileHeroProps> = ({
     </div>
   );
 };
+

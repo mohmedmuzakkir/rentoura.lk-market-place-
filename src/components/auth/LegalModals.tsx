@@ -103,7 +103,7 @@ export const LegalModal: React.FC<LegalModalProps> = ({
               <div>
                 <h4 className="font-bold text-slate-900 mb-1">2. Password Security</h4>
                 <p>
-                  Your account password is encrypted and handled exclusively via Firebase Authentication infrastructure. Passwords are never stored in plain text or accessible to staff.
+                  Your account password is encrypted and handled exclusively via Supabase Authentication infrastructure. Passwords are never stored in plain text or accessible to staff.
                 </p>
               </div>
 

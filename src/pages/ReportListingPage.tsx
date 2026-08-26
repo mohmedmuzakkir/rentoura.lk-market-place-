@@ -1,7 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   ArrowLeft, 
-  Shield, 
   ShieldAlert, 
   CheckCircle2, 
   ExternalLink, 
@@ -12,18 +11,17 @@ import {
   MoreHorizontal, 
   Lock, 
   Phone, 
-  Mail, 
-  X, 
   Globe,
-  ChevronRight,
-  Send,
-  Flag,
-  FileText
+  DollarSign,
+  HelpCircle,
+  FileQuestion,
+  AlertOctagon
 } from 'lucide-react';
 import { RentouraLogo } from '../components/RentouraLogo';
-import { AppRoute, FeaturedListingItem, JobItem, ServiceItem } from '../types';
+import { AppRoute } from '../types';
 import { AuthService } from '../services/authService';
 import { ReportService } from '../services/reportService';
+import { supabase } from '../lib/supabase';
 
 export interface ReportListingTarget {
   id: string;
@@ -46,26 +44,80 @@ interface ReportListingPageProps {
 
 export const ReportListingPage: React.FC<ReportListingPageProps> = ({
   onNavigate,
-  targetListing,
+  targetListing: initialTarget,
   selectedLanguage = 'English',
   onLanguageChange
 }) => {
   const currentUser = AuthService.getCurrentUser();
 
-  // Fallback target if none passed in route state (e.g. sample active listing)
-  const defaultTarget: ReportListingTarget = targetListing || {
-    id: 'prop-kandy-1',
-    title: 'Cozy 3 Bedroom House for Rent in Kandy',
-    location: 'Kandy, Central Province',
-    price: 'Rs. 120,000',
-    pricePeriod: '/ Month',
-    imageUrl: 'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?auto=format&fit=crop&w=800&q=80',
-    module: 'rentals',
-    category: 'House',
-    ownerId: 'usr-owner-99'
-  };
+  const [target, setTarget] = useState<ReportListingTarget | null>(initialTarget || null);
+  const [isLoadingTarget, setIsLoadingTarget] = useState<boolean>(!initialTarget?.title || !initialTarget?.ownerId);
+  const [targetError, setTargetError] = useState<string | null>(null);
 
-  const isSelfListing = currentUser && defaultTarget.ownerId && currentUser.id === defaultTarget.ownerId;
+  // Fetch real listing details from Supabase if target passed only ID or needs verification
+  const loadRealTarget = useCallback(async () => {
+    if (!initialTarget?.id) {
+      setIsLoadingTarget(false);
+      setTargetError('No listing specified for reporting. Please select a listing from the marketplace.');
+      return;
+    }
+
+    try {
+      setIsLoadingTarget(true);
+      const { data, error } = await supabase
+        .from('listings')
+        .select('*')
+        .eq('id', initialTarget.id)
+        .maybeSingle();
+
+      if (error || !data) {
+        // Fall back to passed initial target if valid
+        if (initialTarget.title && initialTarget.title !== 'Rental Listing' && initialTarget.title !== 'Job Opportunity' && initialTarget.title !== 'Service Listing') {
+          setTarget(initialTarget);
+          setTargetError(null);
+        } else {
+          setTargetError('The listing you are attempting to report could not be found or has been removed.');
+          setTarget(null);
+        }
+      } else {
+        const formattedPrice = data.price ? `Rs. ${Number(data.price).toLocaleString()}` : (data.pricing_type || 'Contact for price');
+        const periodStr = data.pricing_period ? `/ ${data.pricing_period}` : '';
+
+        // Media URL resolution
+        let imgUrl = data.thumbnail_url || '';
+        if (!imgUrl && Array.isArray(data.images) && data.images.length > 0) {
+          imgUrl = data.images[0];
+        }
+
+        setTarget({
+          id: data.id,
+          title: data.title || 'Untitled Listing',
+          location: data.location_name || data.district || 'Sri Lanka',
+          price: formattedPrice,
+          pricePeriod: periodStr,
+          imageUrl: imgUrl || 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=800&q=80',
+          module: (data.module || initialTarget.module || 'rentals') as any,
+          category: data.category || '',
+          ownerId: data.user_id
+        });
+        setTargetError(null);
+      }
+    } catch (err) {
+      if (initialTarget.title) {
+        setTarget(initialTarget);
+      } else {
+        setTargetError('Unable to load listing details.');
+      }
+    } finally {
+      setIsLoadingTarget(false);
+    }
+  }, [initialTarget]);
+
+  useEffect(() => {
+    loadRealTarget();
+  }, [loadRealTarget]);
+
+  const isSelfListing = currentUser && target?.ownerId && currentUser.id === target.ownerId;
 
   // Form State
   const [selectedReason, setSelectedReason] = useState<string>('scam');
@@ -88,64 +140,178 @@ export const ReportListingPage: React.FC<ReportListingPageProps> = ({
     Tamil: '🇱🇰 தமிழ்'
   };
 
-  // 6 Primary Reasons Matching Page 30 Reference Image
-  const reportReasons = [
-    {
-      id: 'incorrect_info',
-      label: 'Incorrect Information',
-      desc: 'Details are wrong or misleading.',
-      icon: AlertTriangle,
-      color: 'text-amber-500',
-      bgColor: 'bg-amber-50'
-    },
-    {
-      id: 'spam',
-      label: 'Spam or Irrelevant',
-      desc: 'The listing is spam or not related to our platform.',
-      icon: Ban,
-      color: 'text-orange-500',
-      bgColor: 'bg-orange-50'
-    },
-    {
-      id: 'inappropriate',
-      label: 'Inappropriate Images',
-      desc: 'Images are offensive or not appropriate.',
-      icon: ImageIcon,
-      color: 'text-emerald-500',
-      bgColor: 'bg-emerald-50'
-    },
-    {
-      id: 'scam',
-      label: 'Scam or Fraud',
-      desc: 'Possible scam, fake listing or fraud.',
-      icon: ShieldAlert,
-      color: 'text-purple-500',
-      bgColor: 'bg-purple-50'
-    },
-    {
-      id: 'copyright',
-      label: 'Copyright Violation',
-      desc: 'Uses someone else\'s content without permission.',
-      icon: Copyright,
-      color: 'text-blue-500',
-      bgColor: 'bg-blue-50'
-    },
-    {
-      id: 'other',
-      label: 'Other',
-      desc: 'Something else that violates our rules.',
-      icon: MoreHorizontal,
-      color: 'text-slate-500',
-      bgColor: 'bg-slate-100'
+  // Module-Aware Report Reasons Taxonomy
+  const getReasonsForModule = (mod?: string) => {
+    switch (mod) {
+      case 'jobs':
+        return [
+          {
+            id: 'fake_job',
+            label: 'Fake Job Offer or Scam',
+            desc: 'Job vacancy is non-existent, fake, or fraudulent.',
+            icon: ShieldAlert,
+            color: 'text-purple-500',
+            bgColor: 'bg-purple-50'
+          },
+          {
+            id: 'advance_fee',
+            label: 'Payment / Fee Required',
+            desc: 'Employer asks job seekers for advance payment or fees.',
+            icon: DollarSign,
+            color: 'text-rose-500',
+            bgColor: 'bg-rose-50'
+          },
+          {
+            id: 'incorrect_info',
+            label: 'Misleading Job Details',
+            desc: 'Salary, duties, or requirements are wrong or deceptive.',
+            icon: AlertTriangle,
+            color: 'text-amber-500',
+            bgColor: 'bg-amber-50'
+          },
+          {
+            id: 'spam',
+            label: 'Spam or Duplicate',
+            desc: 'Repeated posting or irrelevant advertisement.',
+            icon: Ban,
+            color: 'text-orange-500',
+            bgColor: 'bg-orange-50'
+          },
+          {
+            id: 'inappropriate',
+            label: 'Inappropriate Content',
+            desc: 'Offensive language, discriminatory, or prohibited terms.',
+            icon: ImageIcon,
+            color: 'text-emerald-500',
+            bgColor: 'bg-emerald-50'
+          },
+          {
+            id: 'other',
+            label: 'Other Policy Violation',
+            desc: 'Another issue violating platform guidelines.',
+            icon: MoreHorizontal,
+            color: 'text-slate-500',
+            bgColor: 'bg-slate-100'
+          }
+        ];
+      case 'services':
+        return [
+          {
+            id: 'misleading_service',
+            label: 'Misleading Service Details',
+            desc: 'Service coverage, pricing, or credentials are invalid.',
+            icon: AlertTriangle,
+            color: 'text-amber-500',
+            bgColor: 'bg-amber-50'
+          },
+          {
+            id: 'scam',
+            label: 'Scam or Unresponsive Provider',
+            desc: 'Possible fraudulent service or payment advance demand.',
+            icon: ShieldAlert,
+            color: 'text-purple-500',
+            bgColor: 'bg-purple-50'
+          },
+          {
+            id: 'copyright',
+            label: 'Stolen Portfolio / Images',
+            desc: 'Uses someone else\'s work without permission.',
+            icon: Copyright,
+            color: 'text-blue-500',
+            bgColor: 'bg-blue-50'
+          },
+          {
+            id: 'spam',
+            label: 'Spam or Unverified Service',
+            desc: 'Unsolicited advertising or duplicate listing.',
+            icon: Ban,
+            color: 'text-orange-500',
+            bgColor: 'bg-orange-50'
+          },
+          {
+            id: 'inappropriate',
+            label: 'Inappropriate Content',
+            desc: 'Offensive material or inappropriate media.',
+            icon: ImageIcon,
+            color: 'text-emerald-500',
+            bgColor: 'bg-emerald-50'
+          },
+          {
+            id: 'other',
+            label: 'Other',
+            desc: 'Something else violating guidelines.',
+            icon: MoreHorizontal,
+            color: 'text-slate-500',
+            bgColor: 'bg-slate-100'
+          }
+        ];
+      case 'rentals':
+      default:
+        return [
+          {
+            id: 'incorrect_info',
+            label: 'Incorrect Information',
+            desc: 'Details, specs, or amenities are wrong or misleading.',
+            icon: AlertTriangle,
+            color: 'text-amber-500',
+            bgColor: 'bg-amber-50'
+          },
+          {
+            id: 'scam',
+            label: 'Scam or Fraud',
+            desc: 'Fake listing, advance money request, or impersonation.',
+            icon: ShieldAlert,
+            color: 'text-purple-500',
+            bgColor: 'bg-purple-50'
+          },
+          {
+            id: 'spam',
+            label: 'Spam or Duplicate',
+            desc: 'Duplicate listing or irrelevant advertisement.',
+            icon: Ban,
+            color: 'text-orange-500',
+            bgColor: 'bg-orange-50'
+          },
+          {
+            id: 'inappropriate',
+            label: 'Inappropriate Images',
+            desc: 'Images are offensive, misleading, or inappropriate.',
+            icon: ImageIcon,
+            color: 'text-emerald-500',
+            bgColor: 'bg-emerald-50'
+          },
+          {
+            id: 'copyright',
+            label: 'Copyright Violation',
+            desc: 'Uses third-party photos without permission.',
+            icon: Copyright,
+            color: 'text-blue-500',
+            bgColor: 'bg-blue-50'
+          },
+          {
+            id: 'other',
+            label: 'Other',
+            desc: 'Something else violating platform rules.',
+            icon: MoreHorizontal,
+            color: 'text-slate-500',
+            bgColor: 'bg-slate-100'
+          }
+        ];
     }
-  ];
+  };
+
+  const reportReasons = getReasonsForModule(target?.module);
 
   // Handle Form Submission
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
 
-    // Validation
+    if (!target) {
+      setErrorMsg('No valid target listing available to report.');
+      return;
+    }
+
     if (!selectedReason) {
       setErrorMsg('Please select a reason for reporting this listing.');
       return;
@@ -165,50 +331,53 @@ export const ReportListingPage: React.FC<ReportListingPageProps> = ({
 
     const activeReason = reportReasons.find(r => r.id === selectedReason);
 
-    // Submit via ReportService
-    setTimeout(() => {
-      const result = ReportService.submitReport({
-        reporterId: currentUser ? currentUser.id : 'guest-reporter',
-        targetId: defaultTarget.id,
-        targetModule: defaultTarget.module,
-        targetTitle: defaultTarget.title,
-        targetLocation: defaultTarget.location,
-        targetPrice: defaultTarget.price,
-        targetImageUrl: defaultTarget.imageUrl,
-        reasonCode: selectedReason,
-        reasonLabel: activeReason ? activeReason.label : 'Reported Issue',
-        description: description.trim(),
-        contactInfo: contactInfo.trim(),
-        allowContact
-      });
+    const result = await ReportService.submitReport({
+      reporterId: currentUser ? currentUser.id : 'guest-reporter',
+      reporterName: currentUser ? (currentUser.user_metadata?.full_name || currentUser.email || 'User') : 'Guest Reporter',
+      reporterEmail: currentUser?.email || contactInfo.trim(),
+      targetId: target.id,
+      targetModule: target.module,
+      targetTitle: target.title,
+      targetLocation: target.location,
+      targetPrice: target.price,
+      targetImageUrl: target.imageUrl,
+      reasonCode: selectedReason,
+      reasonLabel: activeReason ? activeReason.label : 'Reported Issue',
+      description: description.trim(),
+      contactInfo: contactInfo.trim(),
+      allowContact
+    });
 
-      setIsSubmitting(false);
+    setIsSubmitting(false);
 
-      if (result.success) {
-        setIsSubmitted(true);
-      } else {
-        setErrorMsg(result.error || 'Failed to submit report. Please try again.');
-      }
-    }, 600);
+    if (result.success) {
+      setIsSubmitted(true);
+    } else {
+      setErrorMsg(result.error || 'Failed to submit report. Please try again.');
+    }
   };
 
   // Helper to open canonical detail page
   const handleViewListing = () => {
-    if (defaultTarget.module === 'rentals') {
-      onNavigate('/rental-detail');
-    } else if (defaultTarget.module === 'jobs') {
-      onNavigate('/job-detail');
+    if (!target) {
+      onNavigate('/');
+      return;
+    }
+    if (target.module === 'rentals') {
+      onNavigate(`/rental-detail?id=${target.id}` as AppRoute);
+    } else if (target.module === 'jobs') {
+      onNavigate(`/job-detail?id=${target.id}` as AppRoute);
     } else {
-      onNavigate('/service-detail');
+      onNavigate(`/service-detail?id=${target.id}` as AppRoute);
     }
   };
 
   // Module Badge styling
-  const moduleBadgeConfig = {
+  const moduleBadgeConfig = target ? ({
     rentals: { label: 'RENTAL', bg: 'bg-[#1464F4]/10', text: 'text-[#1464F4]', border: 'border-[#1464F4]/20' },
     jobs: { label: 'JOB', bg: 'bg-[#08A34F]/10', text: 'text-[#08A34F]', border: 'border-[#08A34F]/20' },
     services: { label: 'SERVICE', bg: 'bg-[#FF650A]/10', text: 'text-[#FF650A]', border: 'border-[#FF650A]/20' }
-  }[defaultTarget.module];
+  }[target.module]) : { label: 'LISTING', bg: 'bg-slate-100', text: 'text-slate-600', border: 'border-slate-200' };
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col justify-between relative selection:bg-blue-100 selection:text-[#1464F4]">
@@ -269,15 +438,51 @@ export const ReportListingPage: React.FC<ReportListingPageProps> = ({
       {/* MAIN CONTAINER */}
       <main className="w-full max-w-4xl mx-auto px-4 py-6 sm:py-8 flex-1 space-y-6">
 
-        {/* SELF-LISTING GUARD NOTICE */}
-        {isSelfListing ? (
-          <div className="bg-white rounded-3xl p-8 shadow-xl border border-amber-200 text-center space-y-4">
-            <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center mx-auto">
-              <AlertTriangle className="w-6 h-6" />
+        {/* LOADING TARGET STATE */}
+        {isLoadingTarget ? (
+          <div className="bg-white rounded-3xl p-12 shadow-md border border-slate-100 text-center space-y-4">
+            <div className="w-8 h-8 border-3 border-[#1464F4]/20 border-t-[#1464F4] rounded-full animate-spin mx-auto" />
+            <p className="text-xs text-slate-500 font-medium">Validating listing details...</p>
+          </div>
+        ) : targetError || !target ? (
+
+          /* TARGET NOT FOUND STATE */
+          <div className="bg-white rounded-3xl p-8 sm:p-12 shadow-xl border border-slate-100 text-center space-y-4 max-w-lg mx-auto">
+            <div className="w-16 h-16 rounded-3xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto">
+              <FileQuestion className="w-8 h-8" />
+            </div>
+            <h2 className="text-xl font-bold text-[#041C43]">Target Listing Not Found</h2>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              {targetError || 'No valid listing was selected for reporting. Please select a listing from the marketplace to file a report.'}
+            </p>
+            <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+              <button
+                type="button"
+                onClick={() => onNavigate('/')}
+                className="w-full sm:w-auto px-6 py-3 rounded-2xl bg-[#1464F4] text-white font-bold text-xs shadow-md shadow-blue-500/20 hover:bg-blue-600 transition-all tap-bounce"
+              >
+                Browse Marketplace
+              </button>
+              <button
+                type="button"
+                onClick={() => onNavigate('/safety')}
+                className="w-full sm:w-auto px-6 py-3 rounded-2xl bg-slate-100 text-slate-700 font-bold text-xs hover:bg-slate-200 transition-all tap-bounce"
+              >
+                Safety Center
+              </button>
+            </div>
+          </div>
+
+        ) : isSelfListing ? (
+
+          /* SELF-LISTING GUARD NOTICE */
+          <div className="bg-white rounded-3xl p-8 shadow-xl border border-amber-200 text-center space-y-4 max-w-lg mx-auto">
+            <div className="w-14 h-14 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center mx-auto">
+              <AlertTriangle className="w-7 h-7" />
             </div>
             <h2 className="text-lg font-bold text-[#041C43]">You cannot report your own listing</h2>
-            <p className="text-xs text-slate-500 max-w-md mx-auto">
-              This is a listing published under your account. To edit, pause, or remove your listing, visit your My Listings dashboard.
+            <p className="text-xs text-slate-500 leading-relaxed">
+              This listing is published under your account. To edit, pause, or remove your listing, visit your My Listings dashboard.
             </p>
             <button
               type="button"
@@ -287,9 +492,10 @@ export const ReportListingPage: React.FC<ReportListingPageProps> = ({
               Go to My Listings
             </button>
           </div>
+
         ) : isSubmitted ? (
 
-          /* SUCCESS STATE (Matching Page 30 Post-Submission) */
+          /* SUCCESS STATE */
           <div className="bg-white rounded-3xl p-8 sm:p-12 shadow-2xl border border-slate-100 text-center space-y-6 animate-in fade-in zoom-in-95 duration-200 max-w-xl mx-auto">
             <div className="w-16 h-16 rounded-full bg-emerald-50 text-emerald-500 flex items-center justify-center mx-auto ring-8 ring-emerald-50/50">
               <CheckCircle2 className="w-8 h-8" />
@@ -297,13 +503,13 @@ export const ReportListingPage: React.FC<ReportListingPageProps> = ({
 
             <div className="space-y-2">
               <span className="text-[10px] font-bold px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 uppercase tracking-wider">
-                Report Submitted
+                Report Submitted to Supabase
               </span>
               <h2 className="text-2xl font-black text-[#041C43] font-heading">
                 Thank you for your report
               </h2>
               <p className="text-xs text-slate-500 leading-relaxed max-w-md mx-auto font-medium">
-                Your report regarding “{defaultTarget.title}” has been received. Our moderation team will review the issue and take appropriate action if platform rules were violated.
+                Your report regarding “{target.title}” has been recorded in our safety moderation system. Our moderation team will review the issue and take appropriate action if platform rules were violated.
               </p>
             </div>
 
@@ -313,7 +519,7 @@ export const ReportListingPage: React.FC<ReportListingPageProps> = ({
                 <span>Confidentiality Guaranteed</span>
               </div>
               <p className="text-[11px] text-slate-500">
-                Your identity is never disclosed to the listing owner.
+                Your identity is never disclosed to the listing owner. Review times vary depending on moderation queue volume.
               </p>
             </div>
 
@@ -337,10 +543,21 @@ export const ReportListingPage: React.FC<ReportListingPageProps> = ({
 
         ) : (
 
-          /* FORM STATE (Exact Page 30 Visual Match) */
+          /* FORM STATE */
           <div className="space-y-6">
 
-            {/* HERO SECTION WITH ILLUSTRATION GRAPHIC */}
+            {/* EMERGENCY SAFETY DISCLAIMER */}
+            <div className="p-4 rounded-3xl bg-rose-50 border border-rose-200 text-rose-900 flex items-start gap-3 shadow-2xs">
+              <AlertOctagon className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+              <div className="text-xs space-y-1">
+                <h4 className="font-bold text-rose-950">Safety & Emergency Disclaimer</h4>
+                <p className="text-[11px] text-rose-800 leading-relaxed">
+                  If you or someone else is in immediate physical danger or facing threats of crime, please contact Sri Lanka Emergency Services (<strong>119</strong> or <strong>118</strong>) immediately. Platform reports are processed during business hours and do not replace emergency police assistance.
+                </p>
+              </div>
+            </div>
+
+            {/* HERO SECTION */}
             <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-xl shadow-slate-200/50 border border-slate-100 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative overflow-hidden">
               <div className="space-y-3 max-w-lg">
                 <h1 className="text-2xl sm:text-3xl font-black font-heading tracking-tight">
@@ -349,7 +566,7 @@ export const ReportListingPage: React.FC<ReportListingPageProps> = ({
                 </h1>
 
                 <p className="text-xs text-slate-500 font-medium leading-relaxed">
-                  Help us keep RENTOURA.LK safe and trustworthy. Please let us know if this listing goes against our rules.
+                  Help us keep RENTOURA.LK safe and trustworthy. Please let us know if this listing violates our community standards or terms of service.
                 </p>
 
                 {/* Important Report Notice Alert Box */}
@@ -358,27 +575,27 @@ export const ReportListingPage: React.FC<ReportListingPageProps> = ({
                     <CheckCircle2 className="w-3.5 h-3.5" />
                   </div>
                   <div>
-                    <h3 className="font-bold text-[11.5px]">Your report is important</h3>
+                    <h3 className="font-bold text-[11.5px]">Your report is confidential</h3>
                     <p className="text-[11px] text-slate-500 leading-snug">
-                      All reports are reviewed by our team. Your identity will remain confidential.
+                      All reports are logged in our moderation system. Your user identity will never be disclosed to the listing owner.
                     </p>
                   </div>
                 </div>
               </div>
 
-              {/* Shield Illustration Graphic (Page 30 Visual Match) */}
+              {/* Graphic Banner */}
               <div className="shrink-0 w-32 h-32 sm:w-40 sm:h-40 rounded-3xl bg-gradient-to-tr from-[#041C43] via-[#08285C] to-[#1464F4] p-4 text-white flex flex-col items-center justify-center text-center shadow-lg shadow-blue-500/20 relative mx-auto md:mx-0">
                 <ShieldAlert className="w-16 h-16 text-[#00C2FF] mb-1" />
                 <span className="text-[11px] font-bold tracking-wide text-white">SAFETY REVIEW</span>
               </div>
             </div>
 
-            {/* TARGET LISTING SUMMARY CARD (Mandatory Context) */}
+            {/* TARGET LISTING SUMMARY CARD */}
             <div className="p-4 sm:p-5 rounded-3xl bg-white border border-slate-100 shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div className="flex items-center gap-3.5 w-full sm:w-auto">
                 <img
-                  src={defaultTarget.imageUrl}
-                  alt={defaultTarget.title}
+                  src={target.imageUrl}
+                  alt={target.title}
                   className="w-20 h-20 sm:w-24 sm:h-20 rounded-2xl object-cover shrink-0 border border-slate-100 shadow-xs"
                 />
                 <div className="space-y-1 min-w-0 flex-1">
@@ -386,20 +603,20 @@ export const ReportListingPage: React.FC<ReportListingPageProps> = ({
                     <span className={`text-[10px] font-black px-2 py-0.5 rounded-md border ${moduleBadgeConfig.bg} ${moduleBadgeConfig.text} ${moduleBadgeConfig.border}`}>
                       {moduleBadgeConfig.label}
                     </span>
-                    {defaultTarget.category && (
+                    {target.category && (
                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                        • {defaultTarget.category}
+                        • {target.category}
                       </span>
                     )}
                   </div>
                   <h3 className="text-xs font-bold text-[#041C43] line-clamp-1 font-heading">
-                    {defaultTarget.title}
+                    {target.title}
                   </h3>
                   <p className="text-[11px] text-slate-500 font-medium line-clamp-1">
-                    📍 {defaultTarget.location}
+                    📍 {target.location}
                   </p>
                   <p className="text-xs font-black text-[#1464F4]">
-                    {defaultTarget.price} <span className="text-[10px] font-normal text-slate-400">{defaultTarget.pricePeriod}</span>
+                    {target.price} <span className="text-[10px] font-normal text-slate-400">{target.pricePeriod}</span>
                   </p>
                 </div>
               </div>
@@ -426,7 +643,7 @@ export const ReportListingPage: React.FC<ReportListingPageProps> = ({
                 </div>
               )}
 
-              {/* STEP 1: WHY ARE YOU REPORTING? (Page 30 Radio Card Grid) */}
+              {/* STEP 1: WHY ARE YOU REPORTING? */}
               <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-md border border-slate-100 space-y-4">
                 <div className="flex items-center gap-2 font-heading">
                   <div className="w-6 h-6 rounded-full bg-[#1464F4] text-white flex items-center justify-center font-bold text-xs shrink-0">
@@ -488,7 +705,7 @@ export const ReportListingPage: React.FC<ReportListingPageProps> = ({
                       2
                     </div>
                     <h2 className="text-sm font-bold text-[#041C43]">
-                      Describe the issue <span className="text-xs font-normal text-slate-400">(optional)</span>
+                      Describe the issue <span className="text-xs font-normal text-slate-400">(max 500 chars)</span>
                     </h2>
                   </div>
                 </div>
@@ -499,7 +716,7 @@ export const ReportListingPage: React.FC<ReportListingPageProps> = ({
                     maxLength={500}
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Provide more details to help us understand the problem..."
+                    placeholder="Provide specific details to help our moderation team understand the issue..."
                     className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:border-[#1464F4] transition-all resize-none"
                   />
                   <div className="text-[10px] font-bold text-slate-400 text-right mt-1">
@@ -515,7 +732,7 @@ export const ReportListingPage: React.FC<ReportListingPageProps> = ({
                     3
                   </div>
                   <h2 className="text-sm font-bold text-[#041C43]">
-                    How can we contact you? <span className="text-xs font-normal text-slate-400">(optional)</span>
+                    Contact email / phone for updates <span className="text-xs font-normal text-slate-400">(optional)</span>
                   </h2>
                 </div>
 
@@ -526,25 +743,25 @@ export const ReportListingPage: React.FC<ReportListingPageProps> = ({
                       type="text"
                       value={contactInfo}
                       onChange={(e) => setContactInfo(e.target.value)}
-                      placeholder="Enter your email or phone number"
+                      placeholder="Enter your email address or phone number"
                       className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-medium text-slate-800 focus:bg-white focus:outline-none focus:border-[#1464F4] transition-all"
                     />
                   </div>
                   <p className="text-[11px] text-slate-400 font-medium pl-1">
-                    This will not be shared with the listing owner.
+                    This contact info will never be shown to the listing owner.
                   </p>
                 </div>
               </div>
 
-              {/* TRUST & CONFIDENTIALITY BANNER (Page 30 Visual Match) */}
+              {/* TRUST & CONFIDENTIALITY BANNER */}
               <div className="p-5 rounded-3xl bg-blue-50/80 border border-blue-100/90 shadow-2xs flex items-center gap-4">
                 <div className="w-10 h-10 rounded-2xl bg-[#1464F4] text-white flex items-center justify-center shrink-0 shadow-md shadow-blue-500/20">
                   <Lock className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-xs font-bold text-[#041C43]">We take your reports seriously</h3>
+                  <h3 className="text-xs font-bold text-[#041C43]">Verified Moderation Standard</h3>
                   <p className="text-[11px] text-slate-500 font-medium leading-relaxed mt-0.5">
-                    Our team will review your report and take action if it violates our policies. Thank you for helping us build a safe community.
+                    Our Trust & Safety moderators analyze every report against platform guidelines. Thank you for protecting the RENTOURA.LK community.
                   </p>
                 </div>
               </div>
@@ -563,15 +780,15 @@ export const ReportListingPage: React.FC<ReportListingPageProps> = ({
                     </>
                   ) : (
                     <>
-                      <AlertTriangle className="w-4.5 h-4.5" />
-                      <span>Submit Report</span>
+                      <ShieldAlert className="w-4.5 h-4.5" />
+                      <span>Submit Official Report</span>
                     </>
                   )}
                 </button>
 
                 <p className="text-center text-[11px] text-slate-400 font-medium flex items-center justify-center gap-1">
                   <Lock className="w-3 h-3 text-slate-400" />
-                  <span>Your report is confidential and secure.</span>
+                  <span>Your submission is encrypted and confidential.</span>
                 </p>
               </div>
 

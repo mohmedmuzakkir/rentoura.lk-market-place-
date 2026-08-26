@@ -1,5 +1,5 @@
+import { supabase } from '../lib/supabase';
 import { NotificationService } from './notificationService';
-import { AppNotification } from '../types/notificationTypes';
 import { StaffAccount, StaffRole } from '../types/adminTypes';
 import { AdminService } from './adminService';
 
@@ -71,446 +71,127 @@ export interface ListingReport {
   updatedAt?: number;
 }
 
-const STORAGE_KEY = 'rentoura_user_reports_v1';
-
-// Canonical initial seed reports to represent active system state
-const SEED_REPORTS: ListingReport[] = [
-  {
-    id: 'RP-7854',
-    reporterId: 'USR-2456',
-    reporterName: 'Sahan De Silva',
-    reporterEmail: 'sahan.desilva@gmail.com',
-    reporterAvatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=200&q=80',
-    reporterRole: 'User',
-    targetType: 'listing',
-    targetId: 'rent-house-kandy',
-    targetModule: 'rentals',
-    targetTitle: 'Modern 3 Bedroom House in Kandy',
-    targetLocation: 'Kandy, Central Province',
-    targetPrice: 'Rs. 85,000 / mo',
-    targetImageUrl: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?auto=format&fit=crop&w=400&q=80',
-    reasonCode: 'inappropriate_content',
-    reasonLabel: 'Inappropriate Content',
-    description: 'Misleading information in description regarding property square footage and parking availability.',
-    details: 'Misleading information in description regarding property square footage and parking availability.',
-    allowContact: true,
-    source: 'listing_detail',
-    status: 'submitted',
-    statusNote: 'Awaiting initial moderator triage.',
-    createdAt: '10 May 2025 10:30 AM',
-    submittedDate: '10 May 2025 10:30 AM',
-    timestamp: Date.now() - 7200000, // 2 hours ago
-    history: [
-      {
-        id: 'hist-1',
-        action: 'REPORT_SUBMITTED',
-        actorName: 'Sahan De Silva',
-        actorRole: 'User',
-        details: 'Report filed via Listing Detail page.',
-        createdAt: '10 May 2025 10:30 AM',
-        timestamp: Date.now() - 7200000
-      }
-    ],
-    internalNotes: []
-  },
-  {
-    id: 'RP-7853',
-    reporterId: 'USR-1245',
-    reporterName: 'Dilini Fernando',
-    reporterEmail: 'dilini.f@gmail.com',
-    reporterAvatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=200&q=80',
-    reporterRole: 'User',
-    targetType: 'listing',
-    targetId: 'rent-premio-colombo',
-    targetModule: 'rentals',
-    targetTitle: 'Toyota Premio 2018 for Rent (Self Drive)',
-    targetLocation: 'Colombo, Western Province',
-    targetPrice: 'Rs. 12,500 / day',
-    targetImageUrl: 'https://images.unsplash.com/photo-1549399542-7e3f8b79c341?auto=format&fit=crop&w=400&q=80',
-    reasonCode: 'spam_fake_ad',
-    reasonLabel: 'Spam / Fake Ad',
-    description: 'Repeated / duplicate listing posted across multiple accounts with contradictory prices.',
-    details: 'Repeated / duplicate listing posted across multiple accounts with contradictory prices.',
-    allowContact: true,
-    source: 'listing_detail',
-    status: 'under_review',
-    statusNote: 'Under active investigation by moderation staff.',
-    assignedTo: 'staff-102',
-    assignedToName: 'Hasini K.',
-    createdAt: '10 May 2025 09:15 AM',
-    submittedDate: '10 May 2025 09:15 AM',
-    timestamp: Date.now() - 10800000, // 3 hours ago
-    history: [
-      {
-        id: 'hist-2a',
-        action: 'REPORT_SUBMITTED',
-        actorName: 'Dilini Fernando',
-        actorRole: 'User',
-        details: 'Report filed via Listing Detail page.',
-        createdAt: '10 May 2025 09:15 AM',
-        timestamp: Date.now() - 10800000
-      },
-      {
-        id: 'hist-2b',
-        action: 'ASSIGNED',
-        actorName: 'Super Admin',
-        actorRole: 'Super Admin',
-        details: 'Assigned to moderator Hasini K.',
-        createdAt: '10 May 2025 09:30 AM',
-        timestamp: Date.now() - 9900000
-      }
-    ],
-    internalNotes: [
-      {
-        id: 'note-1',
-        authorId: 'staff-102',
-        authorName: 'Hasini K.',
-        authorRole: 'Moderator',
-        note: 'Cross-checking with vehicle registration database and previous listing history.',
-        createdAt: '10 May 2025 09:40 AM',
-        timestamp: Date.now() - 9300000
-      }
-    ]
-  },
-  {
-    id: 'RP-4521',
-    reporterId: 'USR-9812',
-    reporterName: 'Hasini K.',
-    reporterEmail: 'hasinik@gmail.com',
-    reporterAvatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=200&q=80',
-    reporterRole: 'User',
-    targetType: 'listing',
-    targetId: 'job-wedding-dj',
-    targetModule: 'jobs',
-    targetTitle: 'DJ for Wedding Events (Weekend)',
-    targetLocation: 'Kurunegala, North Western Province',
-    targetPrice: 'Rs. 45,000 / event',
-    targetImageUrl: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?auto=format&fit=crop&w=400&q=80',
-    reasonCode: 'inappropriate_content',
-    reasonLabel: 'Inappropriate Content',
-    description: 'Direct personal phone number and WhatsApp contact details embedded inside description text.',
-    details: 'Direct personal phone number and WhatsApp contact details embedded inside description text.',
-    allowContact: false,
-    source: 'listing_detail',
-    status: 'submitted',
-    statusNote: 'Queued for content policy review.',
-    createdAt: '10 May 2025 08:40 AM',
-    submittedDate: '10 May 2025 08:40 AM',
-    timestamp: Date.now() - 14400000, // 4 hours ago
-    history: [
-      {
-        id: 'hist-3',
-        action: 'REPORT_SUBMITTED',
-        actorName: 'Hasini K.',
-        actorRole: 'User',
-        details: 'Report submitted for policy check.',
-        createdAt: '10 May 2025 08:40 AM',
-        timestamp: Date.now() - 14400000
-      }
-    ],
-    internalNotes: []
-  },
-  {
-    id: 'RP-6627',
-    reporterId: 'USR-7761',
-    reporterName: 'Tharindu J.',
-    reporterEmail: 'tharindu.j@gmail.com',
-    reporterAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80',
-    reporterRole: 'User',
-    targetType: 'listing',
-    targetId: 'srv-tiling-galle',
-    targetModule: 'services',
-    targetTitle: 'Professional Tiling Service',
-    targetLocation: 'Galle, Southern Province',
-    targetPrice: 'Rs. 3,500 / sq.ft',
-    targetImageUrl: 'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=400&q=80',
-    reasonCode: 'misleading_information',
-    reasonLabel: 'Misleading Information',
-    description: 'Wrong pricing displayed on public card compared to phone quote given to customer.',
-    details: 'Wrong pricing displayed on public card compared to phone quote given to customer.',
-    allowContact: true,
-    source: 'listing_detail',
-    status: 'resolved',
-    statusNote: 'Moderation review completed. Provider updated pricing info.',
-    resolutionOutcome: 'Warning Issued & Pricing Updated',
-    userFacingMessage: 'Thank you. The service provider was instructed to clarify pricing structure on their listing.',
-    createdAt: '09 May 2025 11:20 AM',
-    submittedDate: '09 May 2025 11:20 AM',
-    timestamp: Date.now() - 86400000, // 1 day ago
-    history: [
-      {
-        id: 'hist-4a',
-        action: 'REPORT_SUBMITTED',
-        actorName: 'Tharindu J.',
-        actorRole: 'User',
-        details: 'Report submitted.',
-        createdAt: '09 May 2025 11:20 AM',
-        timestamp: Date.now() - 86400000
-      },
-      {
-        id: 'hist-4b',
-        action: 'RESOLVED',
-        actorName: 'Super Admin',
-        actorRole: 'Super Admin',
-        details: 'Resolved with provider warning.',
-        createdAt: '09 May 2025 03:15 PM',
-        timestamp: Date.now() - 72000000
-      }
-    ],
-    internalNotes: []
-  },
-  {
-    id: 'RP-7841',
-    reporterId: 'BUS-3321',
-    reporterName: 'Event Masters (Pvt) Ltd',
-    reporterEmail: 'events@eventmasters.lk',
-    reporterAvatar: 'https://images.unsplash.com/photo-1560179707-f14e90ef3623?auto=format&fit=crop&w=200&q=80',
-    reporterRole: 'Business',
-    targetType: 'listing',
-    targetId: 'rent-apt-colombo-3',
-    targetModule: 'rentals',
-    targetTitle: 'Luxury Apartment for Rent in Colombo 03',
-    targetLocation: 'Colombo 03, Western Province',
-    targetPrice: 'Rs. 220,000 / mo',
-    targetImageUrl: 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=400&q=80',
-    reasonCode: 'suspicious_activity',
-    reasonLabel: 'Suspicious Activity',
-    description: 'Potential scam listing requesting advance bank transfer before property inspection.',
-    details: 'Potential scam listing requesting advance bank transfer before property inspection.',
-    allowContact: true,
-    source: 'listing_detail',
-    status: 'under_review',
-    statusNote: 'High priority inspection. Verification requested from seller.',
-    assignedTo: 'staff-101',
-    assignedToName: 'Nimal Perera',
-    createdAt: '09 May 2025 06:10 PM',
-    submittedDate: '09 May 2025 06:10 PM',
-    timestamp: Date.now() - 110000000,
-    history: [
-      {
-        id: 'hist-5',
-        action: 'MARKED_UNDER_REVIEW',
-        actorName: 'Nimal Perera',
-        actorRole: 'Moderator',
-        details: 'Investigation initiated. Contacted poster for deed proof.',
-        createdAt: '09 May 2025 06:30 PM',
-        timestamp: Date.now() - 108000000
-      }
-    ],
-    internalNotes: [
-      {
-        id: 'note-2',
-        authorId: 'staff-101',
-        authorName: 'Nimal Perera',
-        authorRole: 'Moderator',
-        note: 'Requested national ID copy and utility bill proof of ownership.',
-        createdAt: '09 May 2025 06:35 PM',
-        timestamp: Date.now() - 107700000
-      }
-    ]
-  },
-  {
-    id: 'RP-2234',
-    reporterId: 'USR-5567',
-    reporterName: 'Kasun Madusanka',
-    reporterEmail: 'kasun.m@gmail.com',
-    reporterAvatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80',
-    reporterRole: 'User',
-    targetType: 'listing',
-    targetId: 'srv-photography-matara',
-    targetModule: 'services',
-    targetTitle: 'Photography & Video Services',
-    targetLocation: 'Matara, Southern Province',
-    targetPrice: 'Rs. 25,000 / day',
-    targetImageUrl: 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=400&q=80',
-    reasonCode: 'other',
-    reasonLabel: 'Other',
-    description: 'Watermarked images belonging to a third-party photography studio without license.',
-    details: 'Watermarked images belonging to a third-party photography studio without license.',
-    allowContact: false,
-    source: 'listing_detail',
-    status: 'resolved',
-    statusNote: 'Unlicensed images removed from gallery.',
-    resolutionOutcome: 'Content Removed',
-    userFacingMessage: 'Thank you for reporting. Unlicensed portfolio images have been removed from the listing.',
-    createdAt: '08 May 2025 03:45 PM',
-    submittedDate: '08 May 2025 03:45 PM',
-    timestamp: Date.now() - 172800000,
-    history: [
-      {
-        id: 'hist-6',
-        action: 'RESOLVED',
-        actorName: 'Tharindu Jayasekara',
-        actorRole: 'Moderator',
-        details: 'Images removed and seller notified.',
-        createdAt: '08 May 2025 04:30 PM',
-        timestamp: Date.now() - 169200000
-      }
-    ],
-    internalNotes: []
-  },
-  {
-    id: 'RP-5566',
-    reporterId: 'USR-9981',
-    reporterName: 'Nimal Perera',
-    reporterEmail: 'nimalperera@gmail.com',
-    reporterAvatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=200&q=80',
-    reporterRole: 'User',
-    targetType: 'listing',
-    targetId: 'rent-scooter-jaffna',
-    targetModule: 'rentals',
-    targetTitle: 'Honda Dio Scooter for Rent',
-    targetLocation: 'Jaffna, Northern Province',
-    targetPrice: 'Rs. 2,200 / day',
-    targetImageUrl: 'https://images.unsplash.com/photo-1558981403-c5f9899a28bc?auto=format&fit=crop&w=400&q=80',
-    reasonCode: 'inappropriate_content',
-    reasonLabel: 'Inappropriate Content',
-    description: 'Offensive or abusive language in condition guidelines.',
-    details: 'Offensive or abusive language in condition guidelines.',
-    allowContact: true,
-    source: 'listing_detail',
-    status: 'submitted',
-    statusNote: 'Queued for moderation review.',
-    createdAt: '08 May 2025 01:22 PM',
-    submittedDate: '08 May 2025 01:22 PM',
-    timestamp: Date.now() - 180000000,
-    history: [
-      {
-        id: 'hist-7',
-        action: 'REPORT_SUBMITTED',
-        actorName: 'Nimal Perera',
-        actorRole: 'User',
-        details: 'Submitted from listing detail page.',
-        createdAt: '08 May 2025 01:22 PM',
-        timestamp: Date.now() - 180000000
-      }
-    ],
-    internalNotes: []
-  },
-  {
-    id: 'RP-4433',
-    reporterId: 'USR-4490',
-    reporterName: 'Chandika S.',
-    reporterEmail: 'chandikas@gmail.com',
-    reporterAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
-    reporterRole: 'User',
-    targetType: 'listing',
-    targetId: 'rent-table-negombo',
-    targetModule: 'rentals',
-    targetTitle: 'Dining Table Set for Rent',
-    targetLocation: 'Negombo, Western Province',
-    targetPrice: 'Rs. 8,000 / mo',
-    targetImageUrl: 'https://images.unsplash.com/photo-1617806118233-18e1de247200?auto=format&fit=crop&w=400&q=80',
-    reasonCode: 'misleading_information',
-    reasonLabel: 'Misleading Information',
-    description: 'Item no longer available for booking according to poster.',
-    details: 'Item no longer available for booking according to poster.',
-    allowContact: false,
-    source: 'listing_detail',
-    status: 'dismissed',
-    statusNote: 'Owner marked item as booked natively. No policy violation.',
-    resolutionOutcome: 'No Violation Found',
-    userFacingMessage: 'Thank you. The listing status was automatically updated by owner.',
-    createdAt: '07 May 2025 10:05 AM',
-    submittedDate: '07 May 2025 10:05 AM',
-    timestamp: Date.now() - 250000000,
-    history: [
-      {
-        id: 'hist-8',
-        action: 'DISMISSED',
-        actorName: 'Dilini Fernando',
-        actorRole: 'Moderator',
-        details: 'Report dismissed as no active violation was found.',
-        createdAt: '07 May 2025 11:00 AM',
-        timestamp: Date.now() - 246000000
-      }
-    ],
-    internalNotes: []
-  },
-  {
-    id: 'RP-8812',
-    reporterId: 'USR-101',
-    reporterName: 'Nimal Perera',
-    reporterEmail: 'nimalperera@gmail.com',
-    reporterAvatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=200&q=80',
-    reporterRole: 'User',
-    targetType: 'review',
-    targetId: 'rev-302',
-    targetModule: 'rentals',
-    targetTitle: 'Review on "Canon EOS R6 Camera Rental" by Hasini K.',
-    targetLocation: 'Colombo 07',
-    targetImageUrl: 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=400&q=80',
-    targetAuthorName: 'Hasini K.',
-    targetAuthorId: 'usr-104',
-    reasonCode: 'false_review',
-    reasonLabel: 'False or Misleading Review',
-    description: 'Reviewer never booked or picked up the equipment. False rating submitted.',
-    details: 'Reviewer never booked or picked up the equipment. False rating submitted.',
-    allowContact: true,
-    source: 'review_card',
-    status: 'submitted',
-    statusNote: 'Awaiting verification of booking transaction receipt.',
-    createdAt: '06 May 2025 04:15 PM',
-    submittedDate: '06 May 2025 04:15 PM',
-    timestamp: Date.now() - 300000000,
-    history: [
-      {
-        id: 'hist-9',
-        action: 'REPORT_SUBMITTED',
-        actorName: 'Nimal Perera',
-        actorRole: 'User',
-        details: 'Review report filed.',
-        createdAt: '06 May 2025 04:15 PM',
-        timestamp: Date.now() - 300000000
-      }
-    ],
-    internalNotes: []
-  }
-];
+// In-memory cache for synchronous fallback access
+let inMemoryReportsCache: ListingReport[] = [];
 
 export class ReportService {
   /**
-   * Retrieves all user reports from storage (or populates seeds if empty).
+   * Helper to format DB row to ListingReport
    */
-  static getReports(reporterId?: string): ListingReport[] {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      let reports: ListingReport[] = [];
+  private static formatReportRow(row: any): ListingReport {
+    const createdDate = new Date(row.created_at || Date.now());
+    const dateStr = createdDate.toLocaleString('en-US', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
 
-      if (!raw) {
-        reports = SEED_REPORTS;
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(reports));
-      } else {
-        reports = JSON.parse(raw);
-        // Ensure data consistency
-        if (!Array.isArray(reports) || reports.length === 0) {
-          reports = SEED_REPORTS;
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(reports));
-        }
-      }
+    return {
+      id: row.id,
+      reporterId: row.reporter_id || 'guest',
+      reporterName: row.reporter_name || 'User',
+      reporterEmail: row.reporter_email,
+      reporterRole: 'User',
+      targetType: (row.target_type || 'listing') as ReportTargetType,
+      targetId: row.listing_id || row.target_id || row.id,
+      targetModule: (row.target_module || 'rentals') as ReportTargetModule,
+      targetTitle: row.target_title || 'Reported Target',
+      targetLocation: row.target_location || '',
+      targetPrice: row.target_price || '',
+      targetImageUrl: row.target_image_url || '',
+      reasonCode: row.reason_code || 'other',
+      reasonLabel: row.reason_label || 'Reported Issue',
+      description: row.details || '',
+      details: row.details || '',
+      contactInfo: row.contact_info || '',
+      allowContact: row.allow_contact ?? true,
+      status: (row.status || 'submitted') as ReportStatus,
+      statusNote: row.status_note || '',
+      assignedTo: row.assigned_to || '',
+      resolutionOutcome: row.resolution_outcome || '',
+      userFacingMessage: row.user_facing_message || '',
+      internalNotes: Array.isArray(row.internal_notes) ? row.internal_notes : [],
+      history: Array.isArray(row.history) ? row.history : [],
+      createdAt: dateStr,
+      submittedDate: dateStr,
+      timestamp: createdDate.getTime(),
+      updatedAt: row.updated_at ? new Date(row.updated_at).getTime() : createdDate.getTime()
+    };
+  }
+
+  /**
+   * Async fetch reports from Supabase
+   */
+  static async fetchReports(reporterId?: string): Promise<ListingReport[]> {
+    try {
+      let query = supabase
+        .from('reports')
+        .select('*')
+        .order('created_at', { ascending: false });
 
       if (reporterId) {
-        return reports.filter(r => r.reporterId === reporterId);
+        query = query.eq('reporter_id', reporterId);
       }
-      return reports;
-    } catch (e) {
-      console.error('Error reading reports:', e);
-      return SEED_REPORTS;
+
+      const { data, error } = await query;
+      if (error) {
+        console.warn('[ReportService] Failed to query reports table:', error.message);
+        return inMemoryReportsCache;
+      }
+
+      if (data) {
+        const formatted = data.map(r => this.formatReportRow(r));
+        inMemoryReportsCache = formatted;
+        return formatted;
+      }
+
+      return inMemoryReportsCache;
+    } catch (err) {
+      console.warn('[ReportService] Error fetching reports:', err);
+      return inMemoryReportsCache;
     }
+  }
+
+  /**
+   * Synchronous fallback wrapper
+   */
+  static getReports(reporterId?: string): ListingReport[] {
+    // Fire-and-forget async update in background
+    this.fetchReports(reporterId).catch(() => {});
+    if (reporterId) {
+      return inMemoryReportsCache.filter(r => r.reporterId === reporterId);
+    }
+    return inMemoryReportsCache;
   }
 
   /**
    * Get a single report by ID.
    */
-  static getReportById(reportId: string): ListingReport | null {
-    const reports = this.getReports();
-    return reports.find(r => r.id === reportId) || null;
+  static async getReportById(reportId: string): Promise<ListingReport | null> {
+    try {
+      const { data, error } = await supabase
+        .from('reports')
+        .select('*')
+        .eq('id', reportId)
+        .maybeSingle();
+
+      if (error || !data) {
+        return inMemoryReportsCache.find(r => r.id === reportId) || null;
+      }
+
+      return this.formatReportRow(data);
+    } catch {
+      return inMemoryReportsCache.find(r => r.id === reportId) || null;
+    }
   }
 
   /**
-   * Submits a new report for a listing, review, user or conversation.
+   * Submits a new report for a listing, review, user or conversation to Supabase
    */
-  static submitReport(params: {
+  static async submitReport(params: {
     reporterId: string;
     reporterName?: string;
     reporterEmail?: string;
@@ -530,25 +211,35 @@ export class ReportService {
     contactInfo?: string;
     allowContact?: boolean;
     source?: ReportSource;
-  }): { success: boolean; report?: ListingReport; error?: string } {
+  }): Promise<{ success: boolean; report?: ListingReport; error?: string }> {
     try {
-      const reports = this.getReports();
+      // 1. Check current logged in user
+      const { data: { user } } = await supabase.auth.getUser();
+      const realReporterId = user?.id || (params.reporterId !== 'guest-reporter' ? params.reporterId : null);
 
-      // Duplicate submission protection (within 2 minutes)
-      const recentDup = reports.find(
-        r => r.reporterId === params.reporterId &&
-             r.targetId === params.targetId &&
-             Date.now() - r.timestamp < 120000
-      );
+      const isUuid = (val?: string) => typeof val === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
 
-      if (recentDup) {
-        return {
-          success: false,
-          error: 'You recently submitted a report for this item. Our moderation team is already investigating.'
-        };
+      // 2. Anti-spam check: check if report already exists recently for this reporter and target_id
+      if (realReporterId && isUuid(params.targetId)) {
+        const { data: existing } = await supabase
+          .from('reports')
+          .select('id, created_at')
+          .eq('reporter_id', realReporterId)
+          .eq('listing_id', params.targetId)
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (existing && existing.length > 0) {
+          const lastReportTime = new Date(existing[0].created_at).getTime();
+          if (Date.now() - lastReportTime < 120000) { // 2 mins
+            return {
+              success: false,
+              error: 'You recently submitted a report for this item. Our moderation team is investigating.'
+            };
+          }
+        }
       }
 
-      const reportId = `RP-${Math.floor(1000 + Math.random() * 9000)}`;
       const nowStr = new Date().toLocaleString('en-US', {
         day: '2-digit',
         month: 'short',
@@ -558,81 +249,74 @@ export class ReportService {
         hour12: true
       });
 
-      const newReport: ListingReport = {
-        id: reportId,
-        reporterId: params.reporterId,
-        reporterName: params.reporterName || 'Registered User',
-        reporterEmail: params.reporterEmail || 'user@rentoura.lk',
-        reporterAvatar: params.reporterAvatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80',
-        reporterRole: 'User',
-        
-        targetType: params.targetType || 'listing',
-        targetId: params.targetId,
-        targetModule: params.targetModule,
-        targetTitle: params.targetTitle,
-        targetLocation: params.targetLocation,
-        targetPrice: params.targetPrice,
-        targetImageUrl: params.targetImageUrl,
-        targetAuthorName: params.targetAuthorName,
-        targetAuthorId: params.targetAuthorId,
-
-        reasonCode: params.reasonCode,
-        reasonLabel: params.reasonLabel,
-        description: params.description || '',
-        details: params.description || '',
-        contactInfo: params.contactInfo,
-        allowContact: params.allowContact ?? true,
-        source: params.source || 'listing_detail',
-
-        status: 'submitted',
-        statusNote: 'Thank you. Your report has been queued for moderation review.',
+      const historyItem: ReportHistoryItem = {
+        id: `hist-${Date.now()}`,
+        action: 'REPORT_SUBMITTED',
+        actorName: params.reporterName || user?.email || 'User',
+        actorRole: 'Reporter',
+        details: `Submitted report regarding "${params.targetTitle}".`,
         createdAt: nowStr,
-        submittedDate: nowStr,
-        timestamp: Date.now(),
-        updatedAt: Date.now(),
-
-        history: [
-          {
-            id: `hist-${Date.now()}`,
-            action: 'REPORT_SUBMITTED',
-            actorName: params.reporterName || 'User',
-            actorRole: 'Reporter',
-            details: `Submitted report regarding "${params.targetTitle}".`,
-            createdAt: nowStr,
-            timestamp: Date.now()
-          }
-        ],
-        internalNotes: []
+        timestamp: Date.now()
       };
 
-      const updatedReports = [newReport, ...reports];
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedReports));
-
-      // Create in-app notification for reporter
-      const notif: AppNotification = {
-        id: `notif-rep-${Date.now()}`,
-        type: 'REPORT_UPDATE',
-        category: 'system',
-        title: 'Report Received 🚩',
-        body: `Your report regarding “${params.targetTitle}” has been received and queued for prompt review.`,
-        createdAt: 'Just now',
-        timestamp: Date.now(),
-        read: false,
-        priority: 'normal',
-        entityType: (params.targetModule === 'general' ? 'system' : params.targetModule) as any,
-        entityId: params.targetId,
-        listingId: params.targetId
+      // 3. DB insert
+      const insertPayload: any = {
+        reporter_id: realReporterId,
+        target_type: params.targetType || (isUuid(params.targetId) ? 'listing' : 'user'),
+        listing_id: isUuid(params.targetId) ? params.targetId : null,
+        target_user_id: params.targetAuthorId && isUuid(params.targetAuthorId) ? params.targetAuthorId : null,
+        target_module: params.targetModule || 'general',
+        target_title: params.targetTitle,
+        target_location: params.targetLocation || '',
+        target_price: params.targetPrice || '',
+        target_image_url: params.targetImageUrl || '',
+        reason_code: params.reasonCode,
+        reason_label: params.reasonLabel,
+        details: params.description || '',
+        contact_info: params.contactInfo || '',
+        allow_contact: params.allowContact ?? true,
+        status: 'submitted',
+        status_note: 'Thank you. Your report has been queued for moderation review.',
+        history: [historyItem],
+        internal_notes: []
       };
 
-      const existingNotifs = NotificationService.getNotifications();
-      NotificationService.saveNotifications([notif, ...existingNotifs]);
+      const { data, error } = await supabase
+        .from('reports')
+        .insert(insertPayload)
+        .select()
+        .single();
+
+      if (error) {
+        console.warn('[ReportService] Supabase insert report error:', error.message);
+        return {
+          success: false,
+          error: `Failed to submit report: ${error.message}`
+        };
+      }
+
+      const newReport = this.formatReportRow(data);
+      inMemoryReportsCache = [newReport, ...inMemoryReportsCache];
+
+      // 4. Create confirmation notification for reporter if logged in
+      if (realReporterId) {
+        await NotificationService.addNotification({
+          targetUserId: realReporterId,
+          type: 'REPORT_UPDATE',
+          category: 'system',
+          title: 'Report Received 🚩',
+          body: `Your report regarding “${params.targetTitle}” has been received and queued for prompt review.`,
+          entityType: (params.targetModule === 'general' ? 'system' : params.targetModule) as any,
+          entityId: params.targetId
+        });
+      }
 
       return {
         success: true,
         report: newReport
       };
     } catch (e: any) {
-      console.error('Failed to submit report:', e);
+      console.error('[ReportService] Exception during submitReport:', e);
       return {
         success: false,
         error: e?.message || 'Unable to submit report. Please check connection and try again.'
@@ -643,22 +327,15 @@ export class ReportService {
   /**
    * Updates report status (e.g. submitted -> under_review -> resolved/dismissed).
    */
-  static updateReportStatus(params: {
+  static async updateReportStatus(params: {
     reportId: string;
     status: ReportStatus;
     statusNote?: string;
     assignedTo?: string;
     assignedToName?: string;
     staff?: StaffAccount;
-  }): { success: boolean; report?: ListingReport; error?: string } {
+  }): Promise<{ success: boolean; report?: ListingReport; error?: string }> {
     try {
-      const reports = this.getReports();
-      const index = reports.findIndex(r => r.id === params.reportId);
-      if (index === -1) {
-        return { success: false, error: 'Report not found.' };
-      }
-
-      const report = reports[index];
       const nowStr = new Date().toLocaleString('en-US', {
         day: '2-digit',
         month: 'short',
@@ -671,15 +348,11 @@ export class ReportService {
       const staffName = params.staff ? (params.staff.displayName || params.staff.fullName) : 'Moderation Staff';
       const staffRole: StaffRole = params.staff ? params.staff.role : 'MODERATOR';
 
-      report.status = params.status;
-      if (params.statusNote) report.statusNote = params.statusNote;
-      if (params.assignedTo) report.assignedTo = params.assignedTo;
-      if (params.assignedToName) report.assignedToName = params.assignedToName;
-      report.updatedAt = Date.now();
+      // Fetch current report history
+      const currentReport = await this.getReportById(params.reportId);
+      const existingHistory = currentReport?.history || [];
 
-      // Append to history
-      if (!report.history) report.history = [];
-      report.history.push({
+      const newHistoryItem: ReportHistoryItem = {
         id: `hist-${Date.now()}`,
         action: `STATUS_CHANGED_${params.status.toUpperCase()}`,
         actorName: staffName,
@@ -687,12 +360,29 @@ export class ReportService {
         details: params.statusNote || `Status updated to ${params.status.replace('_', ' ')}.`,
         createdAt: nowStr,
         timestamp: Date.now()
-      });
+      };
 
-      reports[index] = report;
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(reports));
+      const updatedHistory = [...existingHistory, newHistoryItem];
 
-      // Audit log
+      const { data, error } = await supabase
+        .from('reports')
+        .update({
+          status: params.status,
+          status_note: params.statusNote || null,
+          assigned_to: params.assignedTo || null,
+          history: updatedHistory,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', params.reportId)
+        .select()
+        .single();
+
+      if (error || !data) {
+        return { success: false, error: error?.message || 'Failed to update report status in DB.' };
+      }
+
+      const updatedReport = this.formatReportRow(data);
+
       if (params.staff) {
         AdminService.addAuditLog({
           actorId: params.staff.id,
@@ -700,15 +390,14 @@ export class ReportService {
           actorRole: staffRole,
           action: `REPORT_STATUS_${params.status.toUpperCase()}`,
           targetType: 'report',
-          targetId: report.id,
-          targetTitle: report.targetTitle,
+          targetId: params.reportId,
+          targetTitle: updatedReport.targetTitle,
           details: `Status set to ${params.status}. Note: ${params.statusNote || 'N/A'}`
         });
       }
 
-      return { success: true, report };
+      return { success: true, report: updatedReport };
     } catch (e: any) {
-      console.error('Failed to update report status:', e);
       return { success: false, error: e?.message || 'Failed to update status.' };
     }
   }
@@ -716,21 +405,13 @@ export class ReportService {
   /**
    * Assigns a report to a moderator.
    */
-  static assignReport(reportId: string, staff: StaffAccount, assigneeName?: string): { success: boolean; error?: string } {
+  static async assignReport(reportId: string, staff: StaffAccount, assigneeName?: string): Promise<{ success: boolean; error?: string }> {
     try {
-      const reports = this.getReports();
-      const report = reports.find(r => r.id === reportId);
-      if (!report) return { success: false, error: 'Report not found.' };
-
       const staffName = staff.displayName || staff.fullName;
       const targetAssignee = assigneeName || staffName;
 
-      report.assignedTo = staff.id;
-      report.assignedToName = targetAssignee;
-      if (report.status === 'submitted') {
-        report.status = 'under_review';
-      }
-      report.updatedAt = Date.now();
+      const currentReport = await this.getReportById(reportId);
+      if (!currentReport) return { success: false, error: 'Report not found.' };
 
       const nowStr = new Date().toLocaleString('en-US', {
         day: '2-digit',
@@ -741,18 +422,32 @@ export class ReportService {
         hour12: true
       });
 
-      if (!report.history) report.history = [];
-      report.history.push({
-        id: `hist-${Date.now()}`,
-        action: 'REPORT_ASSIGNED',
-        actorName: staffName,
-        actorRole: staff.role,
-        details: `Assigned report to ${targetAssignee}.`,
-        createdAt: nowStr,
-        timestamp: Date.now()
-      });
+      const updatedHistory = [
+        ...(currentReport.history || []),
+        {
+          id: `hist-${Date.now()}`,
+          action: 'REPORT_ASSIGNED',
+          actorName: staffName,
+          actorRole: staff.role,
+          details: `Assigned report to ${targetAssignee}.`,
+          createdAt: nowStr,
+          timestamp: Date.now()
+        }
+      ];
 
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(reports));
+      const nextStatus = currentReport.status === 'submitted' ? 'under_review' : currentReport.status;
+
+      const { error } = await supabase
+        .from('reports')
+        .update({
+          assigned_to: staff.id,
+          status: nextStatus,
+          history: updatedHistory,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', reportId);
+
+      if (error) return { success: false, error: error.message };
 
       AdminService.addAuditLog({
         actorId: staff.id,
@@ -760,8 +455,8 @@ export class ReportService {
         actorRole: staff.role,
         action: 'REPORT_ASSIGNED',
         targetType: 'report',
-        targetId: report.id,
-        targetTitle: report.targetTitle,
+        targetId: reportId,
+        targetTitle: currentReport.targetTitle,
         details: `Report assigned to ${targetAssignee}.`
       });
 
@@ -774,13 +469,12 @@ export class ReportService {
   /**
    * Adds an internal staff note (never visible to reporters/reported users).
    */
-  static addInternalNote(reportId: string, noteText: string, staff: StaffAccount): { success: boolean; note?: InternalStaffNote; error?: string } {
+  static async addInternalNote(reportId: string, noteText: string, staff: StaffAccount): Promise<{ success: boolean; note?: InternalStaffNote; error?: string }> {
     try {
       if (!noteText.trim()) return { success: false, error: 'Note cannot be empty.' };
 
-      const reports = this.getReports();
-      const report = reports.find(r => r.id === reportId);
-      if (!report) return { success: false, error: 'Report not found.' };
+      const currentReport = await this.getReportById(reportId);
+      if (!currentReport) return { success: false, error: 'Report not found.' };
 
       const staffName = staff.displayName || staff.fullName;
       const nowStr = new Date().toLocaleString('en-US', {
@@ -802,11 +496,17 @@ export class ReportService {
         timestamp: Date.now()
       };
 
-      if (!report.internalNotes) report.internalNotes = [];
-      report.internalNotes.push(newNote);
-      report.updatedAt = Date.now();
+      const updatedNotes = [...(currentReport.internalNotes || []), newNote];
 
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(reports));
+      const { error } = await supabase
+        .from('reports')
+        .update({
+          internal_notes: updatedNotes,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', reportId);
+
+      if (error) return { success: false, error: error.message };
 
       return { success: true, note: newNote };
     } catch (e: any) {
@@ -817,18 +517,17 @@ export class ReportService {
   /**
    * Resolves a report with an outcome, internal note, user-facing message, and optional linked target action.
    */
-  static resolveReport(params: {
+  static async resolveReport(params: {
     reportId: string;
     outcome: string;
     internalNote?: string;
     userFacingMessage?: string;
     staff: StaffAccount;
     linkedTargetAction?: string;
-  }): { success: boolean; error?: string } {
+  }): Promise<{ success: boolean; error?: string }> {
     try {
-      const reports = this.getReports();
-      const report = reports.find(r => r.id === params.reportId);
-      if (!report) return { success: false, error: 'Report not found.' };
+      const currentReport = await this.getReportById(params.reportId);
+      if (!currentReport) return { success: false, error: 'Report not found.' };
 
       const staffName = params.staff.displayName || params.staff.fullName;
       const nowStr = new Date().toLocaleString('en-US', {
@@ -840,16 +539,9 @@ export class ReportService {
         hour12: true
       });
 
-      report.status = 'resolved';
-      report.resolutionOutcome = params.outcome;
-      report.statusNote = params.internalNote || `Resolved by ${staffName} with outcome: ${params.outcome}.`;
-      if (params.userFacingMessage) report.userFacingMessage = params.userFacingMessage;
-      report.updatedAt = Date.now();
-
-      // Append internal note if provided
+      const updatedNotes = [...(currentReport.internalNotes || [])];
       if (params.internalNote) {
-        if (!report.internalNotes) report.internalNotes = [];
-        report.internalNotes.push({
+        updatedNotes.push({
           id: `note-${Date.now()}`,
           authorId: params.staff.id,
           authorName: staffName,
@@ -860,47 +552,55 @@ export class ReportService {
         });
       }
 
-      // History
-      if (!report.history) report.history = [];
-      report.history.push({
-        id: `hist-${Date.now()}`,
-        action: 'REPORT_RESOLVED',
-        actorName: staffName,
-        actorRole: params.staff.role,
-        details: `Resolved report with outcome: "${params.outcome}".`,
-        createdAt: nowStr,
-        timestamp: Date.now()
-      });
+      const updatedHistory = [
+        ...(currentReport.history || []),
+        {
+          id: `hist-${Date.now()}`,
+          action: 'REPORT_RESOLVED',
+          actorName: staffName,
+          actorRole: params.staff.role,
+          details: `Resolved report with outcome: "${params.outcome}".`,
+          createdAt: nowStr,
+          timestamp: Date.now()
+        }
+      ];
 
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(reports));
+      const { error } = await supabase
+        .from('reports')
+        .update({
+          status: 'resolved',
+          resolution_outcome: params.outcome,
+          status_note: params.internalNote || `Resolved by ${staffName} with outcome: ${params.outcome}.`,
+          user_facing_message: params.userFacingMessage || null,
+          internal_notes: updatedNotes,
+          history: updatedHistory,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', params.reportId);
 
-      // Send safe user-facing notification to reporter
-      const notif: AppNotification = {
-        id: `notif-res-${Date.now()}`,
-        type: 'REPORT_UPDATE',
-        category: 'system',
-        title: 'Report Update 🛡️',
-        body: params.userFacingMessage || `Your report regarding “${report.targetTitle}” has been reviewed and resolved by our Trust & Safety team.`,
-        createdAt: 'Just now',
-        timestamp: Date.now(),
-        read: false,
-        priority: 'normal',
-        entityType: (report.targetModule === 'general' ? 'system' : report.targetModule) as any,
-        entityId: report.targetId,
-        listingId: report.targetId
-      };
-      const existingNotifs = NotificationService.getNotifications();
-      NotificationService.saveNotifications([notif, ...existingNotifs]);
+      if (error) return { success: false, error: error.message };
 
-      // Audit Log
+      // Send user-facing notification to reporter if logged in
+      if (currentReport.reporterId && currentReport.reporterId !== 'guest') {
+        await NotificationService.addNotification({
+          targetUserId: currentReport.reporterId,
+          type: 'REPORT_UPDATE',
+          category: 'system',
+          title: 'Report Update 🛡️',
+          body: params.userFacingMessage || `Your report regarding “${currentReport.targetTitle}” has been reviewed and resolved by our Trust & Safety team.`,
+          entityType: (currentReport.targetModule === 'general' ? 'system' : currentReport.targetModule) as any,
+          entityId: currentReport.targetId
+        });
+      }
+
       AdminService.addAuditLog({
         actorId: params.staff.id,
         actorName: staffName,
         actorRole: params.staff.role,
         action: 'REPORT_RESOLVED',
         targetType: 'report',
-        targetId: report.id,
-        targetTitle: report.targetTitle,
+        targetId: currentReport.id,
+        targetTitle: currentReport.targetTitle,
         details: `Outcome: ${params.outcome}. ${params.linkedTargetAction ? `Linked action: ${params.linkedTargetAction}` : ''}`
       });
 
@@ -913,15 +613,14 @@ export class ReportService {
   /**
    * Dismisses a report (invalid, duplicate, or no violation).
    */
-  static dismissReport(params: {
+  static async dismissReport(params: {
     reportId: string;
     reasonNote: string;
     staff: StaffAccount;
-  }): { success: boolean; error?: string } {
+  }): Promise<{ success: boolean; error?: string }> {
     try {
-      const reports = this.getReports();
-      const report = reports.find(r => r.id === params.reportId);
-      if (!report) return { success: false, error: 'Report not found.' };
+      const currentReport = await this.getReportById(params.reportId);
+      if (!currentReport) return { success: false, error: 'Report not found.' };
 
       const staffName = params.staff.displayName || params.staff.fullName;
       const nowStr = new Date().toLocaleString('en-US', {
@@ -933,14 +632,9 @@ export class ReportService {
         hour12: true
       });
 
-      report.status = 'dismissed';
-      report.statusNote = params.reasonNote || 'Report dismissed as no active violation was found.';
-      report.resolutionOutcome = 'No Violation Found';
-      report.updatedAt = Date.now();
-
+      const updatedNotes = [...(currentReport.internalNotes || [])];
       if (params.reasonNote) {
-        if (!report.internalNotes) report.internalNotes = [];
-        report.internalNotes.push({
+        updatedNotes.push({
           id: `note-${Date.now()}`,
           authorId: params.staff.id,
           authorName: staffName,
@@ -951,18 +645,32 @@ export class ReportService {
         });
       }
 
-      if (!report.history) report.history = [];
-      report.history.push({
-        id: `hist-${Date.now()}`,
-        action: 'REPORT_DISMISSED',
-        actorName: staffName,
-        actorRole: params.staff.role,
-        details: `Dismissed report. Reason: ${params.reasonNote || 'No violation found.'}`,
-        createdAt: nowStr,
-        timestamp: Date.now()
-      });
+      const updatedHistory = [
+        ...(currentReport.history || []),
+        {
+          id: `hist-${Date.now()}`,
+          action: 'REPORT_DISMISSED',
+          actorName: staffName,
+          actorRole: params.staff.role,
+          details: `Dismissed report. Reason: ${params.reasonNote || 'No violation found.'}`,
+          createdAt: nowStr,
+          timestamp: Date.now()
+        }
+      ];
 
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(reports));
+      const { error } = await supabase
+        .from('reports')
+        .update({
+          status: 'dismissed',
+          status_note: params.reasonNote || 'Report dismissed as no active violation was found.',
+          resolution_outcome: 'No Violation Found',
+          internal_notes: updatedNotes,
+          history: updatedHistory,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', params.reportId);
+
+      if (error) return { success: false, error: error.message };
 
       AdminService.addAuditLog({
         actorId: params.staff.id,
@@ -970,8 +678,8 @@ export class ReportService {
         actorRole: params.staff.role,
         action: 'REPORT_DISMISSED',
         targetType: 'report',
-        targetId: report.id,
-        targetTitle: report.targetTitle,
+        targetId: currentReport.id,
+        targetTitle: currentReport.targetTitle,
         details: `Dismissal Note: ${params.reasonNote}`
       });
 
@@ -985,7 +693,7 @@ export class ReportService {
    * Computes chronological activity timeline for report moderation logs.
    */
   static getReportActivities(): { id: string; title: string; actorName: string; timeAgo: string; iconType: string }[] {
-    const reports = this.getReports();
+    const reports = inMemoryReportsCache;
     const activities: { id: string; title: string; actorName: string; timeAgo: string; iconType: string }[] = [];
 
     reports.forEach(r => {

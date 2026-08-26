@@ -109,7 +109,17 @@ export const PostModuleCard: React.FC<PostModuleCardProps> = ({ config, onSelect
 
   return (
     <div 
-      className={`relative flex flex-col justify-between bg-white rounded-3xl p-6 sm:p-7 border-2 ${config.borderColor} ${config.hoverBorderColor} shadow-md hover:shadow-xl transition-all duration-200 group text-left`}
+      onClick={() => onSelect(config.route)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onSelect(config.route);
+        }
+      }}
+      role="button"
+      tabIndex={0}
+      aria-label={`${config.titlePrefix} ${config.titleHighlight}`}
+      className={`relative flex flex-col justify-between bg-white rounded-3xl p-6 sm:p-7 border-2 ${config.borderColor} ${config.hoverBorderColor} shadow-md hover:shadow-xl transition-all duration-200 group text-left cursor-pointer active:scale-[0.99] focus:outline-hidden focus:ring-2 focus:ring-[#1464F4]`}
     >
       {/* Popular Badge if defined */}
       {config.badge && (
@@ -157,8 +167,8 @@ export const PostModuleCard: React.FC<PostModuleCardProps> = ({ config, onSelect
       {/* Bottom CTA Button */}
       <div className="pt-3">
         <button
-          onClick={() => onSelect(config.route)}
-          className={`w-full py-3.5 px-5 rounded-2xl text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg ${config.buttonBg} transition-all duration-150 tap-bounce active:scale-[0.98]`}
+          tabIndex={-1}
+          className={`w-full py-3.5 px-5 rounded-2xl text-white font-bold text-sm flex items-center justify-center gap-2 shadow-lg ${config.buttonBg} transition-all duration-150 tap-bounce active:scale-[0.98] pointer-events-none`}
         >
           <Plus className="w-4 h-4 stroke-[3]" />
           <span>{config.ctaText}</span>

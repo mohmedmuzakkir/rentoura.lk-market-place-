@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { RentouraLogo } from '../components/RentouraLogo';
 import { AuthService } from '../services/authService';
+import { supabase } from '../lib/supabase';
 import { validatePassword } from '../utils/passwordValidator';
 import { AppRoute } from '../types';
 
@@ -29,9 +30,6 @@ export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({
   selectedLanguage = 'English',
   onLanguageChange
 }) => {
-  // Query params parsing
-  const [oobCode, setOobCode] = useState<string>('');
-  
   // Verification states
   const [isVerifyingLink, setIsVerifyingLink] = useState(true);
   const [linkVerified, setLinkVerified] = useState(false);
@@ -57,44 +55,85 @@ export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({
   const passValidation = validatePassword(newPassword);
   const passwordsMatch = newPassword.length > 0 && confirmPassword.length > 0 && newPassword === confirmPassword;
 
-  // On mount, parse URL and verify code
+  // On mount, parse URL and verify Supabase recovery session
   useEffect(() => {
-    const parseAndVerify = async () => {
+    let isMounted = true;
+    let fallbackTimer: NodeJS.Timeout | null = null;
+
+    const verifyRecoverySession = async () => {
       setIsVerifyingLink(true);
       setVerifyError('');
 
-      const searchParams = new URLSearchParams(window.location.search);
-      const codeParam = searchParams.get('oobCode');
-      const modeParam = searchParams.get('mode');
+      // 1. Check if URL contains error flags from Supabase (e.g. #error=unauthorized_client&error_description=...)
+      const hash = window.location.hash || '';
+      const search = window.location.search || '';
+      const searchParams = new URLSearchParams(search);
+      const hashParams = new URLSearchParams(hash.startsWith('#') ? hash.substring(1) : hash);
 
-      // If mode is specified, verify mode === 'resetPassword'
-      if (modeParam && modeParam !== 'resetPassword') {
-        setVerifyError('This link is for a different authentication action. Please request a new password reset link.');
-        setIsVerifyingLink(false);
+      const urlError = searchParams.get('error_description') || 
+                       hashParams.get('error_description') || 
+                       searchParams.get('error') || 
+                       hashParams.get('error');
+
+      if (urlError) {
+        if (isMounted) {
+          const decoded = decodeURIComponent(urlError.replace(/\+/g, ' '));
+          setVerifyError(decoded || 'This password reset link is invalid or has expired.');
+          setLinkVerified(false);
+          setIsVerifyingLink(false);
+        }
         return;
       }
 
-      if (!codeParam) {
-        setVerifyError('Missing reset authorization code. Please check the reset link sent to your email.');
-        setIsVerifyingLink(false);
-        return;
-      }
-
-      setOobCode(codeParam);
-
+      // 2. Check existing session directly
       try {
-        const email = await AuthService.verifyResetCode(codeParam);
-        setAssociatedEmail(email || '');
-        setLinkVerified(true);
-      } catch (err: any) {
-        setVerifyError(err.message || 'This password reset link is invalid or has expired.');
-        setLinkVerified(false);
-      } finally {
-        setIsVerifyingLink(false);
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          if (isMounted) {
+            setAssociatedEmail(session.user?.email || '');
+            setLinkVerified(true);
+            setIsVerifyingLink(false);
+          }
+          return;
+        }
+      } catch (e) {
+        // Fall through to subscription & timer check
       }
+
+      // 3. Fallback timer if session initialization is delayed
+      fallbackTimer = setTimeout(async () => {
+        if (!isMounted) return;
+        const { data: { session: finalSession } } = await supabase.auth.getSession();
+        if (finalSession) {
+          setAssociatedEmail(finalSession.user?.email || '');
+          setLinkVerified(true);
+        } else {
+          setVerifyError('No password reset session detected or your link has expired. Please request a new password reset link.');
+          setLinkVerified(false);
+        }
+        setIsVerifyingLink(false);
+      }, 1200);
     };
 
-    parseAndVerify();
+    // Listen for PASSWORD_RECOVERY event from Supabase auth listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY' || (event === 'SIGNED_IN' && session)) {
+        if (isMounted) {
+          if (fallbackTimer) clearTimeout(fallbackTimer);
+          setAssociatedEmail(session?.user?.email || '');
+          setLinkVerified(true);
+          setIsVerifyingLink(false);
+        }
+      }
+    });
+
+    verifyRecoverySession();
+
+    return () => {
+      isMounted = false;
+      if (fallbackTimer) clearTimeout(fallbackTimer);
+      subscription.unsubscribe();
+    };
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -118,10 +157,19 @@ export const ResetPasswordPage: React.FC<ResetPasswordPageProps> = ({
       return;
     }
 
+    // Email prefix reuse check if email available
+    if (associatedEmail && associatedEmail.includes('@')) {
+      const emailPrefix = associatedEmail.split('@')[0].toLowerCase();
+      if (emailPrefix.length >= 4 && newPassword.toLowerCase().includes(emailPrefix)) {
+        setFormError('Password should not contain your email address for security reasons.');
+        return;
+      }
+    }
+
     setIsSubmitting(true);
 
     try {
-      await AuthService.confirmResetPassword(oobCode, newPassword);
+      await AuthService.updatePasswordFromRecoverySession(newPassword);
       // Clear password values from memory for safety
       setNewPassword('');
       setConfirmPassword('');

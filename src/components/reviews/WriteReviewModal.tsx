@@ -31,18 +31,17 @@ export const WriteReviewModal: React.FC<WriteReviewModalProps> = ({
 }) => {
   const currentUser = AuthService.getCurrentUser();
 
-  // Target context fallback
-  const activeTarget: ReviewTargetContext = targetContext || {
-    id: 'rent-prius-2018',
-    title: 'Toyota Prius Hybrid 2018',
-    imageUrl: 'https://images.unsplash.com/photo-1590362891991-f776e747a588?auto=format&fit=crop&w=800&q=80',
-    location: 'Kandy, Central Province',
-    module: 'rentals',
-    ownerId: 'usr-owner-99',
-    price: 'Rs. 12,500 / Day'
-  };
-
   const isEditing = Boolean(initialReviewToEdit);
+
+  // Derive target context
+  const activeTarget: ReviewTargetContext | null = targetContext || (initialReviewToEdit ? {
+    id: initialReviewToEdit.targetId,
+    title: initialReviewToEdit.targetTitle,
+    imageUrl: initialReviewToEdit.targetImageUrl,
+    location: initialReviewToEdit.targetLocation,
+    module: initialReviewToEdit.targetModule,
+    ownerId: initialReviewToEdit.targetOwnerId
+  } : null);
 
   // Form State
   const [overallRating, setOverallRating] = useState<number>(initialReviewToEdit?.overallRating || 5);
@@ -84,11 +83,21 @@ export const WriteReviewModal: React.FC<WriteReviewModalProps> = ({
   if (!isOpen) return null;
 
   // Self-review guard
-  const isSelfListing = currentUser && activeTarget.ownerId && currentUser.id === activeTarget.ownerId;
+  const isSelfListing = Boolean(currentUser && activeTarget?.ownerId && currentUser.id === activeTarget.ownerId);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
+
+    if (!currentUser) {
+      setErrorMsg('You must be signed in to write a review.');
+      return;
+    }
+
+    if (!activeTarget) {
+      setErrorMsg('Target listing missing. Please select a valid listing to review.');
+      return;
+    }
 
     if (isSelfListing) {
       setErrorMsg('You cannot write a review for your own listing.');
@@ -107,10 +116,10 @@ export const WriteReviewModal: React.FC<WriteReviewModalProps> = ({
 
     setIsSubmitting(true);
 
-    setTimeout(() => {
+    try {
       let result;
       if (isEditing && initialReviewToEdit && currentUser) {
-        result = ReviewService.updateReview(initialReviewToEdit.id, currentUser.id, {
+        result = await ReviewService.updateReview(initialReviewToEdit.id, currentUser.id, {
           overallRating,
           body,
           subratings: {
@@ -122,18 +131,12 @@ export const WriteReviewModal: React.FC<WriteReviewModalProps> = ({
           }
         });
       } else {
-        result = ReviewService.addReview({
-          authorId: currentUser ? currentUser.id : 'usr-guest-user',
-          authorName: currentUser ? ((currentUser as any).displayName || (currentUser as any).fullName || (currentUser as any).name || 'Verified RENTOURA User') : 'Verified User',
-          authorAvatar: (currentUser as any)?.avatarUrl || (currentUser as any)?.avatar,
-          isAuthorVerified: true,
-          targetType: 'listing',
+        result = await ReviewService.addReview({
+          authorId: currentUser.id,
+          authorName: currentUser.user_metadata?.full_name || currentUser.email || 'Community Member',
+          authorAvatar: currentUser.user_metadata?.avatar_url,
           targetId: activeTarget.id,
           targetModule: activeTarget.module,
-          targetTitle: activeTarget.title,
-          targetImageUrl: activeTarget.imageUrl,
-          targetLocation: activeTarget.location,
-          targetOwnerId: activeTarget.ownerId,
           overallRating,
           subratings: {
             communication: commRating,
@@ -155,264 +158,254 @@ export const WriteReviewModal: React.FC<WriteReviewModalProps> = ({
       } else {
         setErrorMsg(result.error || 'Failed to submit review. Please try again.');
       }
-    }, 500);
+    } catch (err: any) {
+      setIsSubmitting(false);
+      setErrorMsg(err?.message || 'An unexpected error occurred.');
+    }
   };
 
-  const starLabels: Record<number, string> = {
-    5: 'Excellent ⭐⭐⭐⭐⭐',
-    4: 'Good ⭐⭐⭐⭐',
-    3: 'Average ⭐⭐⭐',
-    2: 'Below Expectations ⭐⭐',
-    1: 'Poor ⭐'
+  const getRatingLabel = (score: number) => {
+    if (score >= 5) return 'Excellent (5.0)';
+    if (score >= 4) return 'Good (4.0)';
+    if (score >= 3) return 'Average (3.0)';
+    if (score >= 2) return 'Below Expectations (2.0)';
+    return 'Poor (1.0)';
   };
-
-  // Module Badge styling
-  const moduleBadge = {
-    rentals: { label: 'RENTAL', bg: 'bg-[#1464F4]/10 text-[#1464F4]', icon: Building },
-    jobs: { label: 'JOB', bg: 'bg-[#08A34F]/10 text-[#08A34F]', icon: Briefcase },
-    services: { label: 'SERVICE', bg: 'bg-[#FF650A]/10 text-[#FF650A]', icon: Wrench }
-  }[activeTarget.module];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
       <div 
-        className="bg-white rounded-3xl shadow-2xl border border-slate-100 w-full max-w-xl max-h-[92vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
+        className="bg-white rounded-3xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-100 p-6 space-y-6"
         onClick={(e) => e.stopPropagation()}
       >
-        
-        {/* HEADER */}
-        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center font-bold">
-              <Star className="w-4 h-4 fill-amber-500 text-amber-500" />
-            </div>
-            <div>
-              <h2 className="text-sm font-bold text-[#041C43]">
-                {isEditing ? 'Edit Your Review' : 'Write a Review'}
-              </h2>
-              <p className="text-[11px] text-slate-400 font-medium">
-                Share genuine feedback to help our community
-              </p>
-            </div>
+        {/* Header */}
+        <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+          <div>
+            <span className="text-[10px] font-bold tracking-widest text-[#1464F4] uppercase">
+              {isEditing ? 'Edit Your Review' : 'Community Review'}
+            </span>
+            <h3 className="text-lg font-black text-[#041C43] font-heading">
+              {isEditing ? 'Update Review' : 'Write a Review'}
+            </h3>
           </div>
-
           <button
-            type="button"
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition-colors"
+            className="p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
           >
-            <X className="w-4 h-4" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* BODY FORM */}
-        <form onSubmit={handleSubmit} className="p-5 overflow-y-auto space-y-5 flex-1 custom-scrollbar">
-
-          {/* TARGET CONTEXT CARD */}
+        {/* Target Context Summary Card */}
+        {activeTarget ? (
           <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-center gap-3">
-            {activeTarget.imageUrl && (
+            {activeTarget.imageUrl ? (
               <img
                 src={activeTarget.imageUrl}
                 alt={activeTarget.title}
-                className="w-14 h-14 rounded-xl object-cover shrink-0 border border-slate-200 shadow-xs"
+                className="w-14 h-14 rounded-xl object-cover shrink-0 border border-slate-200"
               />
+            ) : (
+              <div className="w-14 h-14 rounded-xl bg-slate-200 flex items-center justify-center shrink-0">
+                <Building className="w-6 h-6 text-slate-400" />
+              </div>
             )}
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5 mb-0.5">
-                <span className={`text-[9px] font-black px-2 py-0.5 rounded-md ${moduleBadge.bg}`}>
-                  {moduleBadge.label}
-                </span>
-                {activeTarget.location && (
-                  <span className="text-[10px] text-slate-400 truncate">
-                    📍 {activeTarget.location}
-                  </span>
-                )}
+              <div className="text-[10px] font-bold text-[#1464F4] uppercase tracking-wider">
+                {activeTarget.module}
               </div>
-              <h3 className="text-xs font-bold text-[#041C43] truncate">
+              <h4 className="text-xs font-bold text-slate-900 truncate">
                 {activeTarget.title}
-              </h3>
-              {activeTarget.price && (
-                <p className="text-[11px] font-black text-[#1464F4]">
-                  {activeTarget.price}
+              </h4>
+              {activeTarget.location && (
+                <p className="text-[11px] text-slate-500 truncate">
+                  📍 {activeTarget.location}
                 </p>
               )}
             </div>
           </div>
+        ) : (
+          <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-xs text-amber-800">
+            No specific listing selected. Please open a listing page to leave a targeted review.
+          </div>
+        )}
 
-          {/* ERROR ALERT */}
-          {errorMsg && (
-            <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-medium flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-              <span>{errorMsg}</span>
-            </div>
-          )}
+        {/* Error Alert */}
+        {errorMsg && (
+          <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-xs text-rose-700 font-medium flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+            <span>{errorMsg}</span>
+          </div>
+        )}
 
-          {/* SELF LISTING WARNING */}
-          {isSelfListing && (
-            <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-medium flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-              <span>You cannot review a listing that you published.</span>
-            </div>
-          )}
-
-          {/* OVERALL RATING SELECTOR */}
-          <div className="bg-blue-50/50 rounded-2xl p-4 border border-blue-100/80 text-center space-y-2">
-            <label className="text-xs font-bold text-[#041C43] block">
-              Overall Rating <span className="text-rose-500">*</span>
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="space-y-5">
+          {/* Overall Star Rating */}
+          <div className="space-y-2 text-center py-2 bg-slate-50 rounded-2xl border border-slate-100">
+            <label className="text-xs font-bold text-slate-700 block">
+              Overall Experience Rating *
             </label>
-
-            {/* Interactive Stars */}
-            <div className="flex items-center justify-center gap-1.5 py-1">
-              {[1, 2, 3, 4, 5].map((star) => {
-                const isActive = (hoverRating || overallRating) >= star;
-                return (
-                  <button
-                    key={star}
-                    type="button"
-                    onMouseEnter={() => setHoverRating(star)}
-                    onMouseLeave={() => setHoverRating(0)}
-                    onClick={() => setOverallRating(star)}
-                    className="p-1 transition-transform hover:scale-125 focus:outline-none tap-bounce"
-                    aria-label={`Rate ${star} star${star > 1 ? 's' : ''}`}
-                  >
-                    <Star className={`w-8 h-8 transition-colors ${
-                      isActive ? 'fill-amber-400 text-amber-400 drop-shadow-xs' : 'text-slate-300'
-                    }`} />
-                  </button>
-                );
-              })}
+            <div className="flex justify-center gap-1.5 py-1">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <button
+                  type="button"
+                  key={star}
+                  onMouseEnter={() => setHoverRating(star)}
+                  onMouseLeave={() => setHoverRating(0)}
+                  onClick={() => setOverallRating(star)}
+                  className="p-1 transition-transform active:scale-95 focus:outline-none"
+                >
+                  <Star
+                    className={`w-7 h-7 transition-colors ${
+                      star <= (hoverRating || overallRating)
+                        ? 'fill-amber-400 text-amber-400'
+                        : 'text-slate-300 hover:text-amber-200'
+                    }`}
+                  />
+                </button>
+              ))}
             </div>
-
             <div className="text-xs font-bold text-[#1464F4]">
-              {starLabels[hoverRating || overallRating]}
+              {getRatingLabel(hoverRating || overallRating)}
             </div>
           </div>
 
-          {/* CATEGORY SUBRATINGS */}
-          <div className="space-y-3 pt-1">
-            <h4 className="text-xs font-bold text-[#041C43]">
-              Category Breakdown Ratings
-            </h4>
+          {/* Subratings Slider / Star Pickers */}
+          <div className="space-y-3">
+            <span className="text-xs font-bold text-slate-700 block">
+              Detailed Criteria Ratings
+            </span>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-              
+            <div className="space-y-2.5 text-xs">
               {/* Communication */}
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between">
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-100">
                 <span className="font-semibold text-slate-700">Communication</span>
-                <div className="flex gap-1">
-                  {[1, 2, 3, 4, 5].map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => setCommRating(s)}
-                      className="p-0.5"
-                    >
-                      <Star className={`w-4 h-4 ${s <= commRating ? 'fill-amber-400 text-amber-400' : 'text-slate-300'}`} />
-                    </button>
+                <div className="flex items-center gap-1">
+                  {[1, 2, 3, 4, 5].map((st) => (
+                    <Star
+                      key={st}
+                      onClick={() => setCommRating(st)}
+                      className={`w-4 h-4 cursor-pointer ${
+                        st <= commRating ? 'fill-amber-400 text-amber-400' : 'text-slate-300'
+                      }`}
+                    />
                   ))}
                 </div>
               </div>
 
               {/* Accuracy / Quality */}
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between">
-                <span className="font-semibold text-slate-700">
-                  {activeTarget.module === 'services' ? 'Service Quality' : 'Listing Accuracy'}
-                </span>
-                <div className="flex gap-1">
-                  {[1, 2, 3, 4, 5].map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => setAccuracyRating(s)}
-                      className="p-0.5"
-                    >
-                      <Star className={`w-4 h-4 ${s <= accuracyRating ? 'fill-amber-400 text-amber-400' : 'text-slate-300'}`} />
-                    </button>
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-100">
+                <span className="font-semibold text-slate-700">Accuracy & Quality</span>
+                <div className="flex items-center gap-1">
+                  {[1, 2, 3, 4, 5].map((st) => (
+                    <Star
+                      key={st}
+                      onClick={() => setAccuracyRating(st)}
+                      className={`w-4 h-4 cursor-pointer ${
+                        st <= accuracyRating ? 'fill-amber-400 text-amber-400' : 'text-slate-300'
+                      }`}
+                    />
                   ))}
                 </div>
               </div>
 
               {/* Condition / Professionalism */}
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between">
-                <span className="font-semibold text-slate-700">
-                  {activeTarget.module === 'services' ? 'Professionalism' : 'Item Condition'}
-                </span>
-                <div className="flex gap-1">
-                  {[1, 2, 3, 4, 5].map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => setConditionRating(s)}
-                      className="p-0.5"
-                    >
-                      <Star className={`w-4 h-4 ${s <= conditionRating ? 'fill-amber-400 text-amber-400' : 'text-slate-300'}`} />
-                    </button>
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-100">
+                <span className="font-semibold text-slate-700">Condition & Professionalism</span>
+                <div className="flex items-center gap-1">
+                  {[1, 2, 3, 4, 5].map((st) => (
+                    <Star
+                      key={st}
+                      onClick={() => setConditionRating(st)}
+                      className={`w-4 h-4 cursor-pointer ${
+                        st <= conditionRating ? 'fill-amber-400 text-amber-400' : 'text-slate-300'
+                      }`}
+                    />
                   ))}
                 </div>
               </div>
 
               {/* Value for Money */}
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-between">
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-100">
                 <span className="font-semibold text-slate-700">Value for Money</span>
-                <div className="flex gap-1">
-                  {[1, 2, 3, 4, 5].map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => setValueRating(s)}
-                      className="p-0.5"
-                    >
-                      <Star className={`w-4 h-4 ${s <= valueRating ? 'fill-amber-400 text-amber-400' : 'text-slate-300'}`} />
-                    </button>
+                <div className="flex items-center gap-1">
+                  {[1, 2, 3, 4, 5].map((st) => (
+                    <Star
+                      key={st}
+                      onClick={() => setValueRating(st)}
+                      className={`w-4 h-4 cursor-pointer ${
+                        st <= valueRating ? 'fill-amber-400 text-amber-400' : 'text-slate-300'
+                      }`}
+                    />
                   ))}
                 </div>
               </div>
 
+              {/* Timeliness */}
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 border border-slate-100">
+                <span className="font-semibold text-slate-700">Timeliness & Punctuality</span>
+                <div className="flex items-center gap-1">
+                  {[1, 2, 3, 4, 5].map((st) => (
+                    <Star
+                      key={st}
+                      onClick={() => setTimeRating(st)}
+                      className={`w-4 h-4 cursor-pointer ${
+                        st <= timeRating ? 'fill-amber-400 text-amber-400' : 'text-slate-300'
+                      }`}
+                    />
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* REVIEW TEXT AREA */}
-          <div className="space-y-1.5 pt-1">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-[#041C43]">
-                Your Review <span className="text-rose-500">*</span>
+          {/* Written Review Textarea */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between text-xs">
+              <label className="font-bold text-slate-700">
+                Your Written Review *
               </label>
-              <span className="text-[10px] font-bold text-slate-400">
+              <span className={`font-medium ${body.length > 1000 ? 'text-rose-600' : 'text-slate-400'}`}>
                 {body.length} / 1000
               </span>
             </div>
-
             <textarea
               rows={4}
-              maxLength={1000}
               value={body}
               onChange={(e) => setBody(e.target.value)}
-              placeholder="Tell others about your experience... Was it as described? How was communication and timeliness?"
-              className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:border-[#1464F4] transition-all resize-none"
+              placeholder="Describe your experience with this listing (condition, punctuality, owner communication, overall satisfaction)..."
+              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs text-slate-800 focus:outline-none focus:border-[#1464F4] focus:bg-white transition-all resize-none font-medium"
             />
+            <p className="text-[11px] text-slate-400 italic">
+              Reviews are public to the RENTOURA.LK community. Please maintain respectful standards.
+            </p>
           </div>
 
-          {/* SUBMIT BUTTON */}
-          <div className="pt-2">
+          {/* Actions */}
+          <div className="flex items-center justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isSubmitting}
+              className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs hover:bg-slate-50 transition-colors"
+            >
+              Cancel
+            </button>
             <button
               type="submit"
-              disabled={isSubmitting || isSelfListing}
-              className="w-full py-3.5 rounded-2xl bg-[#1464F4] hover:bg-blue-600 text-white font-bold text-xs shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2 transition-all tap-bounce disabled:opacity-50"
+              disabled={isSubmitting || isSelfListing || !activeTarget}
+              className="px-6 py-2.5 rounded-xl bg-[#1464F4] text-white font-bold text-xs hover:bg-blue-600 shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
               {isSubmitting ? (
                 <>
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                   <span>Submitting...</span>
                 </>
               ) : (
-                <>
-                  <Sparkles className="w-4 h-4" />
-                  <span>{isEditing ? 'Save Changes' : 'Publish Review'}</span>
-                </>
+                <span>{isEditing ? 'Update Review' : 'Submit Review'}</span>
               )}
             </button>
           </div>
-
         </form>
       </div>
     </div>

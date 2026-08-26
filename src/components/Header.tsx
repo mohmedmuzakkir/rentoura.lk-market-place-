@@ -21,8 +21,8 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenDrawer,
   onOpenNotifications,
   savedCount = 0,
-  unreadMessagesCount = 2,
-  unreadNotificationsCount = 5,
+  unreadMessagesCount = 0,
+  unreadNotificationsCount = 0,
   userProfile
 }) => {
   const isMobileHiddenRoute = 

@@ -16,11 +16,11 @@ export const ServiceContactStep: React.FC<ServiceContactStepProps> = ({
   accentColor = '#FF650A'
 }) => {
   const contact = draft.contactPreferences || {
-    contactName: 'Muzakkir M.',
+    contactName: '',
     showPhone: true,
-    phone: '077 123 4567',
-    showWhatsApp: true,
-    whatsappNumber: '077 123 4567',
+    phone: '',
+    showWhatsApp: false,
+    whatsappNumber: '',
     allowDirectChat: true
   };
 

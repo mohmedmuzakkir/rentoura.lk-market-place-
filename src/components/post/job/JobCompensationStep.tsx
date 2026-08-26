@@ -16,10 +16,10 @@ export const JobCompensationStep: React.FC<JobCompensationStepProps> = ({
   accentColor = '#08A34F'
 }) => {
   const salaryStructure = draft.formValues.salaryStructure || 'monthly-range';
-  const minSalary = draft.formValues.minSalary !== undefined ? draft.formValues.minSalary : 120000;
-  const maxSalary = draft.formValues.maxSalary !== undefined ? draft.formValues.maxSalary : 180000;
+  const minSalary = draft.formValues.minSalary !== undefined ? draft.formValues.minSalary : 0;
+  const maxSalary = draft.formValues.maxSalary !== undefined ? draft.formValues.maxSalary : 0;
   const showSalary = draft.formValues.showSalary !== undefined ? draft.formValues.showSalary : true;
-  const benefitsList: string[] = Array.isArray(draft.formValues.benefits) ? draft.formValues.benefits : ['meals', 'transport', 'insurance'];
+  const benefitsList: string[] = Array.isArray(draft.formValues.benefits) ? draft.formValues.benefits : [];
 
   const updateFormValue = (key: string, val: any) => {
     onChange({

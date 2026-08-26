@@ -19,19 +19,26 @@ import {
   Calendar,
   Sparkles,
   Paperclip,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Loader2
 } from 'lucide-react';
 import { RentouraLogo } from '../components/RentouraLogo';
 import { AppRoute } from '../types';
 import { Conversation, ChatMessage } from '../types/messagesTypes';
+import { MessagingService } from '../services/messagingService';
 
 interface ChatPageProps {
   conversation: Conversation;
   onBack: () => void;
   onNavigate: (route: AppRoute) => void;
   onOpenListingDetail: (id: string, module?: 'rentals' | 'jobs' | 'services') => void;
-  onSendMessage: (conversationId: string, text: string, type?: 'text' | 'location' | 'contact') => void;
+  onSendMessage: (conversationId: string, text: string, type?: 'text' | 'location' | 'contact' | 'image') => void;
   notificationCount?: number;
+  userProfile?: any;
+  onRefreshMessages?: () => void;
+  onToggleMute?: (conversationId: string, isMuted: boolean) => void;
+  onToggleArchive?: (conversationId: string, isArchived: boolean) => void;
+  onMarkUnread?: (conversationId: string) => void;
 }
 
 export const ChatPage: React.FC<ChatPageProps> = ({
@@ -40,7 +47,12 @@ export const ChatPage: React.FC<ChatPageProps> = ({
   onNavigate,
   onOpenListingDetail,
   onSendMessage,
-  notificationCount = 3
+  notificationCount = 3,
+  userProfile,
+  onRefreshMessages,
+  onToggleMute,
+  onToggleArchive,
+  onMarkUnread
 }) => {
   const [inputText, setInputText] = useState('');
   const [activeTab, setActiveTab] = useState<'chat' | 'details' | 'user'>('chat');
@@ -48,7 +60,23 @@ export const ChatPage: React.FC<ChatPageProps> = ({
   const [messageSearch, setMessageSearch] = useState('');
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
   const [showUserInfoModal, setShowUserInfoModal] = useState(false);
+  const [showShareContactModal, setShowShareContactModal] = useState(false);
+  const [contactPhoneInput, setContactPhoneInput] = useState(userProfile?.phone_normalized || userProfile?.phone || '');
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Real-time subscription to message updates
+  useEffect(() => {
+    if (conversation?.id) {
+      const unsub = MessagingService.subscribeToMessages(conversation.id, () => {
+        onRefreshMessages?.();
+      });
+      return () => {
+        unsub();
+      };
+    }
+  }, [conversation?.id, onRefreshMessages]);
 
   // Auto scroll to bottom of messages
   const scrollToBottom = () => {
@@ -70,19 +98,85 @@ export const ChatPage: React.FC<ChatPageProps> = ({
   };
 
   const handleSendLocation = () => {
-    onSendMessage(
-      conversation.id, 
-      `📍 Shared Location: ${conversation.listing.location || 'Kandy City Center, Sri Lanka'}`, 
-      'location'
-    );
+    if ('geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const lat = pos.coords.latitude.toFixed(4);
+          const lng = pos.coords.longitude.toFixed(4);
+          onSendMessage(
+            conversation.id, 
+            `📍 Shared Location: https://maps.google.com/?q=${lat},${lng}`, 
+            'location'
+          );
+        },
+        () => {
+          if (conversation.listing.location && conversation.listing.location !== 'Sri Lanka') {
+            onSendMessage(
+              conversation.id, 
+              `📍 Location regarding listing: ${conversation.listing.location}`, 
+              'location'
+            );
+          } else {
+            const userLoc = prompt('Enter location or landmark to share:');
+            if (userLoc && userLoc.trim()) {
+              onSendMessage(conversation.id, `📍 Shared Location: ${userLoc.trim()}`, 'location');
+            }
+          }
+        }
+      );
+    } else if (conversation.listing.location) {
+      onSendMessage(
+        conversation.id, 
+        `📍 Location regarding listing: ${conversation.listing.location}`, 
+        'location'
+      );
+    }
   };
 
-  const handleShareContact = () => {
+  const handleConfirmShareContact = () => {
+    const phoneToShare = contactPhoneInput.trim() || userProfile?.phone_normalized || userProfile?.phone;
+    if (!phoneToShare) {
+      alert('Please enter a valid contact number to share.');
+      return;
+    }
     onSendMessage(
       conversation.id, 
-      `📞 Contact Number: +94 77 123 4567 (Verified Rentoura User)`, 
+      `📞 Contact Number: ${phoneToShare}`, 
       'contact'
     );
+    setShowShareContactModal(false);
+  };
+
+  const handleImageUploadChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      alert('Please select a valid image file (JPEG, PNG, WEBP).');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Image file size must be smaller than 5 MB.');
+      return;
+    }
+
+    setIsUploadingImage(true);
+    try {
+      const signedUrl = await MessagingService.uploadAttachment(conversation.id, file);
+      if (signedUrl) {
+        onSendMessage(conversation.id, signedUrl, 'image');
+      } else {
+        alert('Could not upload image attachment. Storage bucket security policy requirement.');
+      }
+    } catch (err: any) {
+      alert('Failed to upload image. Please try again.');
+    } finally {
+      setIsUploadingImage(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -330,6 +424,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({
 
             {filteredMessages.map((msg) => {
               const isMe = msg.sender === 'me';
+              const isImageMsg = msg.type === 'image' || (typeof msg.text === 'string' && (msg.text.startsWith('http://') || msg.text.startsWith('https://')) && (msg.text.includes('.png') || msg.text.includes('.jpg') || msg.text.includes('.jpeg') || msg.text.includes('.webp') || msg.text.includes('token=') || msg.text.includes('supabase')));
               return (
                 <div
                   key={msg.id}
@@ -358,7 +453,19 @@ export const ChatPage: React.FC<ChatPageProps> = ({
                         : 'bg-slate-100/90 border border-slate-200/70 text-slate-900 rounded-bl-xs'
                     }`}
                   >
-                    <p className="whitespace-pre-wrap font-medium">{msg.text}</p>
+                    {isImageMsg ? (
+                      <div className="mt-0.5 space-y-1">
+                        <img
+                          src={msg.text}
+                          alt="Attachment image"
+                          className="max-w-xs max-h-60 rounded-xl object-cover border border-slate-200/80 cursor-pointer hover:opacity-95 transition-opacity"
+                          onClick={() => window.open(msg.text, '_blank')}
+                        />
+                        <span className="text-[10px] text-slate-500 block italic">Click image to view full resolution</span>
+                      </div>
+                    ) : (
+                      <p className="whitespace-pre-wrap font-medium">{msg.text}</p>
+                    )}
                     <div
                       className={`flex items-center gap-1 text-[9.5px] mt-1 ${
                         isMe ? 'justify-end text-[#1464F4]/80' : 'text-slate-400'
@@ -385,7 +492,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({
                 <MapPin className="w-3 h-3" /> Send location
               </button>
               <button
-                onClick={handleShareContact}
+                onClick={() => setShowShareContactModal(true)}
                 className="px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-[#08A34F] text-[11px] font-bold border border-emerald-200/60 whitespace-nowrap tap-bounce flex items-center gap-1"
               >
                 <Phone className="w-3 h-3" /> Share contact
@@ -410,6 +517,15 @@ export const ChatPage: React.FC<ChatPageProps> = ({
         </div>
       </main>
 
+      {/* Hidden File Input for Image Uploads */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        className="hidden"
+        accept="image/jpeg,image/png,image/webp,image/gif"
+        onChange={handleImageUploadChange}
+      />
+
       {/* Sticky Message Composer matching Image 3 */}
       <footer className="sticky bottom-0 z-30 bg-white border-t border-slate-200/90 px-3 sm:px-4 py-3 pb-6 sm:pb-4 shadow-lg">
         <div className="max-w-4xl mx-auto flex items-center gap-2">
@@ -417,15 +533,16 @@ export const ChatPage: React.FC<ChatPageProps> = ({
           <div className="relative">
             <button
               onClick={() => setShowAttachmentMenu(!showAttachmentMenu)}
-              className="w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors tap-bounce shrink-0"
+              disabled={isUploadingImage}
+              className="w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors tap-bounce shrink-0 disabled:opacity-50"
               aria-label="Add attachment"
             >
-              <Plus className="w-5 h-5" />
+              {isUploadingImage ? <Loader2 className="w-5 h-5 animate-spin text-[#1464F4]" /> : <Plus className="w-5 h-5" />}
             </button>
 
             {/* Attachment popover */}
             {showAttachmentMenu && (
-              <div className="absolute bottom-12 left-0 bg-white rounded-2xl p-2 shadow-xl border border-slate-200 w-44 space-y-1 z-50 animate-in fade-in slide-in-from-bottom-2">
+              <div className="absolute bottom-12 left-0 bg-white rounded-2xl p-2 shadow-xl border border-slate-200 w-48 space-y-1 z-50 animate-in fade-in slide-in-from-bottom-2">
                 <button
                   onClick={() => {
                     handleSendLocation();
@@ -437,7 +554,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({
                 </button>
                 <button
                   onClick={() => {
-                    handleShareContact();
+                    setShowShareContactModal(true);
                     setShowAttachmentMenu(false);
                   }}
                   className="w-full px-3 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 rounded-xl flex items-center gap-2"
@@ -446,12 +563,12 @@ export const ChatPage: React.FC<ChatPageProps> = ({
                 </button>
                 <button
                   onClick={() => {
-                    onSendMessage(conversation.id, '📷 [Photo attachment]', 'text');
+                    fileInputRef.current?.click();
                     setShowAttachmentMenu(false);
                   }}
                   className="w-full px-3 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 rounded-xl flex items-center gap-2"
                 >
-                  <ImageIcon className="w-4 h-4 text-purple-500" /> Send Photo
+                  <ImageIcon className="w-4 h-4 text-purple-500" /> Upload Image
                 </button>
               </div>
             )}
@@ -464,8 +581,9 @@ export const ChatPage: React.FC<ChatPageProps> = ({
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Type a message..."
-              className="w-full pl-3.5 pr-10 py-2.5 bg-slate-100 rounded-xl text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#1464F4]/30 border border-slate-200"
+              placeholder={isUploadingImage ? "Uploading image..." : "Type a message..."}
+              disabled={isUploadingImage}
+              className="w-full pl-3.5 pr-10 py-2.5 bg-slate-100 rounded-xl text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#1464F4]/30 border border-slate-200 disabled:opacity-60"
             />
             <button
               onClick={() => setInputText(prev => prev + ' 😊')}
@@ -480,22 +598,71 @@ export const ChatPage: React.FC<ChatPageProps> = ({
           {inputText.trim() ? (
             <button
               onClick={handleSend}
-              className="w-10 h-10 rounded-xl bg-[#1464F4] text-white flex items-center justify-center hover:bg-blue-600 transition-colors shadow-xs tap-bounce shrink-0"
+              disabled={isUploadingImage}
+              className="w-10 h-10 rounded-xl bg-[#1464F4] text-white flex items-center justify-center hover:bg-blue-600 transition-colors shadow-xs tap-bounce shrink-0 disabled:opacity-50"
               aria-label="Send message"
             >
               <Send className="w-4.5 h-4.5" />
             </button>
           ) : (
             <button
-              onClick={() => onSendMessage(conversation.id, '🎤 [Voice message: 0:04]', 'text')}
+              onClick={() => alert('Voice recording is coming soon.')}
               className="w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors tap-bounce shrink-0"
               aria-label="Record voice note"
+              title="Voice recording coming soon"
             >
               <Mic className="w-4.5 h-4.5" />
             </button>
           )}
         </div>
       </footer>
+
+      {/* Share Contact Confirmation Modal */}
+      {showShareContactModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-5 max-w-sm w-full space-y-4 shadow-2xl animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="font-bold text-slate-900 text-base font-heading">Share Contact Info</h3>
+              <button
+                onClick={() => setShowShareContactModal(false)}
+                className="w-7 h-7 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Confirm your phone number to share with <strong>{conversation.participant.name}</strong>.
+            </p>
+
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-bold text-slate-700">Phone Number</label>
+              <input
+                type="text"
+                value={contactPhoneInput}
+                onChange={(e) => setContactPhoneInput(e.target.value)}
+                placeholder="+94 77 000 0000"
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-[#1464F4]/30 focus:outline-none"
+              />
+            </div>
+
+            <div className="flex items-center gap-2 pt-2">
+              <button
+                onClick={() => setShowShareContactModal(false)}
+                className="flex-1 py-2.5 px-3 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold hover:bg-slate-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmShareContact}
+                className="flex-1 py-2.5 px-3 rounded-xl bg-[#08A34F] text-white text-xs font-bold hover:bg-emerald-600 shadow-xs"
+              >
+                Share Contact
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* User Info & Options Modal */}
       {showUserInfoModal && (
@@ -526,9 +693,11 @@ export const ChatPage: React.FC<ChatPageProps> = ({
               <div>
                 <h4 className="font-bold text-slate-900 text-sm">{conversation.participant.name}</h4>
                 <div className="text-xs text-slate-500">{conversation.participant.memberSince}</div>
-                <div className="text-xs text-emerald-600 font-semibold flex items-center gap-1 mt-0.5">
-                  <ShieldCheck className="w-3.5 h-3.5" /> Verified User
-                </div>
+                {conversation.participant.verified && (
+                  <div className="text-xs text-emerald-600 font-semibold flex items-center gap-1 mt-0.5">
+                    <ShieldCheck className="w-3.5 h-3.5" /> Verified User
+                  </div>
+                )}
               </div>
             </div>
 
@@ -551,6 +720,40 @@ export const ChatPage: React.FC<ChatPageProps> = ({
                   <Phone className="w-4 h-4" /> Call: {conversation.participant.phone}
                 </a>
               )}
+
+              <div className="pt-2 border-t border-slate-100 flex flex-col gap-1.5">
+                <button
+                  onClick={() => {
+                    onToggleMute?.(conversation.id, !conversation.isMuted);
+                    setShowUserInfoModal(false);
+                  }}
+                  className="w-full py-2 px-3 rounded-lg text-slate-700 bg-slate-100 hover:bg-slate-200 text-xs font-medium flex items-center justify-center gap-1.5"
+                >
+                  <Bell className="w-3.5 h-3.5" /> {conversation.isMuted ? 'Unmute Conversation' : 'Mute Notifications'}
+                </button>
+
+                <button
+                  onClick={() => {
+                    onToggleArchive?.(conversation.id, !(conversation as any).isArchived);
+                    setShowUserInfoModal(false);
+                    onBack();
+                  }}
+                  className="w-full py-2 px-3 rounded-lg text-slate-700 bg-slate-100 hover:bg-slate-200 text-xs font-medium flex items-center justify-center gap-1.5"
+                >
+                  <Info className="w-3.5 h-3.5 text-amber-500" /> Archive Conversation
+                </button>
+
+                <button
+                  onClick={() => {
+                    onMarkUnread?.(conversation.id);
+                    setShowUserInfoModal(false);
+                    onBack();
+                  }}
+                  className="w-full py-2 px-3 rounded-lg text-slate-700 bg-slate-100 hover:bg-slate-200 text-xs font-medium flex items-center justify-center gap-1.5"
+                >
+                  <CheckCheck className="w-3.5 h-3.5 text-[#1464F4]" /> Mark as Unread
+                </button>
+              </div>
             </div>
           </div>
         </div>

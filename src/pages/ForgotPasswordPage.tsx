@@ -304,6 +304,17 @@ export const ForgotPasswordPage: React.FC<ForgotPasswordPageProps> = ({
 
                 <button
                   type="button"
+                  onClick={() => {
+                    setIsSuccess(false);
+                    setEmailError('');
+                  }}
+                  className="w-full py-2.5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all tap-bounce"
+                >
+                  Change Email Address
+                </button>
+
+                <button
+                  type="button"
                   onClick={() => onNavigate('/login')}
                   className="w-full py-3 rounded-2xl bg-[#1464F4] hover:bg-blue-600 active:bg-blue-700 text-white text-xs font-bold shadow-md shadow-blue-500/20 flex items-center justify-center gap-1.5 transition-all tap-bounce"
                 >
@@ -444,7 +455,7 @@ export const ForgotPasswordPage: React.FC<ForgotPasswordPageProps> = ({
               <p className="text-[10px] text-slate-400">Still having trouble? We're here to help.</p>
               <button
                 type="button"
-                onClick={() => onNavigate('/notifications')}
+                onClick={() => onNavigate('/help')}
                 className="text-[10px] font-bold text-[#1464F4] hover:underline mt-0.5 inline-block"
               >
                 Contact Support →

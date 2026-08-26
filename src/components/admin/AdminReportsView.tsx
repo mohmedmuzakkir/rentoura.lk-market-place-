@@ -83,8 +83,8 @@ export const AdminReportsView: React.FC<AdminReportsViewProps> = ({
   const [feedbackBanner, setFeedbackBanner] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
 
   // Reload data
-  const refreshData = () => {
-    const updated = ReportService.getReports();
+  const refreshData = async () => {
+    const updated = await ReportService.fetchReports();
     setReports(updated);
     if (selectedReport) {
       const refreshedSelected = updated.find(r => r.id === selectedReport.id);
@@ -172,8 +172,8 @@ export const AdminReportsView: React.FC<AdminReportsViewProps> = ({
   }, [filteredReports, currentPage, rowsPerPage]);
 
   // Action Handlers
-  const handleMarkUnderReview = (report: ListingReport) => {
-    const res = ReportService.updateReportStatus({
+  const handleMarkUnderReview = async (report: ListingReport) => {
+    const res = await ReportService.updateReportStatus({
       reportId: report.id,
       status: 'under_review',
       statusNote: `Marked under active review by ${staff.displayName || staff.fullName}.`,
@@ -184,17 +184,17 @@ export const AdminReportsView: React.FC<AdminReportsViewProps> = ({
 
     if (res.success) {
       triggerBanner('success', `Report #${report.id} marked as Under Review.`);
-      refreshData();
+      await refreshData();
     } else {
       triggerBanner('error', res.error || 'Failed to update report status.');
     }
   };
 
-  const handleConfirmResolve = (e: React.FormEvent) => {
+  const handleConfirmResolve = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedReport) return;
 
-    const res = ReportService.resolveReport({
+    const res = await ReportService.resolveReport({
       reportId: selectedReport.id,
       outcome: resolutionOutcome,
       internalNote: resolutionInternalNote,
@@ -214,17 +214,17 @@ export const AdminReportsView: React.FC<AdminReportsViewProps> = ({
       setResolutionInternalNote('');
       setResolutionUserMessage('');
       setTriggerLinkedTargetAction(false);
-      refreshData();
+      await refreshData();
     } else {
       triggerBanner('error', res.error || 'Failed to resolve report.');
     }
   };
 
-  const handleConfirmDismiss = (e: React.FormEvent) => {
+  const handleConfirmDismiss = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedReport) return;
 
-    const res = ReportService.dismissReport({
+    const res = await ReportService.dismissReport({
       reportId: selectedReport.id,
       reasonNote: dismissReason,
       staff
@@ -234,35 +234,35 @@ export const AdminReportsView: React.FC<AdminReportsViewProps> = ({
       triggerBanner('info', `Report #${selectedReport.id} dismissed.`);
       setShowDismissModal(false);
       setDismissReason('');
-      refreshData();
+      await refreshData();
     } else {
       triggerBanner('error', res.error || 'Failed to dismiss report.');
     }
   };
 
-  const handleConfirmAssign = (e: React.FormEvent) => {
+  const handleConfirmAssign = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedReport) return;
 
-    const res = ReportService.assignReport(selectedReport.id, staff, selectedAssignee);
+    const res = await ReportService.assignReport(selectedReport.id, staff, selectedAssignee);
     if (res.success) {
       triggerBanner('success', `Report #${selectedReport.id} assigned to ${selectedAssignee}.`);
       setShowAssignModal(false);
-      refreshData();
+      await refreshData();
     } else {
       triggerBanner('error', res.error || 'Assignment failed.');
     }
   };
 
-  const handleAddInternalNote = (e: React.FormEvent) => {
+  const handleAddInternalNote = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedReport || !newInternalNote.trim()) return;
 
-    const res = ReportService.addInternalNote(selectedReport.id, newInternalNote, staff);
+    const res = await ReportService.addInternalNote(selectedReport.id, newInternalNote, staff);
     if (res.success) {
       triggerBanner('success', 'Internal note added.');
       setNewInternalNote('');
-      refreshData();
+      await refreshData();
     } else {
       triggerBanner('error', res.error || 'Failed to add note.');
     }

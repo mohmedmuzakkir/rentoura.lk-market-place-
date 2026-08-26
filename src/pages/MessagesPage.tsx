@@ -25,6 +25,11 @@ interface MessagesPageProps {
   onSelectConversation: (conversationId: string) => void;
   onNavigate: (route: AppRoute) => void;
   onOpenListingDetail?: (id: string, module?: 'rentals' | 'jobs' | 'services') => void;
+  onRefreshInbox?: () => void;
+  onMarkAllAsRead?: () => void;
+  onToggleArchive?: (conversationId: string, isArchived: boolean) => void;
+  onToggleMute?: (conversationId: string, isMuted: boolean) => void;
+  onMarkUnread?: (conversationId: string) => void;
 }
 
 type FilterTab = 'all' | 'rentals' | 'jobs' | 'services' | 'system';
@@ -33,14 +38,25 @@ export const MessagesPage: React.FC<MessagesPageProps> = ({
   conversations,
   onSelectConversation,
   onNavigate,
-  onOpenListingDetail
+  onOpenListingDetail,
+  onRefreshInbox,
+  onMarkAllAsRead,
+  onToggleArchive,
+  onToggleMute,
+  onMarkUnread
 }) => {
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [showFilterMenu, setShowFilterMenu] = useState(false);
+  const [showOptionsMenu, setShowOptionsMenu] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
+  const [activeItemMenuId, setActiveItemMenuId] = useState<string | null>(null);
 
-  // Filter conversations by tab and search
+  // Filter conversations by tab, archive status, and search
   const filteredConversations = conversations.filter((c) => {
+    if (!showArchived && c.isPinned === false && (c as any).isArchived) return false;
+    if (showArchived && !(c as any).isArchived) return false;
+
     const matchesTab = activeTab === 'all' || c.module === activeTab;
     const matchesSearch = searchQuery.trim() === '' || 
       c.participant.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -92,7 +108,7 @@ export const MessagesPage: React.FC<MessagesPageProps> = ({
           </div>
 
           {/* Right Action Icons */}
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 shrink-0 relative">
             <button
               onClick={() => setShowFilterMenu(!showFilterMenu)}
               className="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-700 transition-colors tap-bounce"
@@ -102,12 +118,44 @@ export const MessagesPage: React.FC<MessagesPageProps> = ({
             </button>
 
             <button
-              onClick={() => {}}
+              onClick={() => setShowOptionsMenu(!showOptionsMenu)}
               className="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-700 transition-colors tap-bounce"
               aria-label="Options"
             >
               <MoreVertical className="w-4.5 h-4.5" />
             </button>
+
+            {showOptionsMenu && (
+              <div className="absolute top-11 right-0 bg-white rounded-2xl shadow-xl border border-slate-200 p-2 w-48 space-y-1 z-50 animate-in fade-in slide-in-from-top-2">
+                <button
+                  onClick={() => {
+                    onMarkAllAsRead?.();
+                    setShowOptionsMenu(false);
+                  }}
+                  className="w-full text-left px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 rounded-xl flex items-center gap-2"
+                >
+                  <CheckCheck className="w-4 h-4 text-[#1464F4]" /> Mark all as read
+                </button>
+                <button
+                  onClick={() => {
+                    setShowArchived(!showArchived);
+                    setShowOptionsMenu(false);
+                  }}
+                  className="w-full text-left px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 rounded-xl flex items-center gap-2"
+                >
+                  <Info className="w-4 h-4 text-amber-500" /> {showArchived ? 'View Active Chats' : 'View Archived Chats'}
+                </button>
+                <button
+                  onClick={() => {
+                    onRefreshInbox?.();
+                    setShowOptionsMenu(false);
+                  }}
+                  className="w-full text-left px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 rounded-xl flex items-center gap-2"
+                >
+                  <SlidersHorizontal className="w-4 h-4 text-emerald-500" /> Refresh Inbox
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </header>

@@ -28,24 +28,30 @@ import {
 } from 'lucide-react';
 import { RentouraLogo } from '../components/RentouraLogo';
 import { AppRoute } from '../types';
-import { AuthService } from '../services/authService';
+import { UserProfile } from '../types/profileTypes';
+import { AuthService, CURRENT_AGREEMENT_VERSION } from '../services/authService';
 
 interface UserAgreementPageProps {
   onNavigate: (route: AppRoute) => void;
   selectedLanguage?: 'English' | 'Sinhala' | 'Tamil';
   onLanguageChange?: (lang: 'English' | 'Sinhala' | 'Tamil') => void;
   onAgreeAndContinue?: () => void;
+  userProfile?: UserProfile | null;
 }
 
 export const UserAgreementPage: React.FC<UserAgreementPageProps> = ({
   onNavigate,
   selectedLanguage = 'English',
   onLanguageChange,
-  onAgreeAndContinue
+  onAgreeAndContinue,
+  userProfile
 }) => {
   const [agreedChecked, setAgreedChecked] = useState<boolean>(() => {
-    return localStorage.getItem('rentoura_agreement_accepted') === 'true';
+    return AuthService.hasAcceptedCurrentAgreement(userProfile || null);
   });
+
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
 
   const [currentLang, setCurrentLang] = useState<'English' | 'Sinhala' | 'Tamil'>(selectedLanguage);
   const [showLangDropdown, setShowLangDropdown] = useState(false);
@@ -67,18 +73,24 @@ export const UserAgreementPage: React.FC<UserAgreementPageProps> = ({
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const handleAgreeAndSubmit = () => {
-    if (!agreedChecked) return;
+  const handleAgreeAndSubmit = async () => {
+    if (!agreedChecked || isSubmitting) return;
 
-    const timestamp = new Date().toISOString();
-    localStorage.setItem('rentoura_agreement_accepted', 'true');
-    localStorage.setItem('rentoura_agreement_version', '1.0');
-    localStorage.setItem('rentoura_agreement_accepted_at', timestamp);
+    setIsSubmitting(true);
+    setSubmitError('');
 
-    if (onAgreeAndContinue) {
-      onAgreeAndContinue();
-    } else {
-      onNavigate('/');
+    try {
+      await AuthService.acceptUserAgreement();
+      if (onAgreeAndContinue) {
+        onAgreeAndContinue();
+      } else {
+        onNavigate('/');
+      }
+    } catch (err: any) {
+      console.error('Failed to record agreement acceptance:', err);
+      setSubmitError(err.message || 'Failed to record acceptance in database. Please check your network connection and try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -360,6 +372,22 @@ export const UserAgreementPage: React.FC<UserAgreementPageProps> = ({
 
           {/* Mandatory Checkbox & Actions Row */}
           <div className="p-4 rounded-2xl bg-blue-50/70 border border-blue-100 space-y-4">
+            {submitError && (
+              <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold flex items-center justify-between gap-2 animate-in fade-in duration-150">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>{submitError}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleAgreeAndSubmit}
+                  className="px-2.5 py-1 rounded-xl bg-rose-600 text-white font-bold text-[11px] hover:bg-rose-700 transition-colors"
+                >
+                  Retry
+                </button>
+              </div>
+            )}
+
             <label className="flex items-start gap-3 cursor-pointer select-none">
               <input
                 type="checkbox"
@@ -390,11 +418,20 @@ export const UserAgreementPage: React.FC<UserAgreementPageProps> = ({
               <button
                 type="button"
                 onClick={handleAgreeAndSubmit}
-                disabled={!agreedChecked}
+                disabled={!agreedChecked || isSubmitting}
                 className="w-full sm:w-auto flex-1 py-3 px-6 rounded-2xl bg-[#1464F4] hover:bg-blue-600 active:bg-blue-700 text-white font-bold text-xs shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2 transition-all tap-bounce disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <ShieldCheck className="w-4 h-4" />
-                <span>I Agree & Continue</span>
+                {isSubmitting ? (
+                  <>
+                    <div className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                    <span>Saving Acceptance...</span>
+                  </>
+                ) : (
+                  <>
+                    <ShieldCheck className="w-4 h-4" />
+                    <span>I Agree & Continue</span>
+                  </>
+                )}
               </button>
             </div>
 

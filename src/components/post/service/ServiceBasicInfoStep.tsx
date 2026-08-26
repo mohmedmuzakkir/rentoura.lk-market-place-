@@ -60,22 +60,39 @@ export const ServiceBasicInfoStep: React.FC<ServiceBasicInfoStepProps> = ({
     if (!cat) return;
 
     const firstSub = cat.children?.[0];
+    const firstL3 = firstSub?.children?.[0];
     onChange({
       categoryId: cat.id,
       categoryName: cat.name,
       subcategoryId: firstSub ? firstSub.id : '',
       subcategoryName: firstSub ? firstSub.name : '',
+      thirdLevelId: firstL3 ? firstL3.id : undefined,
+      thirdLevelName: firstL3 ? firstL3.name : undefined,
       categoryPath: `Services > ${cat.name}${firstSub ? ` > ${firstSub.name}` : ''}`,
+      formValues: {
+        ...draft.formValues,
+        serviceFeatures: [],
+        electricalExperience: undefined,
+        licenseType: undefined,
+        plumbingType: undefined,
+        subjectArea: undefined,
+        cameraEquipment: undefined,
+        cleaningType: undefined,
+        specialization: undefined
+      }
     });
   };
 
   const handleSelectSubcategory = (subId: string) => {
     const sub = subcategories.find((s) => s.id === subId);
     if (!sub || !selectedCategory) return;
+    const firstL3 = sub.children?.[0];
 
     onChange({
       subcategoryId: sub.id,
       subcategoryName: sub.name,
+      thirdLevelId: firstL3 ? firstL3.id : undefined,
+      thirdLevelName: firstL3 ? firstL3.name : undefined,
       categoryPath: `Services > ${selectedCategory.name} > ${sub.name}`,
     });
   };
@@ -92,7 +109,7 @@ export const ServiceBasicInfoStep: React.FC<ServiceBasicInfoStepProps> = ({
   // Service features multiselect handler
   const currentFeatures: string[] = Array.isArray(draft.formValues.serviceFeatures)
     ? draft.formValues.serviceFeatures
-    : ['installation', 'repair', 'maintenance', 'onsite', 'advance_booking'];
+    : [];
 
   const toggleFeature = (featureId: string) => {
     const updated = currentFeatures.includes(featureId)

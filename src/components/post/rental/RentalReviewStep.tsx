@@ -24,9 +24,8 @@ export const RentalReviewStep: React.FC<RentalReviewStepProps> = ({
   const rate = draft.pricing?.rate || draft.formValues.price || 0;
   const ratePeriod = draft.pricing?.ratePeriod || 'day';
   const { formatted: formattedRate } = normalizeNumericPrice(rate);
-  const coverImage = draft.images.find(img => img.isCover) || draft.images[0] || {
-    url: 'https://images.unsplash.com/photo-1549399542-7e3f8b79c341?auto=format&fit=crop&w=800&q=80'
-  };
+  const coverImage = draft.images.find(img => img.isCover) || draft.images[0];
+  const coverUrl = coverImage?.url || '';
 
   const handleFinalSubmit = () => {
     if (!agreedToTerms) {
@@ -65,24 +64,31 @@ export const RentalReviewStep: React.FC<RentalReviewStepProps> = ({
         </div>
 
         {/* Cover Photo with Badges */}
-        <div className="relative h-48 sm:h-56 bg-slate-100 overflow-hidden">
-          <img
-            src={coverImage.url}
-            alt={title}
-            className="w-full h-full object-cover"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/20" />
+        <div className="relative h-48 sm:h-56 bg-slate-900 overflow-hidden flex items-center justify-center">
+          {coverUrl ? (
+            <img
+              src={coverUrl}
+              alt={title}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="text-center p-4 text-slate-400">
+              <Image className="w-10 h-10 mx-auto mb-1 opacity-50" />
+              <p className="text-xs font-semibold">No cover photo uploaded</p>
+            </div>
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/30" />
 
           {/* Category Chip */}
           <div className="absolute top-3 left-3 flex items-center gap-1.5">
             <span className="bg-black/60 backdrop-blur-md text-white text-[11px] font-bold px-2.5 py-1 rounded-lg">
-              {draft.categoryName} › {draft.subcategoryName}
+              {draft.categoryName || 'Uncategorized'}{draft.subcategoryName ? ` › ${draft.subcategoryName}` : ''}
             </span>
           </div>
 
           {/* Photos Count */}
           <div className="absolute top-3 right-3 bg-black/60 backdrop-blur-md text-white text-[10px] font-bold px-2 py-1 rounded-md flex items-center gap-1">
-            <Image className="w-3 h-3" /> {draft.images.length || 1} Photos
+            <Image className="w-3 h-3" /> {draft.images.length} Photos
           </div>
 
           {/* Title & Price in overlay */}
@@ -103,7 +109,7 @@ export const RentalReviewStep: React.FC<RentalReviewStepProps> = ({
               <div className="flex items-center gap-1 text-[11px] text-slate-200">
                 <MapPin className="w-3.5 h-3.5 text-blue-400" />
                 <span>
-                  {draft.location.cityName || 'Kandy'}, {draft.location.districtName || 'Kandy'}
+                  {draft.location.cityName || draft.location.districtName || 'Sri Lanka'}
                 </span>
                 {draft.location.hideExactAddress && (
                   <span title="Exact address protected">
@@ -122,7 +128,7 @@ export const RentalReviewStep: React.FC<RentalReviewStepProps> = ({
             <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100">
               <span className="text-[10px] font-bold text-slate-400 uppercase">Condition</span>
               <p className="text-xs font-extrabold text-slate-800 capitalize mt-0.5">
-                {draft.condition?.replace('-', ' ') || 'Like New'}
+                {draft.condition?.replace('-', ' ') || 'Unspecified'}
               </p>
             </div>
             <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100">
@@ -142,7 +148,7 @@ export const RentalReviewStep: React.FC<RentalReviewStepProps> = ({
             <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-100">
               <span className="text-[10px] font-bold text-slate-400 uppercase">Contact</span>
               <p className="text-xs font-extrabold text-slate-800 mt-0.5">
-                {draft.contactPreferences.phone || '077 123 4567'}
+                {draft.contactPreferences.phone || 'Not provided'}
               </p>
             </div>
           </div>
@@ -174,7 +180,7 @@ export const RentalReviewStep: React.FC<RentalReviewStepProps> = ({
               </div>
               <div>
                 <p className="text-xs font-bold text-slate-900">Category & Title</p>
-                <p className="text-[11px] text-slate-500">{draft.categoryPath || 'Vehicles'}</p>
+                <p className="text-[11px] text-slate-500">{draft.categoryPath || 'Not selected'}</p>
               </div>
             </div>
             <button

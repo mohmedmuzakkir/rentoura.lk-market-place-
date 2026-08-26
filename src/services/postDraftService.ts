@@ -6,7 +6,7 @@ export class PostDraftService {
   /**
    * Generates a storage key for a module draft
    */
-  private static getKey(module: 'rentals' | 'jobs' | 'services', ownerId: string = 'usr-muzakkir-1'): string {
+  private static getKey(module: 'rentals' | 'jobs' | 'services', ownerId: string = 'device_user'): string {
     return `${DRAFT_STORAGE_PREFIX}${ownerId}_${module}`;
   }
 
@@ -19,7 +19,7 @@ export class PostDraftService {
         ...draft,
         lastSavedAt: Date.now()
       };
-      localStorage.setItem(this.getKey(draft.module, draft.ownerId), JSON.stringify(updatedDraft));
+      localStorage.setItem(this.getKey(draft.module, draft.ownerId || 'device_user'), JSON.stringify(updatedDraft));
     } catch (e) {
       console.warn('Failed to save listing draft to localStorage', e);
     }
@@ -28,7 +28,7 @@ export class PostDraftService {
   /**
    * Retrieves a draft for a specific module
    */
-  static getDraft(module: 'rentals' | 'jobs' | 'services', ownerId: string = 'usr-muzakkir-1'): ListingDraft | null {
+  static getDraft(module: 'rentals' | 'jobs' | 'services', ownerId: string = 'device_user'): ListingDraft | null {
     try {
       const stored = localStorage.getItem(this.getKey(module, ownerId));
       if (!stored) return null;
@@ -42,7 +42,7 @@ export class PostDraftService {
   /**
    * Deletes a draft when a listing is submitted or cleared
    */
-  static deleteDraft(module: 'rentals' | 'jobs' | 'services', ownerId: string = 'usr-muzakkir-1'): void {
+  static deleteDraft(module: 'rentals' | 'jobs' | 'services', ownerId: string = 'device_user'): void {
     try {
       localStorage.removeItem(this.getKey(module, ownerId));
     } catch (e) {
@@ -53,98 +53,70 @@ export class PostDraftService {
   /**
    * Creates an empty initial draft
    */
-  static createInitialDraft(module: 'rentals' | 'jobs' | 'services', ownerId: string = 'usr-muzakkir-1'): ListingDraft {
+  static createInitialDraft(module: 'rentals' | 'jobs' | 'services', ownerId: string = 'device_user'): ListingDraft {
     return {
       id: `draft-${module}-${Date.now()}`,
       ownerId,
       module,
-      categoryId: module === 'rentals' ? 'vehicles' : '',
-      categoryName: module === 'rentals' ? 'Vehicles' : '',
-      subcategoryId: module === 'rentals' ? 'cars' : '',
-      subcategoryName: module === 'rentals' ? 'Cars' : '',
-      thirdLevelId: module === 'rentals' ? 'car-sedan' : undefined,
-      thirdLevelName: module === 'rentals' ? 'Sedan' : undefined,
-      categoryPath: module === 'rentals' ? 'Vehicles › Cars › Sedan' : '',
+      categoryId: '',
+      categoryName: '',
+      subcategoryId: '',
+      subcategoryName: '',
+      thirdLevelId: undefined,
+      thirdLevelName: undefined,
+      categoryPath: '',
       currentStep: 1,
       condition: 'like-new',
       pricing: {
-        rate: 12500,
+        rate: 0,
         ratePeriod: 'day',
-        hasSecondaryRate: true,
-        secondaryRate: 185000,
+        hasSecondaryRate: false,
+        secondaryRate: 0,
         secondaryPeriod: 'month',
-        depositRequired: true,
-        depositAmount: 25000,
-        depositTerms: 'Fully refundable upon safe vehicle return with fuel level verified',
+        depositRequired: false,
+        depositAmount: 0,
+        depositTerms: '',
         minRentalDuration: '1 day',
         bookingType: 'inquire',
         availableImmediately: true,
-        offerLongTermDiscount: true,
-        discountWeek: 10,
-        discountMonth: 20
+        offerLongTermDiscount: false,
+        discountWeek: 0,
+        discountMonth: 0
       },
       rules: {
-        requiredDocuments: ['nic', 'driving_license', 'billing_proof'],
+        requiredDocuments: ['nic'],
         smokingAllowed: false,
         petsAllowed: false,
-        commercialUsageAllowed: true,
+        commercialUsageAllowed: false,
         handoverMode: 'both',
-        deliveryFee: 2500,
+        deliveryFee: 0,
         cancellationPolicy: 'flexible',
-        customRules: 'Driver must be at least 21 years old with valid Sri Lankan driving license.'
+        customRules: ''
       },
       formValues: {
-        title: module === 'rentals' ? 'Toyota Axio WxB 2018 - Self Drive / With Driver' : '',
-        make: 'toyota',
-        model: 'Axio WxB Hybrid',
-        year: 2018,
-        fuelType: 'hybrid',
-        transmission: 'automatic',
-        seats: '5',
-        rentalType: 'both',
-        freeMileage: '100km',
-        extraKmCharge: 85,
-        depositRequired: true,
-        depositAmount: 25000,
-        description: 'Well-maintained Toyota Axio WxB 2018 Hybrid available for self-drive or with professional driver. Excellent fuel efficiency (22-26 km/l). Dual airbags, lane assist, push start, Bluetooth audio, reverse camera and ice cold climate control AC. Suitable for weddings, business trips, or holiday travel across Sri Lanka.'
+        title: '',
+        price: 0,
+        description: ''
       },
       location: {
-        provinceId: 'central',
-        provinceName: 'Central Province',
-        districtId: 'kandy',
-        districtName: 'Kandy District',
-        cityId: 'kandy-city',
-        cityName: 'Kandy',
-        areaName: 'Peradeniya Road',
-        address: 'No. 45, Peradeniya Road, Kandy',
+        provinceId: '',
+        provinceName: '',
+        districtId: '',
+        districtName: '',
+        cityId: '',
+        cityName: '',
+        areaId: '',
+        areaName: '',
+        address: '',
         hideExactAddress: false
       },
-      images: module === 'rentals' ? [
-        {
-          id: 'img-1',
-          url: 'https://images.unsplash.com/photo-1549399542-7e3f8b79c341?auto=format&fit=crop&w=800&q=80',
-          name: 'Front view',
-          isCover: true
-        },
-        {
-          id: 'img-2',
-          url: 'https://images.unsplash.com/photo-1552519507-da3b142c6e3d?auto=format&fit=crop&w=800&q=80',
-          name: 'Interior & dashboard',
-          isCover: false
-        },
-        {
-          id: 'img-3',
-          url: 'https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=800&q=80',
-          name: 'Side profile',
-          isCover: false
-        }
-      ] : [],
+      images: [],
       contactPreferences: {
-        contactName: 'Muzakkir M.',
+        contactName: '',
         showPhone: true,
-        phone: '077 123 4567',
-        showWhatsApp: true,
-        whatsappNumber: '077 123 4567',
+        phone: '',
+        showWhatsApp: false,
+        whatsappNumber: '',
         allowDirectChat: true
       },
       lastSavedAt: Date.now()

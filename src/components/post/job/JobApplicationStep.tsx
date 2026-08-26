@@ -19,17 +19,17 @@ export const JobApplicationStep: React.FC<JobApplicationStepProps> = ({
 
   const contactPrefs = draft.contactPreferences || {
     showPhone: true,
-    phone: '0771234567',
-    showWhatsApp: true,
-    whatsappNumber: '0771234567',
+    phone: '',
+    showWhatsApp: false,
+    whatsappNumber: '',
     allowDirectChat: true,
-    email: 'careers@company.lk',
+    email: '',
     externalUrl: ''
   };
 
   const appMethods: string[] = Array.isArray(draft.formValues.appMethods)
     ? draft.formValues.appMethods
-    : ['direct', 'phone', 'email'];
+    : ['direct'];
 
   const deadline = draft.formValues.deadline || '';
   const reqCv = draft.formValues.reqCv !== undefined ? draft.formValues.reqCv : true;
@@ -38,7 +38,7 @@ export const JobApplicationStep: React.FC<JobApplicationStepProps> = ({
 
   const screeningQuestions: string[] = Array.isArray(draft.formValues.screeningQuestions)
     ? draft.formValues.screeningQuestions
-    : ['When is your earliest available joining date?'];
+    : [];
 
   const [newQuestionInput, setNewQuestionInput] = useState('');
 

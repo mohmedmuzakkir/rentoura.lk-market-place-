@@ -62,20 +62,42 @@ export const JobBasicInfoStep: React.FC<JobBasicInfoStepProps> = ({
   const handleSelectCategory = (catId: string, catName: string) => {
     const catObj = categoriesTree.find((c) => c.id === catId);
     const firstSub = catObj?.children?.[0];
+    const firstL3 = firstSub?.children?.[0];
     onChange({
       categoryId: catId,
       categoryName: catName,
-      subcategoryId: firstSub ? firstSub.id : 'general-role',
-      subcategoryName: firstSub ? firstSub.name : catName,
-      categoryPath: `Jobs > ${catName}`,
+      subcategoryId: firstSub ? firstSub.id : '',
+      subcategoryName: firstSub ? firstSub.name : '',
+      thirdLevelId: firstL3 ? firstL3.id : undefined,
+      thirdLevelName: firstL3 ? firstL3.name : undefined,
+      categoryPath: `Jobs > ${catName}${firstSub ? ` > ${firstSub.name}` : ''}`,
+      formValues: {
+        ...draft.formValues,
+        // Clear category-specific fields so stale values do not persist across categories
+        primarySkills: undefined,
+        frameworks: undefined,
+        devLevel: undefined,
+        msOfficeSkills: undefined,
+        typingSpeed: undefined,
+        salesType: undefined,
+        drivingLicenseType: undefined,
+        vehicleType: undefined,
+        cuisineTypes: undefined,
+        teachingSubject: undefined,
+        nvqLevel: undefined
+      }
     });
   };
 
   const handleSelectSubcategory = (subId: string, subName: string) => {
+    const subObj = selectedCategoryObj?.children?.find((s) => s.id === subId);
+    const firstL3 = subObj?.children?.[0];
     onChange({
       subcategoryId: subId,
       subcategoryName: subName,
-      categoryPath: `Jobs > ${draft.categoryName} > ${subName}`,
+      thirdLevelId: firstL3 ? firstL3.id : undefined,
+      thirdLevelName: firstL3 ? firstL3.name : undefined,
+      categoryPath: `Jobs > ${draft.categoryName} > ${subName}${firstL3 ? ` > ${firstL3.name}` : ''}`,
     });
   };
 

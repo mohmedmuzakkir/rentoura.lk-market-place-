@@ -131,7 +131,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onNavigate, onLogout }
             </button>
 
             <button
-              onClick={() => onNavigate('/help-center')}
+              onClick={() => onNavigate('/help')}
               className="w-full p-4 hover:bg-slate-50 flex items-center justify-between text-left transition-colors group"
             >
               <div className="flex items-center gap-3">

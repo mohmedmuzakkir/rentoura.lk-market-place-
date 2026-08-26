@@ -34,6 +34,8 @@ export interface UserProfile {
   averageRating: number;
   role?: string;
   accountStatus?: string;
+  agreementVersion?: string;
+  agreementAcceptedAt?: string;
 }
 
 export interface UserListingItem {

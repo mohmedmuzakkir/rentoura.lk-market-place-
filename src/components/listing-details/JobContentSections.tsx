@@ -18,9 +18,10 @@ import { JobListingDetail } from '../../types/listingDetailsTypes';
 
 interface JobContentSectionsProps {
   job: JobListingDetail;
+  onOpenReviews?: () => void;
 }
 
-export const JobContentSections: React.FC<JobContentSectionsProps> = ({ job }) => {
+export const JobContentSections: React.FC<JobContentSectionsProps> = ({ job, onOpenReviews }) => {
   const [isDescExpanded, setIsDescExpanded] = useState(false);
   const [showAllRequirements, setShowAllRequirements] = useState(false);
 
@@ -204,7 +205,10 @@ export const JobContentSections: React.FC<JobContentSectionsProps> = ({ job }) =
           <div className="bg-white rounded-3xl border border-slate-100 p-4 shadow-xs flex flex-col justify-between">
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-bold text-slate-900">Company Reviews</span>
-              <button className="text-[11px] font-bold text-[#08A34F] hover:underline">
+              <button 
+                onClick={onOpenReviews}
+                className="text-[11px] font-bold text-[#08A34F] hover:underline"
+              >
                 View All
               </button>
             </div>

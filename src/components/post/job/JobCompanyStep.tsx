@@ -41,12 +41,24 @@ export const JobCompanyStep: React.FC<JobCompanyStepProps> = ({
         return;
       }
       const objectUrl = URL.createObjectURL(file);
-      updateFormValue('logoUrl', objectUrl);
+      onChange({
+        formValues: {
+          ...draft.formValues,
+          logoUrl: objectUrl,
+          logoFile: file
+        }
+      });
     }
   };
 
   const handleRemoveLogo = () => {
-    updateFormValue('logoUrl', '');
+    onChange({
+      formValues: {
+        ...draft.formValues,
+        logoUrl: '',
+        logoFile: undefined
+      }
+    });
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }

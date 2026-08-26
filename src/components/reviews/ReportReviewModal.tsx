@@ -33,34 +33,32 @@ export const ReportReviewModal: React.FC<ReportReviewModalProps> = ({
 
   if (!isOpen || !reviewToReport) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
     setIsSubmitting(true);
 
     const activeReason = REVIEW_REPORT_REASONS.find(r => r.id === selectedReason);
 
-    setTimeout(() => {
-      const result = ReportService.submitReport({
-        reporterId: currentUser ? currentUser.id : 'guest-reporter',
-        targetId: reviewToReport.id,
-        targetModule: reviewToReport.targetModule,
-        targetTitle: `Review on "${reviewToReport.targetTitle}" by ${reviewToReport.authorName}`,
-        targetLocation: reviewToReport.locationName,
-        reasonCode: selectedReason,
-        reasonLabel: activeReason ? activeReason.label : 'Reported Review',
-        description: description.trim(),
-        allowContact: true
-      });
+    const result = await ReportService.submitReport({
+      reporterId: currentUser ? currentUser.id : 'guest-reporter',
+      targetId: reviewToReport.id,
+      targetModule: reviewToReport.targetModule,
+      targetTitle: `Review on "${reviewToReport.targetTitle}" by ${reviewToReport.authorName}`,
+      targetLocation: reviewToReport.locationName,
+      reasonCode: selectedReason,
+      reasonLabel: activeReason ? activeReason.label : 'Reported Review',
+      description: description.trim(),
+      allowContact: true
+    });
 
-      setIsSubmitting(false);
+    setIsSubmitting(false);
 
-      if (result.success) {
-        setIsSubmitted(true);
-      } else {
-        setErrorMsg(result.error || 'Unable to submit report.');
-      }
-    }, 500);
+    if (result.success) {
+      setIsSubmitted(true);
+    } else {
+      setErrorMsg(result.error || 'Unable to submit report.');
+    }
   };
 
   return (

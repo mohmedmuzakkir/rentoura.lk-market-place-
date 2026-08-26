@@ -1,15 +1,10 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { 
   ArrowLeft, 
   Bell, 
   Camera, 
-  Upload, 
   User, 
   Mail, 
-  Phone, 
-  FileText, 
-  MapPin, 
-  Building, 
   Globe, 
   Coins, 
   Lock, 
@@ -21,11 +16,15 @@ import {
   CheckCircle2,
   Trash2,
   HelpCircle,
-  Sparkles
+  Sparkles,
+  MapPin,
+  Loader2
 } from 'lucide-react';
 import { AppRoute } from '../types';
 import { UserProfile } from '../types/profileTypes';
 import { LocationService, CanonicalLocation } from '../services/locationService';
+import { AuthService, normalizeSriLankanPhone } from '../services/authService';
+import { supabase } from '../lib/supabase';
 
 interface EditProfilePageProps {
   profile: UserProfile;
@@ -44,87 +43,147 @@ export const EditProfilePage: React.FC<EditProfilePageProps> = ({
 }) => {
   // Form State initialized from current profile
   const [fullName, setFullName] = useState(profile.fullName || '');
-  const [displayName, setDisplayName] = useState(profile.displayName || '');
+  const [displayName, setDisplayName] = useState(profile.displayName || profile.fullName || '');
   const [email] = useState(profile.email || ''); // Email is read-only / auth-controlled
   const [phone, setPhone] = useState(profile.phone || '');
   const [bio, setBio] = useState(profile.bio || '');
   const [avatarUrl, setAvatarUrl] = useState(profile.avatarUrl || '');
   
-  // Location States
-  const [dbProvinces, setDbProvinces] = React.useState<CanonicalLocation[]>([]);
-  const [dbDistricts, setDbDistricts] = React.useState<CanonicalLocation[]>([]);
-  const [selectedProvinceName, setSelectedProvinceName] = useState(profile.province || '');
-  const [selectedDistrictName, setSelectedDistrictName] = useState(profile.district || '');
-  const [selectedCityName, setSelectedCityName] = useState(profile.city || '');
-  const [areaVillage, setAreaVillage] = useState(profile.area || '');
+  // Location States (UUID based)
+  const [dbProvinces, setDbProvinces] = useState<CanonicalLocation[]>([]);
+  const [dbDistricts, setDbDistricts] = useState<CanonicalLocation[]>([]);
+  const [dbCities, setDbCities] = useState<CanonicalLocation[]>([]);
+  const [dbAreas, setDbAreas] = useState<CanonicalLocation[]>([]);
+
+  const [selectedProvinceId, setSelectedProvinceId] = useState<string>('');
+  const [selectedDistrictId, setSelectedDistrictId] = useState<string>('');
+  const [selectedCityId, setSelectedCityId] = useState<string>('');
+  const [selectedAreaId, setSelectedAreaId] = useState<string>('');
 
   // Preferences & Toggles
-  const [preferredLanguage, setPreferredLanguage] = useState<'English' | 'Sinhala' | 'Tamil'>(
+  const [preferredLanguage, setPreferredLanguage] = useState<'English' | 'Sinhala' | 'Tamil' | string>(
     profile.preferredLanguage || 'English'
   );
   const [emailNotifications, setEmailNotifications] = useState(profile.emailNotifications ?? true);
   const [pushNotifications, setPushNotifications] = useState(profile.pushNotifications ?? true);
-  const [twoFactorEnabled, setTwoFactorEnabled] = useState(profile.twoFactorEnabled ?? false);
 
   // UI / Validation / Feedback State
   const [isSaving, setIsSaving] = useState(false);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [successToast, setSuccessToast] = useState(false);
   const [errors, setErrors] = useState<{ fullName?: string; phone?: string; photo?: string }>({});
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [show2FAModal, setShow2FAModal] = useState(false);
 
+  // Password modal state
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = useState(false);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Load Provinces
-  React.useEffect(() => {
+  // Load Provinces & Resolve Initial Location Hierarchy
+  useEffect(() => {
     let isMounted = true;
-    async function load() {
+    async function initLocations() {
       const provs = await LocationService.getProvinces();
-      if (isMounted) {
-        setDbProvinces(provs);
-        if (!selectedProvinceName && provs.length > 0) {
-          setSelectedProvinceName(provs[0].name);
+      if (!isMounted) return;
+      setDbProvinces(provs);
+
+      // Resolve initial Province UUID
+      let matchProv = provs.find(p => p.id === profile.province || p.name.toLowerCase() === (profile.province || '').toLowerCase());
+      if (!matchProv && provs.length > 0) matchProv = provs[0];
+
+      if (matchProv) {
+        setSelectedProvinceId(matchProv.id);
+        const dists = await LocationService.getDistricts(matchProv.id);
+        if (!isMounted) return;
+        setDbDistricts(dists);
+
+        // Resolve initial District UUID
+        let matchDist = dists.find(d => d.id === profile.district || d.name.toLowerCase() === (profile.district || '').toLowerCase());
+        if (!matchDist && dists.length > 0) matchDist = dists[0];
+
+        if (matchDist) {
+          setSelectedDistrictId(matchDist.id);
+          const cities = await LocationService.getCities(matchDist.id);
+          if (!isMounted) return;
+          setDbCities(cities);
+
+          // Resolve initial City UUID
+          let matchCity = cities.find(c => c.id === profile.city || c.name.toLowerCase() === (profile.city || '').toLowerCase());
+          if (!matchCity && cities.length > 0) matchCity = cities[0];
+
+          if (matchCity) {
+            setSelectedCityId(matchCity.id);
+            const areas = await LocationService.getAreas(matchCity.id);
+            if (!isMounted) return;
+            setDbAreas(areas);
+
+            let matchArea = areas.find(a => a.id === profile.area || a.name.toLowerCase() === (profile.area || '').toLowerCase());
+            if (matchArea) {
+              setSelectedAreaId(matchArea.id);
+            }
+          }
         }
       }
     }
-    load();
+    initLocations();
     return () => { isMounted = false; };
   }, []);
 
-  // Load Districts when selected province changes
-  React.useEffect(() => {
-    let isMounted = true;
-    async function loadDistricts() {
-      if (!selectedProvinceName) return;
-      const prov = dbProvinces.find(p => p.name.toLowerCase() === selectedProvinceName.toLowerCase());
-      if (prov) {
-        const dists = await LocationService.getDistricts(prov.id);
-        if (isMounted) setDbDistricts(dists);
-      }
-    }
-    loadDistricts();
-    return () => { isMounted = false; };
-  }, [selectedProvinceName, dbProvinces]);
-
   // Handle Province Change
-  const handleProvinceChange = async (newProvinceName: string) => {
-    setSelectedProvinceName(newProvinceName);
-    const prov = dbProvinces.find(p => p.name === newProvinceName);
-    if (prov) {
-      const dists = await LocationService.getDistricts(prov.id);
+  const handleProvinceChange = async (newProvId: string) => {
+    setSelectedProvinceId(newProvId);
+    setSelectedDistrictId('');
+    setSelectedCityId('');
+    setSelectedAreaId('');
+    setDbDistricts([]);
+    setDbCities([]);
+    setDbAreas([]);
+
+    if (newProvId) {
+      const dists = await LocationService.getDistricts(newProvId);
       setDbDistricts(dists);
       if (dists.length > 0) {
-        setSelectedDistrictName(dists[0].name);
-      } else {
-        setSelectedDistrictName('');
+        handleDistrictChange(dists[0].id);
       }
     }
   };
 
   // Handle District Change
-  const handleDistrictChange = (newDistrictName: string) => {
-    setSelectedDistrictName(newDistrictName);
+  const handleDistrictChange = async (newDistId: string) => {
+    setSelectedDistrictId(newDistId);
+    setSelectedCityId('');
+    setSelectedAreaId('');
+    setDbCities([]);
+    setDbAreas([]);
+
+    if (newDistId) {
+      const cities = await LocationService.getCities(newDistId);
+      setDbCities(cities);
+      if (cities.length > 0) {
+        handleCityChange(cities[0].id);
+      }
+    }
+  };
+
+  // Handle City Change
+  const handleCityChange = async (newCityId: string) => {
+    setSelectedCityId(newCityId);
+    setSelectedAreaId('');
+    setDbAreas([]);
+
+    if (newCityId) {
+      const areas = await LocationService.getAreas(newCityId);
+      setDbAreas(areas);
+      if (areas.length > 0) {
+        setSelectedAreaId(areas[0].id);
+      }
+    }
   };
 
   // Detect Unsaved Changes
@@ -135,29 +194,28 @@ export const EditProfilePage: React.FC<EditProfilePageProps> = ({
       phone !== profile.phone ||
       bio !== profile.bio ||
       avatarUrl !== profile.avatarUrl ||
-      selectedProvinceName !== profile.province ||
-      selectedDistrictName !== profile.district ||
-      selectedCityName !== profile.city ||
-      areaVillage !== (profile.area || '') ||
+      selectedProvinceId !== profile.province ||
+      selectedDistrictId !== profile.district ||
+      selectedCityId !== profile.city ||
+      selectedAreaId !== (profile.area || '') ||
       preferredLanguage !== profile.preferredLanguage ||
       emailNotifications !== profile.emailNotifications ||
-      pushNotifications !== profile.pushNotifications ||
-      twoFactorEnabled !== profile.twoFactorEnabled
+      pushNotifications !== profile.pushNotifications
     );
   }, [
     fullName, displayName, phone, bio, avatarUrl,
-    selectedProvinceName, selectedDistrictName, selectedCityName, areaVillage,
-    preferredLanguage, emailNotifications, pushNotifications, twoFactorEnabled, profile
+    selectedProvinceId, selectedDistrictId, selectedCityId, selectedAreaId,
+    preferredLanguage, emailNotifications, pushNotifications, profile
   ]);
 
-  // Photo Upload Handler with File Validation
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Durable Photo Upload Handler via Supabase Storage
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     // Check type
     const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
-    if (!validTypes.includes(file.type)) {
+    if (!validTypes.includes(file.type.toLowerCase())) {
       setErrors(prev => ({ ...prev, photo: 'Only JPG, PNG or WEBP images are supported.' }));
       return;
     }
@@ -169,15 +227,19 @@ export const EditProfilePage: React.FC<EditProfilePageProps> = ({
     }
 
     setErrors(prev => ({ ...prev, photo: undefined }));
+    setIsUploadingPhoto(true);
 
-    // Read preview using FileReader
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      if (event.target?.result) {
-        setAvatarUrl(event.target.result as string);
-      }
-    };
-    reader.readAsDataURL(file);
+    try {
+      const uploadedUrl = await AuthService.uploadAvatar(profile.id, file);
+      setAvatarUrl(uploadedUrl);
+    } catch (err: any) {
+      setErrors(prev => ({
+        ...prev,
+        photo: err?.message || 'Failed to upload photo to storage. Please try again.'
+      }));
+    } finally {
+      setIsUploadingPhoto(false);
+    }
   };
 
   const [saveErrorMessage, setSaveErrorMessage] = useState<string | null>(null);
@@ -191,8 +253,14 @@ export const EditProfilePage: React.FC<EditProfilePageProps> = ({
       newErrors.fullName = 'Full name is required.';
     }
 
-    if (phone.trim() && !/^(\+94|0)[0-9]{9}$/.test(phone.replace(/\s+/g, ''))) {
-      newErrors.phone = 'Please enter a valid Sri Lankan phone number (e.g. 070 123 4567).';
+    let normalizedPhone = phone.trim();
+    if (normalizedPhone) {
+      const phoneVal = normalizeSriLankanPhone(normalizedPhone);
+      if (!phoneVal.isValid) {
+        newErrors.phone = phoneVal.error;
+      } else {
+        normalizedPhone = phoneVal.normalized;
+      }
     }
 
     if (Object.keys(newErrors).length > 0) {
@@ -206,17 +274,17 @@ export const EditProfilePage: React.FC<EditProfilePageProps> = ({
       ...profile,
       fullName: fullName.trim(),
       displayName: displayName.trim() || fullName.trim(),
-      phone: phone.trim(),
+      phone: normalizedPhone,
       bio: bio.trim(),
       avatarUrl,
-      province: selectedProvinceName,
-      district: selectedDistrictName,
-      city: selectedCityName,
-      area: areaVillage.trim(),
+      province: selectedProvinceId,
+      district: selectedDistrictId,
+      city: selectedCityId,
+      area: selectedAreaId,
       preferredLanguage,
       emailNotifications,
       pushNotifications,
-      twoFactorEnabled
+      twoFactorEnabled: false
     };
 
     try {
@@ -229,6 +297,41 @@ export const EditProfilePage: React.FC<EditProfilePageProps> = ({
     } catch (err: any) {
       setIsSaving(false);
       setSaveErrorMessage(err?.message || 'Failed to save profile changes to Supabase. Please try again.');
+    }
+  };
+
+  // Handle Real Password Change via Supabase Auth
+  const handleSavePassword = async () => {
+    setPasswordError(null);
+    setPasswordSuccess(false);
+
+    if (!newPassword || newPassword.length < 8) {
+      setPasswordError('New password must be at least 8 characters long.');
+      return;
+    }
+
+    if (newPassword !== confirmNewPassword) {
+      setPasswordError('Passwords do not match. Please ensure both passwords match.');
+      return;
+    }
+
+    setIsChangingPassword(true);
+
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) throw new Error(error.message);
+
+      setPasswordSuccess(true);
+      setNewPassword('');
+      setConfirmNewPassword('');
+      setTimeout(() => {
+        setShowPasswordModal(false);
+        setPasswordSuccess(false);
+      }, 1500);
+    } catch (err: any) {
+      setPasswordError(err?.message || 'Failed to update password.');
+    } finally {
+      setIsChangingPassword(false);
     }
   };
 
@@ -283,7 +386,7 @@ export const EditProfilePage: React.FC<EditProfilePageProps> = ({
         </div>
       </header>
 
-      {/* 2. Hero Banner matching Image 2 */}
+      {/* 2. Hero Banner */}
       <div className="bg-gradient-to-r from-[#1464F4] via-[#0B357B] to-[#041C43] text-white px-5 py-6 sm:py-8 shadow-md">
         <div className="max-w-xl mx-auto flex items-center justify-between gap-4">
           <div>
@@ -295,10 +398,12 @@ export const EditProfilePage: React.FC<EditProfilePageProps> = ({
             </p>
           </div>
 
-          {/* Hero Avatar Badge with Camera */}
+          {/* Hero Avatar Badge */}
           <div className="relative shrink-0">
             <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full ring-4 ring-white/30 bg-blue-900 flex items-center justify-center overflow-hidden shadow-xl">
-              {avatarUrl ? (
+              {isUploadingPhoto ? (
+                <Loader2 className="w-7 h-7 text-white animate-spin" />
+              ) : avatarUrl ? (
                 <img
                   src={avatarUrl}
                   alt="Profile"
@@ -311,7 +416,8 @@ export const EditProfilePage: React.FC<EditProfilePageProps> = ({
             </div>
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="absolute -bottom-1 -right-1 p-1.5 rounded-full bg-[#1464F4] hover:bg-blue-600 text-white ring-2 ring-white shadow-md transition-all active:scale-95"
+              disabled={isUploadingPhoto}
+              className="absolute -bottom-1 -right-1 p-1.5 rounded-full bg-[#1464F4] hover:bg-blue-600 text-white ring-2 ring-white shadow-md transition-all active:scale-95 disabled:opacity-50"
               title="Upload photo"
             >
               <Camera className="w-3.5 h-3.5" />
@@ -340,7 +446,7 @@ export const EditProfilePage: React.FC<EditProfilePageProps> = ({
                 Profile Photo
               </h3>
               <p className="text-[11px] text-slate-500 mt-0.5">
-                Upload a clear photo to build trust with others.
+                Upload a photo to Supabase storage to build trust with users.
               </p>
             </div>
 
@@ -355,10 +461,15 @@ export const EditProfilePage: React.FC<EditProfilePageProps> = ({
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="px-3.5 py-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-[#1464F4] text-xs font-bold transition-all tap-bounce flex items-center gap-1.5 border border-blue-200"
+                disabled={isUploadingPhoto}
+                className="px-3.5 py-2 rounded-xl bg-blue-50 hover:bg-blue-100 text-[#1464F4] text-xs font-bold transition-all tap-bounce flex items-center gap-1.5 border border-blue-200 disabled:opacity-60"
               >
-                <Camera className="w-3.5 h-3.5" />
-                Change Photo
+                {isUploadingPhoto ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Camera className="w-3.5 h-3.5" />
+                )}
+                <span>{isUploadingPhoto ? 'Uploading...' : 'Change Photo'}</span>
               </button>
 
               {avatarUrl && (
@@ -376,7 +487,7 @@ export const EditProfilePage: React.FC<EditProfilePageProps> = ({
 
           <div className="mt-3 p-2.5 bg-slate-50 rounded-xl border border-slate-200/60 text-[11px] text-slate-500 flex items-center gap-1.5">
             <HelpCircle className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-            <span>JPG, PNG or WEBP. Max 5MB.</span>
+            <span>JPG, PNG or WEBP. Max 5MB. Uploaded to avatars storage.</span>
           </div>
 
           {errors.photo && (
@@ -516,7 +627,7 @@ export const EditProfilePage: React.FC<EditProfilePageProps> = ({
           </div>
         </div>
 
-        {/* 5. Location Information Section */}
+        {/* 5. Location Information Section (UUID Based) */}
         <div className="bg-white rounded-2xl border border-slate-200/80 p-4 sm:p-5 shadow-sm space-y-4">
           <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
             <MapPin className="w-4 h-4 text-[#1464F4]" />
@@ -525,7 +636,7 @@ export const EditProfilePage: React.FC<EditProfilePageProps> = ({
             </h3>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             {/* Province Selector */}
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1.5">
@@ -533,12 +644,13 @@ export const EditProfilePage: React.FC<EditProfilePageProps> = ({
               </label>
               <div className="relative">
                 <select
-                  value={selectedProvinceName}
+                  value={selectedProvinceId}
                   onChange={(e) => handleProvinceChange(e.target.value)}
                   className="w-full px-3 py-2.5 text-xs rounded-xl border border-slate-300 focus:border-[#1464F4] focus:ring-2 focus:ring-blue-100 outline-none bg-white transition-all appearance-none"
                 >
+                  <option value="">Select Province</option>
                   {dbProvinces.map((prov) => (
-                    <option key={prov.id} value={prov.name}>
+                    <option key={prov.id} value={prov.id}>
                       {prov.name}
                     </option>
                   ))}
@@ -556,12 +668,13 @@ export const EditProfilePage: React.FC<EditProfilePageProps> = ({
               </label>
               <div className="relative">
                 <select
-                  value={selectedDistrictName}
+                  value={selectedDistrictId}
                   onChange={(e) => handleDistrictChange(e.target.value)}
                   className="w-full px-3 py-2.5 text-xs rounded-xl border border-slate-300 focus:border-[#1464F4] focus:ring-2 focus:ring-blue-100 outline-none bg-white transition-all appearance-none"
                 >
+                  <option value="">Select District</option>
                   {dbDistricts.map((dist) => (
-                    <option key={dist.id} value={dist.name}>
+                    <option key={dist.id} value={dist.id}>
                       {dist.name}
                     </option>
                   ))}
@@ -572,46 +685,52 @@ export const EditProfilePage: React.FC<EditProfilePageProps> = ({
               </div>
             </div>
 
-            {/* City / Town Input / Selector */}
+            {/* City Selector */}
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1.5">
                 City / Town
               </label>
-              <input
-                type="text"
-                value={selectedCityName}
-                onChange={(e) => setSelectedCityName(e.target.value)}
-                placeholder="e.g. Kandy / Colombo"
-                className="w-full px-3 py-2.5 text-xs rounded-xl border border-slate-300 focus:border-[#1464F4] focus:ring-2 focus:ring-blue-100 outline-none bg-white transition-all"
-              />
-            </div>
-          </div>
-
-          {/* Area / Village (Optional) */}
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1.5">
-              Area / Village (Optional)
-            </label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                <Building className="w-4 h-4" />
-              </div>
-              <input
-                type="text"
-                value={areaVillage}
-                onChange={(e) => setAreaVillage(e.target.value)}
-                placeholder="e.g. Pilimathalawa, Peradeniya, Aniwatta"
-                className="w-full pl-9 pr-8 py-2.5 text-xs rounded-xl border border-slate-300 focus:border-[#1464F4] focus:ring-2 focus:ring-blue-100 outline-none transition-all"
-              />
-              {areaVillage && (
-                <button
-                  type="button"
-                  onClick={() => setAreaVillage('')}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600"
+              <div className="relative">
+                <select
+                  value={selectedCityId}
+                  onChange={(e) => handleCityChange(e.target.value)}
+                  className="w-full px-3 py-2.5 text-xs rounded-xl border border-slate-300 focus:border-[#1464F4] focus:ring-2 focus:ring-blue-100 outline-none bg-white transition-all appearance-none"
                 >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
+                  <option value="">Select City / Town</option>
+                  {dbCities.map((city) => (
+                    <option key={city.id} value={city.id}>
+                      {city.name}
+                    </option>
+                  ))}
+                </select>
+                <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400">
+                  <ChevronRight className="w-4 h-4 rotate-90" />
+                </div>
+              </div>
+            </div>
+
+            {/* Area / Suburb Selector */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                Area / Suburb (Optional)
+              </label>
+              <div className="relative">
+                <select
+                  value={selectedAreaId}
+                  onChange={(e) => setSelectedAreaId(e.target.value)}
+                  className="w-full px-3 py-2.5 text-xs rounded-xl border border-slate-300 focus:border-[#1464F4] focus:ring-2 focus:ring-blue-100 outline-none bg-white transition-all appearance-none"
+                >
+                  <option value="">Select Area / Suburb</option>
+                  {dbAreas.map((area) => (
+                    <option key={area.id} value={area.id}>
+                      {area.name}
+                    </option>
+                  ))}
+                </select>
+                <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400">
+                  <ChevronRight className="w-4 h-4 rotate-90" />
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -634,7 +753,7 @@ export const EditProfilePage: React.FC<EditProfilePageProps> = ({
               <div className="relative">
                 <select
                   value={preferredLanguage}
-                  onChange={(e) => setPreferredLanguage(e.target.value as any)}
+                  onChange={(e) => setPreferredLanguage(e.target.value)}
                   className="w-full px-3 py-2.5 text-xs rounded-xl border border-slate-300 focus:border-[#1464F4] focus:ring-2 focus:ring-blue-100 outline-none bg-white transition-all appearance-none"
                 >
                   <option value="English">English</option>
@@ -680,7 +799,13 @@ export const EditProfilePage: React.FC<EditProfilePageProps> = ({
             {/* Change Password Button */}
             <button
               type="button"
-              onClick={() => setShowPasswordModal(true)}
+              onClick={() => {
+                setPasswordError(null);
+                setPasswordSuccess(false);
+                setNewPassword('');
+                setConfirmNewPassword('');
+                setShowPasswordModal(true);
+              }}
               className="p-3.5 rounded-xl border border-slate-200/80 hover:bg-slate-50 flex items-center justify-between text-left transition-all tap-bounce shadow-xs"
             >
               <div className="flex items-center gap-3">
@@ -691,13 +816,13 @@ export const EditProfilePage: React.FC<EditProfilePageProps> = ({
                   <h4 className="text-xs font-bold text-slate-800 font-heading">
                     Change Password
                   </h4>
-                  <p className="text-[10px] text-slate-400">Update your password</p>
+                  <p className="text-[10px] text-slate-400">Update account password</p>
                 </div>
               </div>
               <ChevronRight className="w-4 h-4 text-slate-400" />
             </button>
 
-            {/* Two-Factor Authentication */}
+            {/* Two-Factor Authentication (Coming Soon) */}
             <button
               type="button"
               onClick={() => setShow2FAModal(true)}
@@ -708,19 +833,15 @@ export const EditProfilePage: React.FC<EditProfilePageProps> = ({
                   <ShieldCheck className="w-4 h-4" />
                 </div>
                 <div>
-                  <div className="flex items-center gap-1.5">
-                    <h4 className="text-xs font-bold text-slate-800 font-heading">
-                      Two-Factor Authentication
-                    </h4>
-                  </div>
-                  <p className="text-[10px] text-slate-400">Add extra security</p>
+                  <h4 className="text-xs font-bold text-slate-800 font-heading">
+                    Two-Factor Auth
+                  </h4>
+                  <p className="text-[10px] text-slate-400">Enhance account security</p>
                 </div>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                  twoFactorEnabled ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'
-                }`}>
-                  {twoFactorEnabled ? 'Active' : 'Setup'}
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                  Coming Soon
                 </span>
                 <ChevronRight className="w-4 h-4 text-slate-400" />
               </div>
@@ -784,7 +905,7 @@ export const EditProfilePage: React.FC<EditProfilePageProps> = ({
           </div>
         </div>
 
-        {/* 8. Sticky Action Buttons (Cancel / Save Changes) */}
+        {/* 8. Action Buttons (Cancel / Save Changes) */}
         <div className="pt-2 grid grid-cols-2 gap-3">
           <button
             type="button"
@@ -797,11 +918,11 @@ export const EditProfilePage: React.FC<EditProfilePageProps> = ({
           <button
             type="button"
             onClick={handleSave}
-            disabled={isSaving}
+            disabled={isSaving || isUploadingPhoto}
             className="py-3 px-4 rounded-2xl bg-[#1464F4] hover:bg-blue-600 text-white text-xs font-bold shadow-md hover:shadow-lg transition-all tap-bounce flex items-center justify-center gap-2 disabled:opacity-60"
           >
             {isSaving ? (
-              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
               <Save className="w-4 h-4" />
             )}
@@ -850,7 +971,7 @@ export const EditProfilePage: React.FC<EditProfilePageProps> = ({
         </div>
       )}
 
-      {/* Change Password Modal */}
+      {/* Change Password Modal (Supabase Auth updateUser) */}
       {showPasswordModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl p-5 max-w-sm w-full shadow-2xl border border-slate-200 animate-in zoom-in-95 relative">
@@ -864,31 +985,53 @@ export const EditProfilePage: React.FC<EditProfilePageProps> = ({
               <Lock className="w-4 h-4 text-[#1464F4]" />
               Update Account Password
             </h3>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Current Password</label>
-                <input
-                  type="password"
-                  placeholder="Enter current password"
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 outline-none"
-                />
+
+            {passwordError && (
+              <div className="mb-3 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>{passwordError}</span>
               </div>
+            )}
+
+            {passwordSuccess && (
+              <div className="mb-3 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>Password updated successfully!</span>
+              </div>
+            )}
+
+            <div className="space-y-3">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">New Password</label>
                 <input
                   type="password"
-                  placeholder="At least 6 characters"
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 outline-none"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="At least 8 characters"
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-100 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Confirm New Password</label>
+                <input
+                  type="password"
+                  value={confirmNewPassword}
+                  onChange={(e) => setConfirmNewPassword(e.target.value)}
+                  placeholder="Repeat new password"
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:ring-2 focus:ring-blue-100 outline-none"
                 />
               </div>
               <button
-                onClick={() => {
-                  alert('Password updated successfully!');
-                  setShowPasswordModal(false);
-                }}
-                className="w-full py-2.5 rounded-xl bg-[#1464F4] text-white text-xs font-bold shadow-sm hover:bg-blue-600"
+                onClick={handleSavePassword}
+                disabled={isChangingPassword}
+                className="w-full py-2.5 rounded-xl bg-[#1464F4] text-white text-xs font-bold shadow-sm hover:bg-blue-600 flex items-center justify-center gap-2 disabled:opacity-60"
               >
-                Save New Password
+                {isChangingPassword ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Lock className="w-4 h-4" />
+                )}
+                <span>{isChangingPassword ? 'Updating Password...' : 'Save New Password'}</span>
               </button>
             </div>
           </div>
@@ -910,24 +1053,19 @@ export const EditProfilePage: React.FC<EditProfilePageProps> = ({
               Two-Factor Authentication (2FA)
             </h3>
             <p className="text-xs text-slate-500 mb-4 leading-relaxed">
-              Enhance account security by requiring an SMS verification code whenever you log in from a new device.
+              Enhance account security by requiring an SMS or Authenticator app (TOTP) verification code whenever you log in from a new device.
             </p>
-            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-700 flex items-center justify-between mb-4">
-              <span>SMS Security Code (+94...)</span>
-              <button
-                onClick={() => setTwoFactorEnabled(!twoFactorEnabled)}
-                className={`px-3 py-1 rounded-lg text-xs font-bold ${
-                  twoFactorEnabled ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-700'
-                }`}
-              >
-                {twoFactorEnabled ? 'Enabled' : 'Enable'}
-              </button>
+            
+            <div className="p-4 bg-amber-50/70 rounded-2xl border border-amber-200 text-amber-900 text-xs leading-relaxed mb-4">
+              <strong className="font-bold block mb-0.5">Feature Coming Soon</strong>
+              Two-factor authentication with SMS verification and TOTP security keys will be enabled in an upcoming security release.
             </div>
+
             <button
               onClick={() => setShow2FAModal(false)}
-              className="w-full py-2 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold hover:bg-slate-200"
+              className="w-full py-2.5 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold hover:bg-slate-200"
             >
-              Done
+              Close
             </button>
           </div>
         </div>

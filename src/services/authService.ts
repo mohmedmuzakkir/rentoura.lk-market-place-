@@ -91,6 +91,8 @@ export function calculatePasswordStrength(password: string): 'Weak' | 'Fair' | '
   return 'Weak';
 }
 
+export const CURRENT_AGREEMENT_VERSION = '1.0';
+
 export class AuthService {
   private static currentUser: User | null = null;
   private static currentSession: Session | null = null;
@@ -217,7 +219,7 @@ export class AuthService {
           return {
             id: uid,
             fullName: data.full_name || 'Rentoura Member',
-            displayName: data.full_name || 'Rentoura Member',
+            displayName: data.display_name || data.full_name || 'Rentoura Member',
             email: data.email || '',
             phone: data.phone_normalized || '',
             bio: data.bio || '',
@@ -230,15 +232,17 @@ export class AuthService {
             district: data.district_id || '',
             city: data.city_id || '',
             area: data.area_id || '',
-            preferredLanguage: data.preferred_language || 'EN',
+            preferredLanguage: data.preferred_language || 'English',
             currency: 'LKR',
             emailNotifications: data.email_notifications != null ? Boolean(data.email_notifications) : true,
             pushNotifications: data.push_notifications != null ? Boolean(data.push_notifications) : true,
-            twoFactorEnabled: Boolean(data.two_factor_enabled),
+            twoFactorEnabled: false,
             totalReviews: Number(data.total_reviews || 0),
             averageRating: Number(data.rating || data.average_rating || 0),
             role: rawRole,
-            accountStatus: rawStatus
+            accountStatus: rawStatus,
+            agreementVersion: data.agreement_version || '',
+            agreementAcceptedAt: data.agreement_accepted_at || ''
           };
         }
       } catch (e: any) {
@@ -285,12 +289,47 @@ export class AuthService {
         totalReviews: 0,
         averageRating: 0,
         role: 'user',
-        accountStatus: 'active'
+        accountStatus: 'active',
+        agreementVersion: meta.agreement_version || cachedProfile?.agreementVersion || '',
+        agreementAcceptedAt: meta.agreement_accepted_at || cachedProfile?.agreementAcceptedAt || ''
       };
     }
 
     console.warn('[DIAGNOSTIC] No row returned from public.profiles for UID:', uid);
     return null;
+  }
+
+  static hasAcceptedCurrentAgreement(profile: UserProfile | null): boolean {
+    if (profile) {
+      return profile.agreementVersion === CURRENT_AGREEMENT_VERSION && Boolean(profile.agreementAcceptedAt);
+    }
+    const accepted = localStorage.getItem('rentoura_agreement_accepted') === 'true';
+    const version = localStorage.getItem('rentoura_agreement_version');
+    return accepted && version === CURRENT_AGREEMENT_VERSION;
+  }
+
+  static async acceptUserAgreement(): Promise<boolean> {
+    const timestamp = new Date().toISOString();
+
+    if (AuthService.currentUser) {
+      await AuthService.safeUpdateProfile(AuthService.currentUser.id, {
+        agreement_version: CURRENT_AGREEMENT_VERSION,
+        agreement_accepted_at: timestamp
+      });
+
+      if (AuthService.currentUserProfile) {
+        AuthService.currentUserProfile.agreementVersion = CURRENT_AGREEMENT_VERSION;
+        AuthService.currentUserProfile.agreementAcceptedAt = timestamp;
+        ProfileService.saveProfile(AuthService.currentUserProfile);
+        AuthService.notifyListeners(AuthService.currentUser, AuthService.currentUserProfile);
+      }
+    }
+
+    localStorage.setItem('rentoura_agreement_accepted', 'true');
+    localStorage.setItem('rentoura_agreement_version', CURRENT_AGREEMENT_VERSION);
+    localStorage.setItem('rentoura_agreement_accepted_at', timestamp);
+
+    return true;
   }
 
   static async login(emailInput: string, passwordInput: string, rememberMe: boolean = true) {
@@ -555,19 +594,77 @@ export class AuthService {
     }
   }
 
+  static async uploadAvatar(userId: string, file: File): Promise<string> {
+    if (!userId) throw new Error('User must be authenticated to upload an avatar.');
+
+    const validMimes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    if (!validMimes.includes(file.type.toLowerCase())) {
+      throw new Error('Avatar photo must be in JPG, PNG, or WEBP format.');
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      throw new Error('Avatar photo must be smaller than 5MB.');
+    }
+
+    const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+    const filePath = `${userId}/avatar_${Date.now()}.${fileExt}`;
+
+    const { error } = await supabase.storage
+      .from('avatars')
+      .upload(filePath, file, {
+        upsert: true,
+        contentType: file.type
+      });
+
+    if (error) {
+      console.warn('Error uploading avatar to Supabase Storage avatars bucket:', error.message);
+      throw new Error(`Failed to upload photo to storage: ${error.message}`);
+    }
+
+    const { data: publicUrlData } = supabase.storage
+      .from('avatars')
+      .getPublicUrl(filePath);
+
+    return publicUrlData.publicUrl;
+  }
+
   static async updateUserProfile(updatedProfile: UserProfile): Promise<void> {
     if (!AuthService.currentUser) {
       throw new Error('You must be logged in to update your profile.');
     }
 
+    // Validate phone if provided
+    let phoneNormalized = updatedProfile.phone;
+    if (phoneNormalized.trim()) {
+      const phoneVal = normalizeSriLankanPhone(phoneNormalized);
+      if (!phoneVal.isValid) {
+        throw new Error(phoneVal.error);
+      }
+      phoneNormalized = phoneVal.normalized;
+      updatedProfile.phone = phoneNormalized;
+    }
+
     try {
-      const fullPayload = {
+      // Ensure location IDs are valid UUIDs or null (never names like "Kandy")
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      const validProvinceId = uuidRegex.test(updatedProfile.province) ? updatedProfile.province : null;
+      const validDistrictId = uuidRegex.test(updatedProfile.district) ? updatedProfile.district : null;
+      const validCityId = uuidRegex.test(updatedProfile.city) ? updatedProfile.city : null;
+      const validAreaId = uuidRegex.test(updatedProfile.area || '') ? updatedProfile.area : null;
+
+      const fullPayload: Record<string, any> = {
         full_name: updatedProfile.fullName.trim(),
-        phone_normalized: updatedProfile.phone,
-        province_id: updatedProfile.province,
-        district_id: updatedProfile.district,
-        city_id: updatedProfile.city,
-        area_id: updatedProfile.area,
+        display_name: updatedProfile.displayName ? updatedProfile.displayName.trim() : updatedProfile.fullName.trim(),
+        bio: updatedProfile.bio ? updatedProfile.bio.trim() : '',
+        avatar_url: updatedProfile.avatarUrl || '',
+        preferred_language: updatedProfile.preferredLanguage || 'English',
+        email_notifications: Boolean(updatedProfile.emailNotifications),
+        push_notifications: Boolean(updatedProfile.pushNotifications),
+        phone_normalized: phoneNormalized,
+        province_id: validProvinceId,
+        district_id: validDistrictId,
+        city_id: validCityId,
+        area_id: validAreaId,
         updated_at: new Date().toISOString()
       };
 
@@ -582,20 +679,49 @@ export class AuthService {
     }
   }
 
+  static async resendConfirmationEmail(rawEmail: string): Promise<boolean> {
+    const emailVal = validateAndNormalizeEmail(rawEmail);
+    if (!emailVal.isValid) {
+      throw new Error(emailVal.error);
+    }
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: emailVal.normalized
+      });
+
+      if (error) {
+        const msg = error.message || '';
+        if (msg.includes('rate limit') || msg.includes('too many requests')) {
+          throw new Error('Too many requests. Please wait a few minutes before resending the confirmation email.');
+        }
+        throw new Error(msg || 'Failed to resend confirmation email. Please try again later.');
+      }
+      return true;
+    } catch (err: any) {
+      throw new Error(err.message || 'Failed to resend confirmation email.');
+    }
+  }
+
   static async sendPasswordReset(rawEmail: string): Promise<boolean> {
     const emailVal = validateAndNormalizeEmail(rawEmail);
     if (!emailVal.isValid) {
       throw new Error(emailVal.error);
     }
 
+    const origin = typeof window !== 'undefined' && window.location?.origin
+      ? window.location.origin
+      : 'https://www.rentoura.lk';
+    const redirectTo = `${origin}/reset-password`;
+
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(emailVal.normalized, {
-        redirectTo: `${window.location.origin}/reset-password`
+        redirectTo
       });
 
       if (error) {
         const msg = error.message || '';
-        if (msg.includes('rate limit') || msg.includes('too many requests')) {
+        if (msg.toLowerCase().includes('rate limit') || msg.toLowerCase().includes('too many requests')) {
           throw new Error('Too many attempts. Please wait a few minutes before requesting another reset link.');
         }
       }
@@ -607,21 +733,23 @@ export class AuthService {
     }
   }
 
-  static async verifyResetCode(code: string): Promise<string> {
-    if (!code || !code.trim()) {
-      throw new Error('This password reset link is missing or invalid.');
-    }
-    return 'user@rentoura.lk';
-  }
-
-  static async confirmResetPassword(code: string, newPassword: string): Promise<boolean> {
+  static async updatePasswordFromRecoverySession(newPassword: string): Promise<boolean> {
     if (!newPassword || newPassword.length < 8) {
       throw new Error('Password must be at least 8 characters long.');
     }
+
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      throw new Error('No active password reset session found. Your reset link may have expired or is invalid.');
+    }
+
     const { error } = await supabase.auth.updateUser({ password: newPassword });
     if (error) {
-      throw new Error(error.message);
+      throw new Error(error.message || 'Failed to update password. Please try requesting a new reset link.');
     }
+
+    // Sign out to clear recovery session and avoid stale auth cache
+    await AuthService.logout();
     return true;
   }
 

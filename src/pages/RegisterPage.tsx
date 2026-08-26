@@ -16,7 +16,10 @@ import {
   CheckCircle2,
   Users,
   Zap,
-  Headphones
+  Headphones,
+  Check,
+  RefreshCw,
+  MailCheck
 } from 'lucide-react';
 import { RentouraLogo } from '../components/RentouraLogo';
 import { 
@@ -36,6 +39,8 @@ interface RegisterPageProps {
   onOpenPrivacyPolicy?: () => void;
 }
 
+const DRAFT_KEY = 'rentoura_register_draft';
+
 export const RegisterPage: React.FC<RegisterPageProps> = ({
   onNavigate,
   returnUrl,
@@ -44,13 +49,53 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
   onOpenUserAgreement,
   onOpenPrivacyPolicy
 }) => {
-  // Form State
-  const [fullName, setFullName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
+  // Form State - Restored from draft if available
+  const [fullName, setFullName] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem(DRAFT_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return parsed.fullName || '';
+      }
+    } catch (e) {}
+    return '';
+  });
+
+  const [email, setEmail] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem(DRAFT_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return parsed.email || '';
+      }
+    } catch (e) {}
+    return '';
+  });
+
+  const [phone, setPhone] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem(DRAFT_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return parsed.phone || '';
+      }
+    } catch (e) {}
+    return '';
+  });
+
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [agreementAccepted, setAgreementAccepted] = useState(false);
+
+  const [agreementAccepted, setAgreementAccepted] = useState(() => {
+    try {
+      const saved = sessionStorage.getItem(DRAFT_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return Boolean(parsed.agreementAccepted);
+      }
+    } catch (e) {}
+    return false;
+  });
 
   // Field UI States
   const [showPassword, setShowPassword] = useState(false);
@@ -69,8 +114,38 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
 
-  // Password strength
+  // Email confirmation state
+  const [requiresConfirmation, setRequiresConfirmation] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [resendStatusMsg, setResendStatusMsg] = useState('');
+  const [isResending, setIsResending] = useState(false);
+
+  // Save form draft to sessionStorage
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(
+        DRAFT_KEY,
+        JSON.stringify({ fullName, email, phone, agreementAccepted })
+      );
+    } catch (e) {}
+  }, [fullName, email, phone, agreementAccepted]);
+
+  // Resend cooldown timer
+  useEffect(() => {
+    if (resendCooldown > 0) {
+      const timer = setTimeout(() => {
+        setResendCooldown((prev) => prev - 1);
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [resendCooldown]);
+
+  // Password strength and checklist
   const passwordStrength = calculatePasswordStrength(password);
+  const hasMinLength = password.length >= 8;
+  const hasCaseMix = /[A-Z]/.test(password) && /[a-z]/.test(password);
+  const hasNumber = /[0-9]/.test(password);
+  const hasSpecial = /[^A-Za-z0-9]/.test(password);
 
   // Check if already authenticated
   useEffect(() => {
@@ -105,6 +180,21 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
     } else {
       setPhone(norm.normalized);
       setPhoneError('');
+    }
+  };
+
+  const handleResendConfirmation = async () => {
+    if (resendCooldown > 0 || isResending) return;
+    setIsResending(true);
+    setResendStatusMsg('');
+    try {
+      await AuthService.resendConfirmationEmail(email);
+      setResendStatusMsg('Confirmation email resent successfully! Please check your inbox.');
+      setResendCooldown(60);
+    } catch (err: any) {
+      setResendStatusMsg(err.message || 'Failed to resend confirmation email. Please try again later.');
+    } finally {
+      setIsResending(false);
     }
   };
 
@@ -191,8 +281,12 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
         agreementAccepted
       });
 
+      // Clear draft on successful signup
+      sessionStorage.removeItem(DRAFT_KEY);
+
       if (res.requiresEmailConfirmation) {
-        setSuccessMsg('Account created. Please verify your email before logging in.');
+        setRequiresConfirmation(true);
+        setSuccessMsg(`Account created! A confirmation email has been sent to ${emailVal.normalized}. Please check your inbox.`);
       } else {
         setSuccessMsg(`Account created successfully! Welcome to Rentoura, ${res.profile?.fullName || trimmedName}.`);
         setTimeout(() => {
@@ -328,327 +422,408 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
               </div>
             </div>
 
-            {/* Form Title */}
-            <div className="mb-5 text-center sm:text-left">
-              <div className="inline-flex items-center justify-center w-10 h-10 rounded-2xl bg-blue-50 text-[#1464F4] mb-2 sm:hidden">
-                <UserPlus className="w-5 h-5" />
-              </div>
-              <h1 className="text-2xl font-black text-[#041C43] font-heading tracking-tight">
-                Create Account
-              </h1>
-              <p className="text-xs text-slate-500 font-medium mt-0.5">
-                Fill in the details below to get started
-              </p>
-            </div>
-
-            {/* General Banner Alert Messages */}
-            {generalError && (
-              <div className="mb-4 p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium flex items-start gap-2.5 animate-in fade-in duration-200">
-                <AlertCircle className="w-4 h-4 shrink-0 text-rose-500 mt-0.5" />
-                <div className="flex-1">{generalError}</div>
-              </div>
-            )}
-
-            {successMsg && (
-              <div className="mb-4 p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium flex items-center gap-2.5 animate-in fade-in duration-200">
-                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
-                <div>{successMsg}</div>
-              </div>
-            )}
-
-            {/* REGISTRATION FORM */}
-            <form onSubmit={handleSubmit} noValidate className="space-y-4">
-              {/* Full Name Field */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Full Name <span className="text-rose-500">*</span>
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                    <User className="w-4 h-4" />
-                  </div>
-                  <input
-                    type="text"
-                    value={fullName}
-                    onChange={(e) => {
-                      setFullName(e.target.value);
-                      if (nameError) setNameError('');
-                    }}
-                    placeholder="Enter your full name"
-                    autoComplete="name"
-                    disabled={isSubmitting}
-                    className={`w-full pl-10 pr-4 py-2.5 bg-slate-50 border rounded-2xl text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 transition-all ${
-                      nameError 
-                        ? 'border-rose-300 focus:border-rose-500 focus:ring-rose-500/20' 
-                        : 'border-slate-200 focus:border-[#1464F4] focus:ring-[#1464F4]/20'
-                    }`}
-                  />
+            {requiresConfirmation ? (
+              /* EMAIL CONFIRMATION REQUIRED UI */
+              <div className="py-8 px-4 text-center space-y-5 animate-in fade-in duration-300 max-w-md mx-auto">
+                <div className="w-16 h-16 rounded-full bg-blue-50 border border-blue-100 text-[#1464F4] flex items-center justify-center mx-auto shadow-sm">
+                  <MailCheck className="w-8 h-8" />
                 </div>
-                {nameError && (
-                  <p className="mt-1 text-[11px] font-medium text-rose-500 flex items-center gap-1">
-                    <AlertCircle className="w-3 h-3 shrink-0" />
-                    <span>{nameError}</span>
-                  </p>
-                )}
-              </div>
 
-              {/* Email Address Field */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Email Address <span className="text-rose-500">*</span>
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                    <Mail className="w-4 h-4" />
-                  </div>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => {
-                      setEmail(e.target.value);
-                      if (emailError) setEmailError('');
-                    }}
-                    onBlur={handleEmailBlur}
-                    placeholder="Enter your email address"
-                    autoComplete="email"
-                    inputMode="email"
-                    disabled={isSubmitting}
-                    className={`w-full pl-10 pr-4 py-2.5 bg-slate-50 border rounded-2xl text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 transition-all ${
-                      emailError 
-                        ? 'border-rose-300 focus:border-rose-500 focus:ring-rose-500/20' 
-                        : 'border-slate-200 focus:border-[#1464F4] focus:ring-[#1464F4]/20'
-                    }`}
-                  />
+                <div className="space-y-2">
+                  <h2 className="text-xl font-black text-[#041C43] font-heading">
+                    Check Your Email
+                  </h2>
+                  <p className="text-xs text-slate-600 leading-relaxed font-medium">
+                    We've sent a confirmation email to <strong className="text-slate-900">{email}</strong>. Please click the link in that email to activate your account.
+                  </p>
                 </div>
-                {emailError && (
-                  <p className="mt-1 text-[11px] font-medium text-rose-500 flex items-center gap-1">
-                    <AlertCircle className="w-3 h-3 shrink-0" />
-                    <span>{emailError}</span>
-                  </p>
-                )}
-              </div>
 
-              {/* Sri Lankan Mobile Number Field */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Sri Lankan Mobile Number <span className="text-rose-500">*</span>
-                </label>
-                <div className="relative flex items-center">
-                  <div className="absolute left-2 flex items-center gap-1 px-2 py-1 rounded-xl bg-slate-200/80 text-[11px] font-bold text-slate-700 border border-slate-300/80 pointer-events-none">
-                    <span>🇱🇰</span>
-                    <span>+94</span>
+                {resendStatusMsg && (
+                  <div className="p-3.5 rounded-2xl bg-blue-50 border border-blue-200 text-blue-900 text-xs font-medium flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-[#1464F4] shrink-0" />
+                    <span>{resendStatusMsg}</span>
                   </div>
-                  <input
-                    type="tel"
-                    value={phone}
-                    onChange={(e) => {
-                      setPhone(e.target.value);
-                      if (phoneError) setPhoneError('');
-                    }}
-                    onBlur={handlePhoneBlur}
-                    placeholder="07XXXXXXXX"
-                    autoComplete="tel"
-                    inputMode="tel"
-                    disabled={isSubmitting}
-                    className={`w-full pl-20 pr-4 py-2.5 bg-slate-50 border rounded-2xl text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 transition-all ${
-                      phoneError 
-                        ? 'border-rose-300 focus:border-rose-500 focus:ring-rose-500/20' 
-                        : 'border-slate-200 focus:border-[#1464F4] focus:ring-[#1464F4]/20'
-                    }`}
-                  />
-                </div>
-                {phoneError ? (
-                  <p className="mt-1 text-[11px] font-medium text-rose-500 flex items-center gap-1">
-                    <AlertCircle className="w-3 h-3 shrink-0" />
-                    <span>{phoneError}</span>
-                  </p>
-                ) : (
-                  <p className="mt-1 text-[10px] text-slate-400 font-medium">
-                    Enter a valid Sri Lankan mobile number (07XXXXXXXX or +947XXXXXXXX)
-                  </p>
                 )}
-              </div>
 
-              {/* Password & Strength Indicator */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Password <span className="text-rose-500">*</span>
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                    <Lock className="w-4 h-4" />
-                  </div>
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    value={password}
-                    onChange={(e) => {
-                      setPassword(e.target.value);
-                      if (passwordError) setPasswordError('');
-                    }}
-                    placeholder="Create a strong password"
-                    autoComplete="new-password"
-                    disabled={isSubmitting}
-                    className={`w-full pl-10 pr-10 py-2.5 bg-slate-50 border rounded-2xl text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 transition-all ${
-                      passwordError 
-                        ? 'border-rose-300 focus:border-rose-500 focus:ring-rose-500/20' 
-                        : 'border-slate-200 focus:border-[#1464F4] focus:ring-[#1464F4]/20'
-                    }`}
-                  />
+                <div className="pt-2 space-y-3">
                   <button
                     type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600 transition-colors"
+                    onClick={handleResendConfirmation}
+                    disabled={resendCooldown > 0 || isResending}
+                    className="w-full py-3 px-4 rounded-2xl bg-[#1464F4] hover:bg-blue-600 active:bg-blue-700 text-white font-bold text-xs shadow-md shadow-blue-500/20 flex items-center justify-center gap-2 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    {isResending ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        <span>Resending email...</span>
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw className="w-4 h-4" />
+                        <span>
+                          {resendCooldown > 0
+                            ? `Resend Email (${resendCooldown}s)`
+                            : 'Resend Confirmation Email'}
+                        </span>
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => onNavigate('/login')}
+                    className="w-full py-2.5 px-4 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors"
+                  >
+                    Return to Login
                   </button>
                 </div>
+              </div>
+            ) : (
+              /* REGISTRATION FORM */
+              <>
+                {/* Form Title */}
+                <div className="mb-4 text-center sm:text-left">
+                  <div className="inline-flex items-center justify-center w-10 h-10 rounded-2xl bg-blue-50 text-[#1464F4] mb-2 sm:hidden">
+                    <UserPlus className="w-5 h-5" />
+                  </div>
+                  <h1 className="text-2xl font-black text-[#041C43] font-heading tracking-tight">
+                    Create Account
+                  </h1>
+                  <p className="text-xs text-slate-500 font-medium mt-0.5">
+                    Fill in the details below to get started
+                  </p>
+                </div>
 
-                {/* Password Strength Indicator */}
-                {password.length > 0 && (
-                  <div className="mt-1.5 flex items-center gap-2">
-                    <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden flex gap-1">
-                      <div className={`h-full flex-1 rounded-full ${passwordStrength === 'Weak' ? 'bg-rose-500' : passwordStrength === 'Fair' ? 'bg-amber-500' : 'bg-emerald-500'}`} />
-                      <div className={`h-full flex-1 rounded-full ${passwordStrength === 'Fair' || passwordStrength === 'Strong' ? (passwordStrength === 'Fair' ? 'bg-amber-500' : 'bg-emerald-500') : 'bg-slate-200'}`} />
-                      <div className={`h-full flex-1 rounded-full ${passwordStrength === 'Strong' ? 'bg-emerald-500' : 'bg-slate-200'}`} />
+                {/* General Banner Alert Messages */}
+                {generalError && (
+                  <div className="mb-4 p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium flex items-start gap-2.5 animate-in fade-in duration-200">
+                    <AlertCircle className="w-4 h-4 shrink-0 text-rose-500 mt-0.5" />
+                    <div className="flex-1">{generalError}</div>
+                  </div>
+                )}
+
+                {successMsg && (
+                  <div className="mb-4 p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium flex items-center gap-2.5 animate-in fade-in duration-200">
+                    <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+                    <div>{successMsg}</div>
+                  </div>
+                )}
+
+                <form onSubmit={handleSubmit} noValidate className="space-y-3.5">
+                  {/* Full Name Field */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Full Name <span className="text-rose-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                        <User className="w-4 h-4" />
+                      </div>
+                      <input
+                        type="text"
+                        value={fullName}
+                        onChange={(e) => {
+                          setFullName(e.target.value);
+                          if (nameError) setNameError('');
+                        }}
+                        placeholder="Enter your full name"
+                        autoComplete="name"
+                        disabled={isSubmitting}
+                        className={`w-full pl-10 pr-4 py-2.5 bg-slate-50 border rounded-2xl text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 transition-all ${
+                          nameError 
+                            ? 'border-rose-300 focus:border-rose-500 focus:ring-rose-500/20' 
+                            : 'border-slate-200 focus:border-[#1464F4] focus:ring-[#1464F4]/20'
+                        }`}
+                      />
                     </div>
-                    <span className={`text-[10px] font-bold ${passwordStrength === 'Weak' ? 'text-rose-500' : passwordStrength === 'Fair' ? 'text-amber-600' : 'text-emerald-600'}`}>
-                      {passwordStrength} Password
-                    </span>
+                    {nameError && (
+                      <p className="mt-1 text-[11px] font-medium text-rose-500 flex items-center gap-1">
+                        <AlertCircle className="w-3 h-3 shrink-0" />
+                        <span>{nameError}</span>
+                      </p>
+                    )}
                   </div>
-                )}
 
-                {passwordError && (
-                  <p className="mt-1 text-[11px] font-medium text-rose-500 flex items-center gap-1">
-                    <AlertCircle className="w-3 h-3 shrink-0" />
-                    <span>{passwordError}</span>
-                  </p>
-                )}
-              </div>
-
-              {/* Confirm Password Field */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Confirm Password <span className="text-rose-500">*</span>
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                    <Lock className="w-4 h-4" />
+                  {/* Email Address Field */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Email Address <span className="text-rose-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                        <Mail className="w-4 h-4" />
+                      </div>
+                      <input
+                        type="email"
+                        value={email}
+                        onChange={(e) => {
+                          setEmail(e.target.value);
+                          if (emailError) setEmailError('');
+                        }}
+                        onBlur={handleEmailBlur}
+                        placeholder="Enter your email address"
+                        autoComplete="email"
+                        inputMode="email"
+                        disabled={isSubmitting}
+                        className={`w-full pl-10 pr-4 py-2.5 bg-slate-50 border rounded-2xl text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 transition-all ${
+                          emailError 
+                            ? 'border-rose-300 focus:border-rose-500 focus:ring-rose-500/20' 
+                            : 'border-slate-200 focus:border-[#1464F4] focus:ring-[#1464F4]/20'
+                        }`}
+                      />
+                    </div>
+                    {emailError && (
+                      <p className="mt-1 text-[11px] font-medium text-rose-500 flex items-center gap-1">
+                        <AlertCircle className="w-3 h-3 shrink-0" />
+                        <span>{emailError}</span>
+                      </p>
+                    )}
                   </div>
-                  <input
-                    type={showConfirmPassword ? 'text' : 'password'}
-                    value={confirmPassword}
-                    onChange={(e) => {
-                      setConfirmPassword(e.target.value);
-                      if (confirmPasswordError) setConfirmPasswordError('');
-                    }}
-                    placeholder="Confirm your password"
-                    autoComplete="new-password"
-                    disabled={isSubmitting}
-                    className={`w-full pl-10 pr-10 py-2.5 bg-slate-50 border rounded-2xl text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 transition-all ${
-                      confirmPasswordError 
-                        ? 'border-rose-300 focus:border-rose-500 focus:ring-rose-500/20' 
-                        : 'border-slate-200 focus:border-[#1464F4] focus:ring-[#1464F4]/20'
-                    }`}
-                  />
+
+                  {/* Sri Lankan Mobile Number Field */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Sri Lankan Mobile Number <span className="text-rose-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                        <Phone className="w-4 h-4" />
+                      </div>
+                      <input
+                        type="tel"
+                        value={phone}
+                        onChange={(e) => {
+                          setPhone(e.target.value);
+                          if (phoneError) setPhoneError('');
+                        }}
+                        onBlur={handlePhoneBlur}
+                        placeholder="07XXXXXXXX or +947XXXXXXXX"
+                        autoComplete="tel"
+                        inputMode="tel"
+                        disabled={isSubmitting}
+                        className={`w-full pl-10 pr-4 py-2.5 bg-slate-50 border rounded-2xl text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 transition-all ${
+                          phoneError 
+                            ? 'border-rose-300 focus:border-rose-500 focus:ring-rose-500/20' 
+                            : 'border-slate-200 focus:border-[#1464F4] focus:ring-[#1464F4]/20'
+                        }`}
+                      />
+                    </div>
+                    {phoneError ? (
+                      <p className="mt-1 text-[11px] font-medium text-rose-500 flex items-center gap-1">
+                        <AlertCircle className="w-3 h-3 shrink-0" />
+                        <span>{phoneError}</span>
+                      </p>
+                    ) : (
+                      <p className="mt-1 text-[10px] text-slate-400 font-medium">
+                        Valid 10-digit Sri Lankan mobile (e.g. 0771234567 or +94771234567)
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Password & Strength Indicator / Inline Checklist */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Password <span className="text-rose-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                        <Lock className="w-4 h-4" />
+                      </div>
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        value={password}
+                        onChange={(e) => {
+                          setPassword(e.target.value);
+                          if (passwordError) setPasswordError('');
+                        }}
+                        placeholder="Create a strong password"
+                        autoComplete="new-password"
+                        disabled={isSubmitting}
+                        className={`w-full pl-10 pr-10 py-2.5 bg-slate-50 border rounded-2xl text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 transition-all ${
+                          passwordError 
+                            ? 'border-rose-300 focus:border-rose-500 focus:ring-rose-500/20' 
+                            : 'border-slate-200 focus:border-[#1464F4] focus:ring-[#1464F4]/20'
+                        }`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600 transition-colors"
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+
+                    {/* Password Strength Bar */}
+                    {password.length > 0 && (
+                      <div className="mt-2 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden flex gap-1">
+                            <div className={`h-full flex-1 rounded-full ${passwordStrength === 'Weak' ? 'bg-rose-500' : passwordStrength === 'Fair' ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+                            <div className={`h-full flex-1 rounded-full ${passwordStrength === 'Fair' || passwordStrength === 'Strong' ? (passwordStrength === 'Fair' ? 'bg-amber-500' : 'bg-emerald-500') : 'bg-slate-200'}`} />
+                            <div className={`h-full flex-1 rounded-full ${passwordStrength === 'Strong' ? 'bg-emerald-500' : 'bg-slate-200'}`} />
+                          </div>
+                          <span className={`text-[10px] font-bold ${passwordStrength === 'Weak' ? 'text-rose-500' : passwordStrength === 'Fair' ? 'text-amber-600' : 'text-emerald-600'}`}>
+                            {passwordStrength} Password
+                          </span>
+                        </div>
+
+                        {/* Inline Password Checklist */}
+                        <div className="grid grid-cols-2 gap-1.5 p-2 rounded-xl bg-slate-50 border border-slate-100 text-[10.5px] font-medium text-slate-600">
+                          <div className={`flex items-center gap-1.5 ${hasMinLength ? 'text-emerald-600 font-bold' : 'text-slate-400'}`}>
+                            <Check className={`w-3 h-3 ${hasMinLength ? 'text-emerald-600' : 'text-slate-300'}`} />
+                            <span>8+ characters</span>
+                          </div>
+                          <div className={`flex items-center gap-1.5 ${hasCaseMix ? 'text-emerald-600 font-bold' : 'text-slate-400'}`}>
+                            <Check className={`w-3 h-3 ${hasCaseMix ? 'text-emerald-600' : 'text-slate-300'}`} />
+                            <span>Upper & lower case</span>
+                          </div>
+                          <div className={`flex items-center gap-1.5 ${hasNumber ? 'text-emerald-600 font-bold' : 'text-slate-400'}`}>
+                            <Check className={`w-3 h-3 ${hasNumber ? 'text-emerald-600' : 'text-slate-300'}`} />
+                            <span>At least 1 number</span>
+                          </div>
+                          <div className={`flex items-center gap-1.5 ${hasSpecial ? 'text-emerald-600 font-bold' : 'text-slate-400'}`}>
+                            <Check className={`w-3 h-3 ${hasSpecial ? 'text-emerald-600' : 'text-slate-300'}`} />
+                            <span>Special character</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {passwordError && (
+                      <p className="mt-1 text-[11px] font-medium text-rose-500 flex items-center gap-1">
+                        <AlertCircle className="w-3 h-3 shrink-0" />
+                        <span>{passwordError}</span>
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Confirm Password Field */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Confirm Password <span className="text-rose-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                        <Lock className="w-4 h-4" />
+                      </div>
+                      <input
+                        type={showConfirmPassword ? 'text' : 'password'}
+                        value={confirmPassword}
+                        onChange={(e) => {
+                          setConfirmPassword(e.target.value);
+                          if (confirmPasswordError) setConfirmPasswordError('');
+                        }}
+                        placeholder="Confirm your password"
+                        autoComplete="new-password"
+                        disabled={isSubmitting}
+                        className={`w-full pl-10 pr-10 py-2.5 bg-slate-50 border rounded-2xl text-xs font-medium text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 transition-all ${
+                          confirmPasswordError 
+                            ? 'border-rose-300 focus:border-rose-500 focus:ring-rose-500/20' 
+                            : 'border-slate-200 focus:border-[#1464F4] focus:ring-[#1464F4]/20'
+                        }`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600 transition-colors"
+                      >
+                        {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                    {confirmPasswordError && (
+                      <p className="mt-1 text-[11px] font-medium text-rose-500 flex items-center gap-1">
+                        <AlertCircle className="w-3 h-3 shrink-0" />
+                        <span>{confirmPasswordError}</span>
+                      </p>
+                    )}
+                  </div>
+
+                  {/* User Agreement Checkbox */}
+                  <div>
+                    <label className="flex items-start gap-2 cursor-pointer select-none text-slate-600 font-medium text-xs leading-relaxed">
+                      <input
+                        type="checkbox"
+                        checked={agreementAccepted}
+                        onChange={(e) => {
+                          setAgreementAccepted(e.target.checked);
+                          if (agreementError) setAgreementError('');
+                        }}
+                        disabled={isSubmitting}
+                        className="w-4 h-4 rounded-md border-slate-300 text-[#1464F4] focus:ring-[#1464F4]/30 transition-all cursor-pointer mt-0.5"
+                      />
+                      <span>
+                        I agree to the{' '}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            onOpenUserAgreement ? onOpenUserAgreement() : onNavigate('/user-agreement');
+                          }}
+                          className="font-bold text-[#1464F4] hover:underline focus:outline-none"
+                        >
+                          User Agreement
+                        </button>{' '}
+                        and{' '}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            onOpenPrivacyPolicy ? onOpenPrivacyPolicy() : onNavigate('/privacy-policy');
+                          }}
+                          className="font-bold text-[#1464F4] hover:underline focus:outline-none"
+                        >
+                          Privacy Policy
+                        </button>
+                      </span>
+                    </label>
+                    {agreementError && (
+                      <p className="mt-1 text-[11px] font-medium text-rose-500 flex items-center gap-1">
+                        <AlertCircle className="w-3 h-3 shrink-0" />
+                        <span>{agreementError}</span>
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Create Account Submit Button */}
                   <button
-                    type="button"
-                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600 transition-colors"
-                  >
-                    {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-                {confirmPasswordError && (
-                  <p className="mt-1 text-[11px] font-medium text-rose-500 flex items-center gap-1">
-                    <AlertCircle className="w-3 h-3 shrink-0" />
-                    <span>{confirmPasswordError}</span>
-                  </p>
-                )}
-              </div>
-
-              {/* User Agreement Checkbox */}
-              <div>
-                <label className="flex items-start gap-2 cursor-pointer select-none text-slate-600 font-medium text-xs leading-relaxed">
-                  <input
-                    type="checkbox"
-                    checked={agreementAccepted}
-                    onChange={(e) => {
-                      setAgreementAccepted(e.target.checked);
-                      if (agreementError) setAgreementError('');
-                    }}
+                    type="submit"
                     disabled={isSubmitting}
-                    className="w-4 h-4 rounded-md border-slate-300 text-[#1464F4] focus:ring-[#1464F4]/30 transition-all cursor-pointer mt-0.5"
-                  />
-                  <span>
-                    I agree to the{' '}
+                    className="w-full py-3 px-4 rounded-2xl bg-[#1464F4] hover:bg-blue-600 active:bg-blue-700 text-white font-bold text-sm shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2 transition-all tap-bounce disabled:opacity-60 disabled:cursor-not-allowed mt-2"
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        <span>Creating account...</span>
+                      </>
+                    ) : (
+                      <>
+                        <UserPlus className="w-4 h-4" />
+                        <span>Create Account</span>
+                        <ChevronRight className="w-4 h-4" />
+                      </>
+                    )}
+                  </button>
+                </form>
+
+                {/* Already have an account link */}
+                <div className="mt-4 text-center pt-3 border-t border-slate-100">
+                  <span className="text-xs text-slate-500">
+                    Already have an account?{' '}
                     <button
                       type="button"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        onOpenUserAgreement ? onOpenUserAgreement() : onNavigate('/user-agreement');
-                      }}
-                      className="font-bold text-[#1464F4] hover:underline focus:outline-none"
+                      onClick={() => onNavigate('/login')}
+                      className="font-bold text-[#1464F4] hover:underline"
                     >
-                      User Agreement
-                    </button>{' '}
-                    and{' '}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        onOpenPrivacyPolicy ? onOpenPrivacyPolicy() : onNavigate('/privacy-policy');
-                      }}
-                      className="font-bold text-[#1464F4] hover:underline focus:outline-none"
-                    >
-                      Privacy Policy
+                      Login Now
                     </button>
                   </span>
-                </label>
-                {agreementError && (
-                  <p className="mt-1 text-[11px] font-medium text-rose-500 flex items-center gap-1">
-                    <AlertCircle className="w-3 h-3 shrink-0" />
-                    <span>{agreementError}</span>
-                  </p>
-                )}
-              </div>
-
-              {/* Create Account Submit Button */}
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="w-full py-3 px-4 rounded-2xl bg-[#1464F4] hover:bg-blue-600 active:bg-blue-700 text-white font-bold text-sm shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2 transition-all tap-bounce disabled:opacity-60 disabled:cursor-not-allowed mt-2"
-              >
-                {isSubmitting ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    <span>Creating account...</span>
-                  </>
-                ) : (
-                  <>
-                    <UserPlus className="w-4 h-4" />
-                    <span>Create Account</span>
-                    <ChevronRight className="w-4 h-4" />
-                  </>
-                )}
-              </button>
-            </form>
-
-            {/* Already have an account link */}
-            <div className="mt-5 text-center pt-3 border-t border-slate-100">
-              <span className="text-xs text-slate-500">
-                Already have an account?{' '}
-                <button
-                  type="button"
-                  onClick={() => onNavigate('/login')}
-                  className="font-bold text-[#1464F4] hover:underline"
-                >
-                  Login Now
-                </button>
-              </span>
-            </div>
+                </div>
+              </>
+            )}
 
             {/* Honest Trust Badges Footer */}
-            <div className="mt-6 pt-4 border-t border-slate-100 grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
+            <div className="mt-5 pt-4 border-t border-slate-100 grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
               <div className="p-2 rounded-xl bg-slate-50 flex flex-col items-center">
                 <ShieldCheck className="w-4 h-4 text-[#1464F4] mb-0.5" />
                 <span className="text-[10px] font-bold text-slate-800">100% Secure</span>

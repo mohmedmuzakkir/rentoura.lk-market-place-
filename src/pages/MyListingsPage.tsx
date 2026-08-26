@@ -328,35 +328,16 @@ export const MyListingsPage: React.FC<MyListingsPageProps> = ({
             <p className="text-xs text-slate-500 mb-4 leading-relaxed">
               Featured promotional boosts will pin "{boostListing.title}" to the top of category searches and marketplace feeds.
             </p>
-            <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 mb-4 text-left text-xs space-y-1.5 text-slate-600">
-              <div className="flex items-center justify-between">
-                <span>Priority Placement</span>
-                <span className="font-bold text-emerald-600">✓ Enabled</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Featured Badge</span>
-                <span className="font-bold text-blue-600">✓ Highlighted</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Est. Extra Reach</span>
-                <span className="font-bold text-slate-900">+350% Views</span>
-              </div>
+            <div className="bg-amber-50 rounded-xl p-3 border border-amber-200 mb-4 text-left text-xs space-y-1 text-amber-900">
+              <span className="font-bold block">Payment Gateway Pending</span>
+              <span className="text-amber-800">Paid promotional boosts require payment gateway integration. Featured status cannot be assigned client-side.</span>
             </div>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="flex justify-end gap-2">
               <button
                 onClick={() => setBoostListing(null)}
-                className="py-2.5 px-3 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-all"
+                className="w-full py-2.5 px-3 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition-all"
               >
-                Close
-              </button>
-              <button
-                onClick={() => {
-                  setBoostListing(null);
-                  showToast('Boost activated for listing');
-                }}
-                className="py-2.5 px-3 rounded-xl text-xs font-bold text-white bg-[#1464F4] hover:bg-blue-700 transition-all shadow-md shadow-blue-600/20"
-              >
-                Activate Boost
+                Close (Coming Soon)
               </button>
             </div>
           </div>

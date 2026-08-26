@@ -1,9 +1,6 @@
 import { UserListingItem } from '../types/profileTypes';
 import { ListingDraft, normalizeNumericPrice } from '../types/postFormTypes';
-import { ProfileService } from './profileService';
-import { NotificationService } from './notificationService';
 import { PostDraftService } from './postDraftService';
-import { AppNotification } from '../types/notificationTypes';
 import { supabase } from '../lib/supabase';
 
 export class ListingSubmissionService {
@@ -58,6 +55,37 @@ export class ListingSubmissionService {
       const description = draft.formValues.description || draft.formValues.summary || 'Listing submitted for review.';
       const shortSummary = description.substring(0, 150);
 
+      // Handle company logo file upload if present
+      let finalLogoUrl = draft.formValues?.logoUrl || '';
+      if (draft.formValues?.logoFile) {
+        try {
+          const logoFile = draft.formValues.logoFile;
+          const ext = logoFile.name ? logoFile.name.split('.').pop() || 'png' : 'png';
+          const logoPath = `${ownerId}/logos/${Date.now()}_logo.${ext}`;
+          const { data: uploadData, error: uploadErr } = await supabase.storage
+            .from('listing-images')
+            .upload(logoPath, logoFile, {
+              cacheControl: '3600',
+              upsert: true,
+              contentType: logoFile.type || 'image/png'
+            });
+          if (!uploadErr && uploadData?.path) {
+            finalLogoUrl = uploadData.path;
+          }
+        } catch (e) {
+          console.warn('Failed to upload logo file:', e);
+        }
+      }
+
+      // Ensure no blob URLs remain in formValues
+      if (typeof finalLogoUrl === 'string' && finalLogoUrl.startsWith('blob:')) {
+        finalLogoUrl = '';
+      }
+
+      const cleanFormValues = { ...(draft.formValues || {}) };
+      delete (cleanFormValues as any).logoFile;
+      cleanFormValues.logoUrl = finalLogoUrl;
+
       // Construct module_data JSON payload
       const moduleData: Record<string, any> = {
         rates: draft.pricing ? {
@@ -73,7 +101,7 @@ export class ListingSubmissionService {
         condition: draft.condition || draft.formValues.condition || undefined,
         contact_preferences: draft.contactPreferences,
         rules: draft.rules,
-        form_values: draft.formValues
+        form_values: cleanFormValues
       };
 
       // 4. Insert into `listings` table
@@ -149,20 +177,25 @@ export class ListingSubmissionService {
             listing_id: listingId,
             storage_path: storagePath,
             media_type: 'image',
-            sort_order: i
+            position: i,
+            is_cover: img.isCover || i === 0
           });
         }
       }
 
-      // Resolve cover URL
-      let coverImageUrl = 'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?auto=format&fit=crop&w=800&q=80';
+      // Resolve cover URL using signed URL for private bucket
+      let coverImageUrl = '';
       if (uploadedMediaPaths.length > 0) {
         const firstPath = uploadedMediaPaths[0];
-        if (firstPath.startsWith('http')) {
+        if (firstPath.startsWith('http') || firstPath.startsWith('blob:')) {
           coverImageUrl = firstPath;
         } else {
-          const { data: pubData } = supabase.storage.from('listing-images').getPublicUrl(firstPath);
-          if (pubData?.publicUrl) coverImageUrl = pubData.publicUrl;
+          const { data: signedData } = await supabase.storage
+            .from('listing-images')
+            .createSignedUrl(firstPath, 3600);
+          if (signedData?.signedUrl) {
+            coverImageUrl = signedData.signedUrl;
+          }
         }
       }
 
@@ -171,7 +204,7 @@ export class ListingSubmissionService {
       const locationDistrict = draft.location.districtName || '';
       const formattedLocation = locationDistrict ? `${locationCity}, ${locationDistrict}` : locationCity;
 
-      // Construct canonical UserListingItem for local state
+      // Construct canonical UserListingItem for returning result
       const newListing: UserListingItem = {
         id: listingId,
         ownerId,
@@ -200,30 +233,7 @@ export class ListingSubmissionService {
         updatedAt: new Date().toISOString()
       };
 
-      // Sync to local ProfileService state for instant UI update
-      ProfileService.addListing(newListing);
-
-      // Create notification for review submission
-      const newNotif: AppNotification = {
-        id: `notif-${Date.now()}`,
-        type: 'LISTING_PENDING',
-        category: 'listings',
-        title: 'Listing submitted for review ⏳',
-        body: `“${title}” has been submitted and is currently under review by our moderation team.`,
-        createdAt: 'Just now',
-        timestamp: Date.now(),
-        read: false,
-        priority: 'normal',
-        entityType: draft.module,
-        entityId: listingId,
-        listingId: listingId,
-        thumbnailUrl: coverImageUrl
-      };
-
-      const existingNotifs = NotificationService.getNotifications();
-      NotificationService.saveNotifications([newNotif, ...existingNotifs]);
-
-      // Delete local draft
+      // Delete local draft upon successful submission
       PostDraftService.deleteDraft(draft.module, ownerId);
 
       return {

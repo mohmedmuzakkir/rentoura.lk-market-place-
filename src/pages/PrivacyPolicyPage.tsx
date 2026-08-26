@@ -162,7 +162,7 @@ export const PrivacyPolicyPage: React.FC<PrivacyPolicyPageProps> = ({
           <div className="space-y-2">
             <h3 className="font-bold text-[#041C43] text-sm">2. Password & Authentication Security</h3>
             <p>
-              Your account password is encrypted and managed exclusively via secure Firebase Authentication infrastructure. We never store passwords in plain text or reveal them to platform staff or third parties.
+              Your account password is encrypted and managed exclusively via secure Supabase Authentication infrastructure. We never store passwords in plain text or reveal them to platform staff or third parties.
             </p>
           </div>
 

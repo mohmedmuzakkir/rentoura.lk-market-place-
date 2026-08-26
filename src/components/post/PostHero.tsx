@@ -42,7 +42,7 @@ export const PostHero: React.FC<PostHeroProps> = () => {
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> Guided 3-min forms
             </span>
             <span className="flex items-center gap-1">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> Verified inquiries
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> Direct inquiries
             </span>
           </div>
         </div>

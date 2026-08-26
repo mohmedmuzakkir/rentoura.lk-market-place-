@@ -100,52 +100,66 @@ export const ProfileModals: React.FC<ProfileModalsProps> = ({
               </div>
             </div>
 
-            {/* Rating Summary Card */}
-            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/80 mb-4 flex items-center justify-around text-center">
-              <div>
-                <div className="text-2xl font-black text-slate-900 font-heading">4.9</div>
-                <div className="flex items-center justify-center text-amber-400 gap-0.5 mt-0.5">
-                  {[...Array(5)].map((_, i) => (
-                    <Star key={i} className="w-3.5 h-3.5 fill-amber-400" />
-                  ))}
-                </div>
-                <div className="text-[10px] text-slate-500 mt-1">Average Score</div>
+            {reviews.length === 0 ? (
+              <div className="bg-slate-50 rounded-2xl p-6 border border-slate-200/80 text-center">
+                <Star className="w-8 h-8 text-amber-300 mx-auto mb-2" />
+                <h4 className="text-xs font-bold text-slate-800">No Reviews Received Yet</h4>
+                <p className="text-[11px] text-slate-500 mt-1 max-w-xs mx-auto">
+                  When clients or renters leave reviews on your active listings, their feedback and ratings will appear here.
+                </p>
               </div>
-              <div className="h-10 w-px bg-slate-200" />
-              <div>
-                <div className="text-2xl font-black text-slate-900 font-heading">{reviews.length}</div>
-                <div className="text-xs font-bold text-emerald-600 mt-0.5">100% Positive</div>
-                <div className="text-[10px] text-slate-500 mt-1">Total Received</div>
-              </div>
-            </div>
-
-            {/* Reviews List */}
-            <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
-              {reviews.map((rev) => (
-                <div key={rev.id} className="p-3 bg-white rounded-xl border border-slate-200/80 shadow-xs">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-full bg-blue-100 text-[#1464F4] flex items-center justify-center text-xs font-bold">
-                        {rev.reviewerName[0]}
-                      </div>
-                      <span className="text-xs font-bold text-slate-800">{rev.reviewerName}</span>
+            ) : (
+              <>
+                {/* Rating Summary Card */}
+                <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/80 mb-4 flex items-center justify-around text-center">
+                  <div>
+                    <div className="text-2xl font-black text-slate-900 font-heading">
+                      {(reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length).toFixed(1)}
                     </div>
-                    <div className="flex items-center text-amber-400 gap-0.5">
+                    <div className="flex items-center justify-center text-amber-400 gap-0.5 mt-0.5">
                       {[...Array(5)].map((_, i) => (
-                        <Star key={i} className="w-3 h-3 fill-amber-400" />
+                        <Star key={i} className="w-3.5 h-3.5 fill-amber-400" />
                       ))}
                     </div>
+                    <div className="text-[10px] text-slate-500 mt-1">Average Score</div>
                   </div>
-                  <p className="text-xs text-slate-600 mt-2 leading-relaxed">
-                    "{rev.comment}"
-                  </p>
-                  <div className="mt-2 flex items-center justify-between text-[10px] text-slate-400">
-                    <span className="truncate max-w-[180px] text-slate-500 font-medium">Re: {rev.listingTitle}</span>
-                    <span>{rev.date}</span>
+                  <div className="h-10 w-px bg-slate-200" />
+                  <div>
+                    <div className="text-2xl font-black text-slate-900 font-heading">{reviews.length}</div>
+                    <div className="text-xs font-bold text-emerald-600 mt-0.5">Total Reviews</div>
+                    <div className="text-[10px] text-slate-500 mt-1">Received</div>
                   </div>
                 </div>
-              ))}
-            </div>
+
+                {/* Reviews List */}
+                <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+                  {reviews.map((rev) => (
+                    <div key={rev.id} className="p-3 bg-white rounded-xl border border-slate-200/80 shadow-xs">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-full bg-blue-100 text-[#1464F4] flex items-center justify-center text-xs font-bold">
+                            {rev.reviewerName[0]}
+                          </div>
+                          <span className="text-xs font-bold text-slate-800">{rev.reviewerName}</span>
+                        </div>
+                        <div className="flex items-center text-amber-400 gap-0.5">
+                          {[...Array(5)].map((_, i) => (
+                            <Star key={i} className={`w-3 h-3 ${i < rev.rating ? 'fill-amber-400' : 'text-slate-200'}`} />
+                          ))}
+                        </div>
+                      </div>
+                      <p className="text-xs text-slate-600 mt-2 leading-relaxed">
+                        "{rev.comment}"
+                      </p>
+                      <div className="mt-2 flex items-center justify-between text-[10px] text-slate-400">
+                        <span className="truncate max-w-[180px] text-slate-500 font-medium">Re: {rev.listingTitle}</span>
+                        <span>{rev.date}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         )}
 
@@ -161,78 +175,18 @@ export const ProfileModals: React.FC<ProfileModalsProps> = ({
                   Identity Verification
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Build trust with verified badge
+                  Account trust verification
                 </p>
               </div>
             </div>
 
-            {profile.isVerified ? (
-              <div className="bg-emerald-50 rounded-2xl p-4 border border-emerald-200 text-center">
-                <div className="w-12 h-12 rounded-full bg-[#08A34F] text-white flex items-center justify-center mx-auto mb-2 shadow-sm">
-                  <ShieldCheck className="w-7 h-7" />
-                </div>
-                <h4 className="text-sm font-bold text-slate-900">Your Account is Fully Verified</h4>
-                <p className="text-xs text-slate-600 mt-1 leading-relaxed">
-                  Your Sri Lankan National Identity & Phone Number are confirmed. The Verified Badge is visible on all your active listings.
-                </p>
-              </div>
-            ) : verificationSubmitted ? (
-              <div className="bg-blue-50 rounded-2xl p-4 border border-blue-200 text-center">
-                <CheckCircle2 className="w-10 h-10 text-[#1464F4] mx-auto mb-2" />
-                <h4 className="text-sm font-bold text-slate-900">Verification Request Submitted</h4>
-                <p className="text-xs text-slate-600 mt-1">
-                  Our Sri Lankan moderation team will review your document within 24 hours.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <p className="text-xs text-slate-600 leading-relaxed">
-                  Provide your Sri Lankan National Identity Card (NIC) or Passport number to obtain the official blue verification checkmark.
-                </p>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Document Type
-                  </label>
-                  <select
-                    value={idType}
-                    onChange={(e) => setIdType(e.target.value)}
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:ring-2 focus:ring-[#1464F4] outline-none"
-                  >
-                    <option value="NIC">National Identity Card (NIC / Smart Card)</option>
-                    <option value="PASSPORT">Sri Lankan Passport</option>
-                    <option value="DRIVING_LICENSE">Driving License</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Document / NIC Number
-                  </label>
-                  <input
-                    type="text"
-                    value={nicNumber}
-                    onChange={(e) => setNicNumber(e.target.value)}
-                    placeholder="e.g. 199412345678 or 941234567V"
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:ring-2 focus:ring-[#1464F4] outline-none font-mono"
-                  />
-                </div>
-
-                <div className="border-2 border-dashed border-slate-200 rounded-xl p-4 text-center cursor-pointer hover:border-blue-400 transition-colors">
-                  <UploadCloud className="w-6 h-6 text-slate-400 mx-auto mb-1" />
-                  <p className="text-xs font-bold text-slate-700">Upload Photo of ID</p>
-                  <p className="text-[10px] text-slate-400">Front & Back side (JPG, PNG, PDF)</p>
-                </div>
-
-                <button
-                  onClick={() => setVerificationSubmitted(true)}
-                  disabled={!nicNumber.trim()}
-                  className="w-full py-2.5 rounded-xl bg-[#1464F4] text-white text-xs font-bold disabled:opacity-50 hover:bg-blue-600 transition-colors shadow-sm"
-                >
-                  Submit for Verification
-                </button>
-              </div>
-            )}
+            <div className="bg-slate-50 rounded-2xl p-5 border border-slate-200 text-center">
+              <ShieldCheck className="w-10 h-10 text-emerald-500 mx-auto mb-2" />
+              <h4 className="text-sm font-extrabold text-slate-900 font-heading">Verification System Coming Soon</h4>
+              <p className="text-xs text-slate-600 mt-1.5 leading-relaxed">
+                The identity verification badge workflow for NIC and Passport validation will be enabled in an upcoming release.
+              </p>
+            </div>
           </div>
         )}
 
@@ -248,7 +202,7 @@ export const ProfileModals: React.FC<ProfileModalsProps> = ({
                   Payments & Promotions
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Manage listing boosts & invoices
+                  Manage listing boosts & ad placements
                 </p>
               </div>
             </div>
@@ -257,27 +211,13 @@ export const ProfileModals: React.FC<ProfileModalsProps> = ({
               <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                 Active Promotions
               </div>
-              <div className="mt-2 flex items-center justify-between">
-                <div>
-                  <div className="text-xs font-bold text-slate-900">Featured Ad Boost (7 Days)</div>
-                  <div className="text-[10px] text-slate-400">Luxury 4BR House in Kandy</div>
-                </div>
-                <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-[#08A34F] text-[10px] font-bold border border-emerald-200">
-                  Active
-                </span>
-              </div>
+              <p className="text-xs text-slate-600 mt-2">
+                No active listing promotions or paid ad boosts currently running on your account.
+              </p>
             </div>
 
-            <div className="space-y-2">
-              <div className="text-xs font-bold text-slate-800">Accepted Sri Lankan Payment Methods</div>
-              <div className="p-3 bg-white rounded-xl border border-slate-200 text-xs text-slate-600 flex items-center justify-between">
-                <span>Visa / MasterCard / LankaPay</span>
-                <span className="font-bold text-slate-900">Online</span>
-              </div>
-              <div className="p-3 bg-white rounded-xl border border-slate-200 text-xs text-slate-600 flex items-center justify-between">
-                <span>Bank Deposit / CEFT Transfer</span>
-                <span className="font-bold text-slate-900">Direct</span>
-              </div>
+            <div className="p-4 bg-indigo-50/60 rounded-2xl border border-indigo-100 text-xs text-indigo-900 leading-relaxed">
+              <strong className="font-bold">Paid Ad Promotions Coming Soon:</strong> Featured listing highlights and priority placements across Sri Lanka will be available in the upcoming billing module.
             </div>
           </div>
         )}

@@ -16,7 +16,7 @@ export const ServicePricingStep: React.FC<ServicePricingStepProps> = ({
   accentColor = '#FF650A'
 }) => {
   const pricingModel = draft.formValues.pricingModel || 'hourly';
-  const priceValue = draft.formValues.price !== undefined ? draft.formValues.price : 2500;
+  const priceValue = draft.formValues.price !== undefined ? draft.formValues.price : 0;
 
   const updateFormValue = (key: string, value: any) => {
     onChange({
@@ -33,12 +33,9 @@ export const ServicePricingStep: React.FC<ServicePricingStepProps> = ({
   };
 
   // Optional Packages
-  const packages = Array.isArray(draft.formValues.servicePackages)
+  const packages: Array<{ name: string; price: number; description: string }> = Array.isArray(draft.formValues.servicePackages)
     ? draft.formValues.servicePackages
-    : [
-        { name: 'Basic Inspection', price: 1500, description: 'Single item inspection & minor diagnosis' },
-        { name: 'Full Repair & Service', price: 4500, description: 'Complete repair with 1 month warranty' }
-      ];
+    : [];
 
   const addPackage = () => {
     const newPkg = { name: 'New Service Package', price: 3000, description: 'Package description' };

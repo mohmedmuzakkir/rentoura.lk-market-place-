@@ -5,6 +5,7 @@ import { AppRoute } from '../types';
 import { UserListingItem } from '../types/profileTypes';
 import { PostHero } from '../components/post/PostHero';
 import { PostModuleCard, POST_MODULES_CONFIG } from '../components/post/PostModuleCard';
+import { WhatHappensNext } from '../components/post/WhatHappensNext';
 import { WhyPostWithUs } from '../components/post/WhyPostWithUs';
 import { UserRecentActivity } from '../components/post/UserRecentActivity';
 import { ProTipBanner } from '../components/post/ProTipBanner';
@@ -19,7 +20,7 @@ interface PostPageProps {
 export const PostPage: React.FC<PostPageProps> = ({
   onNavigate,
   onOpenDrawer,
-  unreadNotificationsCount = 5,
+  unreadNotificationsCount = 0,
   userListings = []
 }) => {
   return (
@@ -58,10 +59,11 @@ export const PostPage: React.FC<PostPageProps> = ({
             <button
               onClick={() => onNavigate('/my-listings')}
               title="My Listings"
-              className="p-2 rounded-xl text-slate-600 hover:text-[#1464F4] hover:bg-blue-50 text-xs font-bold flex items-center gap-1 tap-bounce hidden sm:flex"
+              aria-label="My Listings"
+              className="p-2 sm:px-3 rounded-xl bg-slate-100/80 hover:bg-blue-50 text-slate-700 hover:text-[#1464F4] text-xs font-bold flex items-center gap-1 tap-bounce transition-colors"
             >
               <Layers className="w-4 h-4" />
-              <span>My Listings</span>
+              <span className="hidden sm:inline">My Listings</span>
             </button>
 
             <button
@@ -107,16 +109,19 @@ export const PostPage: React.FC<PostPageProps> = ({
           </div>
         </section>
 
-        {/* 3. Why Post With Us Information */}
+        {/* 3. Short "What happens next?" Moderation Lifecycle Explanation */}
+        <WhatHappensNext />
+
+        {/* 4. Why Post With Us Information */}
         <WhyPostWithUs />
 
-        {/* 4. User's Recent Activity (Real Canonical Listings) */}
+        {/* 5. User's Recent Activity (Real Canonical Listings) */}
         <UserRecentActivity
           listings={userListings}
           onNavigate={onNavigate}
         />
 
-        {/* 5. Pro Tip Guidelines Card */}
+        {/* 6. Pro Tip Guidelines Card */}
         <ProTipBanner />
       </main>
     </div>

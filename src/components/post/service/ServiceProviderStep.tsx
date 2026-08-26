@@ -298,7 +298,7 @@ export const ServiceProviderStep: React.FC<ServiceProviderStepProps> = ({
         <div className="text-xs text-slate-600 space-y-1">
           <p className="font-bold text-slate-800">Verification & Transparency Policy</p>
           <p className="leading-relaxed">
-            RENTOURA.LK ensures trust by displaying accurate provider details. Verified business badges are awarded after identity or BR review upon request via your Account Settings.
+            RENTOURA.LK ensures trust by displaying accurate provider details. Provide clear and truthful information to build reputation with customers.
           </p>
         </div>
       </div>
