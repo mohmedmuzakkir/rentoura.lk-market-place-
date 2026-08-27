@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { UploadedImage } from '../../types/postFormTypes';
+import { createPendingImages, normalizeImagePositions, revokePendingImage } from '../../utils/pendingUploadImages';
 import { Upload, X, Star, AlertCircle, Image as ImageIcon } from 'lucide-react';
 
 interface MediaUploaderStepProps {
@@ -12,7 +13,7 @@ interface MediaUploaderStepProps {
 export const MediaUploaderStep: React.FC<MediaUploaderStepProps> = ({
   images,
   onChangeImages,
-  maxImages = 10,
+  maxImages = 5,
   accentColor = '#1464F4'
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -23,42 +24,20 @@ export const MediaUploaderStep: React.FC<MediaUploaderStepProps> = ({
     if (!files || files.length === 0) return;
     setErrorMsg(null);
 
-    const validFiles: UploadedImage[] = [];
-    const maxSizeBytes = 5 * 1024 * 1024; // 5MB
-
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      if (!file.type.startsWith('image/')) {
-        setErrorMsg('Only JPG, PNG and WebP images are allowed.');
-        continue;
-      }
-      if (file.size > maxSizeBytes) {
-        setErrorMsg(`"${file.name}" exceeds 5MB limit. Please choose smaller photos.`);
-        continue;
-      }
-
-      const tempUrl = URL.createObjectURL(file);
-      validFiles.push({
-        id: `img-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-        url: tempUrl,
-        name: file.name,
-        size: file.size,
-        file: file,
-        isCover: images.length === 0 && validFiles.length === 0
-      });
-    }
-
-    const merged = [...images, ...validFiles].slice(0, maxImages);
-    onChangeImages(merged);
+    const result = createPendingImages(Array.from(files), images.length);
+    setErrorMsg(result.errors[0] || null);
+    onChangeImages(normalizeImagePositions([...images, ...result.images].slice(0, Math.min(maxImages, 5))));
   };
 
   const handleRemove = (id: string) => {
+    const removed = images.find(img => img.id === id);
+    if (removed) revokePendingImage(removed);
     const next = images.filter(img => img.id !== id);
     // If removed cover, make first remaining as cover
     if (next.length > 0 && !next.some(img => img.isCover)) {
       next[0].isCover = true;
     }
-    onChangeImages(next);
+    onChangeImages(normalizeImagePositions(next));
   };
 
   const handleSetCover = (id: string) => {
@@ -96,7 +75,7 @@ export const MediaUploaderStep: React.FC<MediaUploaderStepProps> = ({
         ref={fileInputRef}
         type="file"
         multiple
-        accept="image/*"
+        accept="image/jpeg,image/png,image/webp"
         onChange={(e) => handleFiles(e.target.files)}
         className="hidden"
       />
@@ -149,7 +128,7 @@ export const MediaUploaderStep: React.FC<MediaUploaderStepProps> = ({
               className="group relative rounded-2xl overflow-hidden bg-slate-100 border border-slate-200 aspect-square shadow-xs"
             >
               <img
-                src={img.url}
+                src={img.previewUrl}
                 alt="Upload preview"
                 className="w-full h-full object-cover"
                 referrerPolicy="no-referrer"

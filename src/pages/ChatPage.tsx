@@ -47,7 +47,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({
   onNavigate,
   onOpenListingDetail,
   onSendMessage,
-  notificationCount = 3,
+  notificationCount = 0,
   userProfile,
   onRefreshMessages,
   onToggleMute,
@@ -561,15 +561,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({
                 >
                   <Phone className="w-4 h-4 text-[#08A34F]" /> Send Contact
                 </button>
-                <button
-                  onClick={() => {
-                    fileInputRef.current?.click();
-                    setShowAttachmentMenu(false);
-                  }}
-                  className="w-full px-3 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 rounded-xl flex items-center gap-2"
-                >
-                  <ImageIcon className="w-4 h-4 text-purple-500" /> Upload Image
-                </button>
+                <div className="px-3 py-2 text-xs text-slate-400">Image attachments are coming soon.</div>
               </div>
             )}
           </div>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { CategoryService, CategoryRecord, CategoryModule } from '../../services/categoryService';
 import { Check, ChevronRight, Search, RefreshCw, AlertCircle } from 'lucide-react';
 import { CategoryIcon } from '../CategoryIcon';
@@ -32,6 +32,10 @@ export const CategorySelectorStep: React.FC<CategorySelectorStepProps> = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [progressMessage, setProgressMessage] = useState('Step 1 of 3 — Select a primary category');
+  const levelOneRef = useRef<HTMLDivElement>(null);
+  const levelTwoRef = useRef<HTMLDivElement>(null);
+  const levelThreeRef = useRef<HTMLDivElement>(null);
 
   const dbModule: CategoryModule = module === 'rentals' ? 'rental' : module === 'jobs' ? 'job' : 'service';
 
@@ -48,9 +52,6 @@ export const CategorySelectorStep: React.FC<CategorySelectorStepProps> = ({
     } else {
       const tree = CategoryService.buildTree(res.data);
       setCategoriesTree(tree);
-      if (tree.length > 0 && !activeMainCatId) {
-        setActiveMainCatId(tree[0].id);
-      }
     }
     setLoading(false);
   }, [dbModule, activeMainCatId]);
@@ -60,6 +61,20 @@ export const CategorySelectorStep: React.FC<CategorySelectorStepProps> = ({
   }, [loadCategories]);
 
   const activeMainCat = categoriesTree.find((c) => c.id === activeMainCatId);
+  const activeSubCat = activeMainCat?.children?.find(child => child.id === activeSubCatId);
+  const finalSelectionComplete = Boolean(
+    activeMainCat && activeSubCat && (activeSubCat.children?.length ? selectedThirdLevelId : selectedSubcategoryId)
+  );
+
+  const guideMobileTo = (target: React.RefObject<HTMLDivElement | null>, message: string) => {
+    setProgressMessage(message);
+    if (window.matchMedia('(max-width: 767px)').matches) {
+      window.requestAnimationFrame(() => {
+        target.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        target.current?.focus({ preventScroll: true });
+      });
+    }
+  };
 
   // Filter main categories by search query
   const filteredCategories = searchQuery.trim()
@@ -87,10 +102,12 @@ export const CategorySelectorStep: React.FC<CategorySelectorStepProps> = ({
       thirdLevelName: third?.name,
       categoryPath: path,
     });
+    setProgressMessage(`Category selected — ${path}`);
   };
 
   return (
     <div className="space-y-4 text-left">
+      <p className="sr-only" aria-live="polite" aria-atomic="true">{progressMessage}</p>
       {/* Search Filter */}
       <div className="relative">
         <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -140,7 +157,7 @@ export const CategorySelectorStep: React.FC<CategorySelectorStepProps> = ({
       {!loading && !error && categoriesTree.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-12 gap-3 min-h-[380px]">
           {/* Left: Main Categories */}
-          <div className="md:col-span-5 bg-white rounded-2xl p-2.5 border border-slate-200/80 shadow-xs space-y-1 overflow-y-auto max-h-[420px]">
+          <div ref={levelOneRef} tabIndex={-1} className="md:col-span-5 scroll-mt-24 bg-white rounded-2xl p-2.5 border border-slate-200/80 shadow-xs space-y-1 overflow-y-auto max-h-[420px] focus:outline-none focus:ring-2 focus:ring-blue-500">
             <span className="text-[10px] font-extrabold uppercase text-slate-400 px-2 py-1 block">
               1. Select Primary Category
             </span>
@@ -153,8 +170,10 @@ export const CategorySelectorStep: React.FC<CategorySelectorStepProps> = ({
                   onClick={() => {
                     setActiveMainCatId(cat.id);
                     setActiveSubCatId('');
+                    onSelectCategory({ categoryId: cat.id, categoryName: cat.name, subcategoryId: '', subcategoryName: '', categoryPath: cat.name });
+                    guideMobileTo(levelTwoRef, 'Step 2 of 3 — Select a subcategory');
                   }}
-                  className={`w-full p-2.5 rounded-xl flex items-center justify-between text-left transition-all tap-bounce cursor-pointer ${
+                  className={`w-full p-2.5 rounded-xl flex items-center justify-between text-left transition-all tap-bounce cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                     isSelected
                       ? 'bg-blue-50/80 border border-blue-200 text-slate-900 font-bold shadow-xs'
                       : 'text-slate-600 hover:bg-slate-50 border border-transparent font-medium'
@@ -177,7 +196,7 @@ export const CategorySelectorStep: React.FC<CategorySelectorStepProps> = ({
           </div>
 
           {/* Right: Subcategories & Options */}
-          <div className="md:col-span-7 bg-white rounded-2xl p-3 border border-slate-200/80 shadow-xs space-y-3 overflow-y-auto max-h-[420px]">
+          <div ref={levelTwoRef} tabIndex={-1} className="md:col-span-7 scroll-mt-24 bg-white rounded-2xl p-3 border border-slate-200/80 shadow-xs space-y-3 overflow-y-auto max-h-[420px] focus:outline-none focus:ring-2 focus:ring-blue-500">
             <div className="border-b border-slate-100 pb-2">
               <span className="text-[10px] font-extrabold uppercase text-slate-400 block">
                 2. Select Specific Subcategory
@@ -199,9 +218,8 @@ export const CategorySelectorStep: React.FC<CategorySelectorStepProps> = ({
                         type="button"
                         onClick={() => {
                           setActiveSubCatId(sub.id);
-                          if (!hasThirdLevel) {
-                            handleSelectSubCategory(sub);
-                          }
+                          handleSelectSubCategory(sub);
+                          if (hasThirdLevel) guideMobileTo(levelThreeRef, 'Step 3 of 3 — Select a specific type');
                         }}
                         className={`w-full p-2.5 rounded-xl flex items-center justify-between text-left transition-all tap-bounce cursor-pointer ${
                           isSelectedSub
@@ -238,7 +256,7 @@ export const CategorySelectorStep: React.FC<CategorySelectorStepProps> = ({
 
                       {/* Third level options if expanded */}
                       {hasThirdLevel && activeSubCatId === sub.id && (
-                        <div className="pl-4 pr-1 py-1 space-y-1 border-l-2 border-slate-200 ml-2 animate-in fade-in duration-150">
+                        <div ref={levelThreeRef} tabIndex={-1} className="scroll-mt-24 pl-4 pr-1 py-1 space-y-1 border-l-2 border-slate-200 ml-2 animate-in fade-in duration-150 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-lg">
                           {sub.children?.map((third) => {
                             const isSelectedThird = selectedThirdLevelId === third.id;
                             return (
@@ -269,6 +287,12 @@ export const CategorySelectorStep: React.FC<CategorySelectorStepProps> = ({
               </p>
             )}
           </div>
+        </div>
+      )}
+      {finalSelectionComplete && (
+        <div className="flex items-center justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-3" role="status">
+          <div className="min-w-0"><p className="text-xs font-bold text-emerald-900">Category selected</p><p className="truncate text-[11px] text-emerald-700">{[activeMainCat?.name, activeSubCat?.name, activeSubCat?.children?.find(child => child.id === selectedThirdLevelId)?.name].filter(Boolean).join(' › ')}</p></div>
+          <button type="button" onClick={() => { setActiveMainCatId(''); setActiveSubCatId(''); onSelectCategory({ categoryId: '', categoryName: '', subcategoryId: '', subcategoryName: '', categoryPath: '' }); guideMobileTo(levelOneRef, 'Step 1 of 3 — Select a primary category'); }} className="rounded-lg px-3 py-1.5 text-xs font-bold text-emerald-800 underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600">Change</button>
         </div>
       )}
     </div>

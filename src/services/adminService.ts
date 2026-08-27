@@ -1359,9 +1359,7 @@ export class AdminService {
 
       const { data, error } = await query;
 
-      if (error || !data) {
-        return this.getAnnouncements();
-      }
+      if (error || !data) throw new Error(error?.message || 'Announcements are unavailable.');
 
       return data.map(a => ({
         id: a.id,
@@ -1373,9 +1371,7 @@ export class AdminService {
         createdBy: a.created_by || 'Staff',
         active: a.is_active
       }));
-    } catch (e) {
-      return this.getAnnouncements();
-    }
+    } catch (e) { throw e instanceof Error ? e : new Error('Announcements are unavailable.'); }
   }
 
   static async createAnnouncementAsync(
@@ -1396,9 +1392,7 @@ export class AdminService {
         .select('*')
         .single();
 
-      if (error || !data) {
-        return this.createAnnouncement(announcement, staff);
-      }
+      if (error || !data) throw new Error(error?.message || 'Announcement was not saved.');
 
       const created: PlatformAnnouncement = {
         id: data.id,
@@ -1423,9 +1417,7 @@ export class AdminService {
       });
 
       return created;
-    } catch (e) {
-      return this.createAnnouncement(announcement, staff);
-    }
+    } catch (e) { throw e instanceof Error ? e : new Error('Announcement was not saved.'); }
   }
 
   static async toggleAnnouncementActiveAsync(id: string, staff: StaffAccount): Promise<void> {
@@ -1440,10 +1432,7 @@ export class AdminService {
         .update({ is_active: newStatus, updated_at: new Date().toISOString() })
         .eq('id', id);
 
-      if (error) {
-        this.toggleAnnouncementActive(id, staff);
-        return;
-      }
+      if (error) throw new Error(error.message);
 
       await this.addAuditLogAsync({
         actorId: staff.id,
@@ -1455,9 +1444,7 @@ export class AdminService {
         targetTitle: current.title,
         details: `Toggled active status to ${newStatus}`
       });
-    } catch (e) {
-      this.toggleAnnouncementActive(id, staff);
-    }
+    } catch (e) { throw e instanceof Error ? e : new Error('Announcement was not updated.'); }
   }
 
   static async deleteAnnouncementAsync(id: string, staff: StaffAccount): Promise<void> {
@@ -1466,10 +1453,7 @@ export class AdminService {
       const current = announcements.find(a => a.id === id);
 
       const { error } = await supabase.from('announcements').delete().eq('id', id);
-      if (error) {
-        this.deleteAnnouncement(id, staff);
-        return;
-      }
+      if (error) throw new Error(error.message);
 
       if (current) {
         await this.addAuditLogAsync({
@@ -1483,9 +1467,7 @@ export class AdminService {
           details: 'Deleted announcement from platform.'
         });
       }
-    } catch (e) {
-      this.deleteAnnouncement(id, staff);
-    }
+    } catch (e) { throw e instanceof Error ? e : new Error('Announcement was not deleted.'); }
   }
 
   /**
@@ -1493,12 +1475,15 @@ export class AdminService {
    */
   static async uploadSiteAssetAsync(file: File, folder: string = 'slides'): Promise<{ url?: string; error?: string }> {
     try {
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+      if (!allowedTypes.includes(file.type)) return { error: 'Use a JPEG, PNG, or WEBP image.' };
+      if (file.size > 5 * 1024 * 1024) return { error: 'Image must be 5 MB or smaller.' };
       const fileExt = file.name.split('.').pop() || 'jpg';
       const filePath = `${folder}/${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
       
       const { error: uploadError } = await supabase.storage
         .from('site-assets')
-        .upload(filePath, file, { cacheControl: '3600', upsert: true });
+        .upload(filePath, file, { cacheControl: '3600', upsert: false, contentType: file.type });
 
       if (uploadError) {
         return { error: uploadError.message };
@@ -1509,6 +1494,11 @@ export class AdminService {
     } catch (e: any) {
       return { error: e?.message || 'Upload failed' };
     }
+  }
+
+  static async reorderHomeSlideAsync(slideId: string, action: 'up' | 'down' | 'first' | 'normalize'): Promise<{ success: boolean; error?: string }> {
+    const { error } = await supabase.rpc('admin_reorder_home_slide', { p_slide_id: slideId, p_action: action });
+    return error ? { success: false, error: error.message } : { success: true };
   }
 
   /**

@@ -9,6 +9,8 @@ import { StickyActionBar } from '../components/listing-details/StickyActionBar';
 import { JobApplicationModal } from '../components/listing-details/JobApplicationModal';
 import { JobListingDetail } from '../types/listingDetailsTypes';
 import { ListingDetailService } from '../services/listingDetailService';
+import { ProtectedActionRequest } from '../services/protectedActionService';
+import { buildOwnerWhatsAppUrl } from '../utils/contactLinks';
 
 interface JobDetailPageProps {
   listingId?: string;
@@ -17,6 +19,7 @@ interface JobDetailPageProps {
   onNavigate: (route: string) => void;
   isSaved: boolean;
   onToggleSave: () => void;
+  onProtectedAction: (request: ProtectedActionRequest) => void;
 }
 
 export const JobDetailPage: React.FC<JobDetailPageProps> = ({
@@ -25,7 +28,8 @@ export const JobDetailPage: React.FC<JobDetailPageProps> = ({
   onBack,
   onNavigate,
   isSaved,
-  onToggleSave
+  onToggleSave,
+  onProtectedAction
 }) => {
   const [detail, setDetail] = useState<JobListingDetail | null>(initialJob);
   const [loading, setLoading] = useState<boolean>(!initialJob && Boolean(listingId));
@@ -195,9 +199,10 @@ export const JobDetailPage: React.FC<JobDetailPageProps> = ({
           whatsappNumber={detail.contact?.whatsappNumber}
           isSaved={isSaved}
           onToggleSave={onToggleSave}
-          onSendMessage={() => onNavigate('/messages')}
-          onApplyNow={deadlinePassed ? undefined : handleApplyNow}
-          listingTitle={`${detail.title} at ${detail.company.name}`}
+          onSendMessage={() => onProtectedAction({ type: 'message', returnRoute: `/jobs/${detail.id}`, execute: () => onNavigate('/messages') })}
+          onApplyNow={deadlinePassed ? undefined : () => onProtectedAction({ type: 'apply', returnRoute: `/jobs/${detail.id}`, execute: handleApplyNow })}
+          onCall={detail.contact?.phone ? () => onProtectedAction({ type: 'call', returnRoute: `/jobs/${detail.id}`, execute: () => { window.location.href = `tel:${detail.contact.phone}`; } }) : undefined}
+          onWhatsApp={(detail.contact?.whatsappNumber || detail.contact?.phone) ? () => onProtectedAction({ type: 'whatsapp', returnRoute: `/jobs/${detail.id}`, execute: () => { const url = buildOwnerWhatsAppUrl(detail.contact?.whatsappNumber || detail.contact?.phone, `${detail.title} at ${detail.company.name}`); if (url) window.location.href = url; } }) : undefined}
         />
       </div>
 

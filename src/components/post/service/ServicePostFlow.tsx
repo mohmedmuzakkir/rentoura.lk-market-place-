@@ -1,9 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Save, ArrowRight, CheckCircle2, ShieldCheck, Wrench, User, MapPin, Clock, DollarSign, Image, PhoneCall, Sparkles } from 'lucide-react';
 import { ListingDraft, LocationDataState } from '../../../types/postFormTypes';
 import { PostStepIndicator, StepItem } from '../PostStepIndicator';
 import { PostDraftService } from '../../../services/postDraftService';
 import { ListingSubmissionService } from '../../../services/listingSubmissionService';
+import { AuthService } from '../../../services/authService';
+import { PostAgreementCheckpoint } from '../PostAgreementCheckpoint';
+import { focusFirstInvalidField, ValidationFieldRegistration } from '../../../utils/validationNavigation';
+import { validateSriLankanPhone } from '../../../types/postFormTypes';
+import { revokePendingImage } from '../../../utils/pendingUploadImages';
 import { SubmissionSuccessModal } from '../SubmissionSuccessModal';
 import { ServiceBasicInfoStep } from './ServiceBasicInfoStep';
 import { ServiceProviderStep } from './ServiceProviderStep';
@@ -100,6 +105,17 @@ export const ServicePostFlow: React.FC<ServicePostFlowProps> = ({
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [createdListing, setCreatedListing] = useState<any | null>(null);
+  const [postAgreementChecked, setPostAgreementChecked] = useState(false);
+  const agreementRequired = !AuthService.hasAcceptedCurrentAgreement(AuthService.getCurrentProfile());
+  const imagesRef = useRef(draft.images);
+  useEffect(() => { imagesRef.current = draft.images; }, [draft.images]);
+  useEffect(() => () => imagesRef.current.forEach(revokePendingImage), []);
+  const fieldRegistry: ValidationFieldRegistration[] = [
+    ...['category', 'title', 'description'].map(key => ({ key, step: 1, id: 'service-step-1' })),
+    ...['businessName', 'providerName'].map(key => ({ key, step: 2, id: 'service-step-2' })),
+    { key: 'location', step: 3, id: 'service-step-3' }, { key: 'price', step: 5, id: 'service-step-5' },
+    { key: 'phone', step: 7, id: 'service-step-7' },
+  ];
 
   // Auto-save draft on changes
   useEffect(() => {
@@ -148,18 +164,24 @@ export const ServicePostFlow: React.FC<ServicePostFlowProps> = ({
     }
 
     if (step === 5) {
-      if (draft.formValues.pricingModel !== 'contact' && (draft.formValues.price === undefined || draft.formValues.price < 0)) {
+      if (draft.formValues.pricingModel !== 'contact' && (draft.formValues.price === undefined || Number(draft.formValues.price) <= 0)) {
         newErrors.price = 'Please enter a valid price rate';
       }
     }
 
     if (step === 7) {
-      if (!draft.contactPreferences?.phone || draft.contactPreferences.phone.trim().length < 9) {
+      const contact = draft.contactPreferences;
+      if (!contact.showPhone && !contact.showWhatsApp && !contact.allowDirectChat) {
+        newErrors.phone = 'Select at least one contact method';
+      } else if (contact.showPhone && !validateSriLankanPhone(contact.phone).isValid) {
         newErrors.phone = 'Please enter a valid Sri Lankan mobile phone number';
+      } else if (contact.showWhatsApp && !validateSriLankanPhone(contact.whatsappNumber).isValid) {
+        newErrors.phone = 'Please enter a valid Sri Lankan WhatsApp number';
       }
     }
 
     setErrors(newErrors);
+    if (Object.keys(newErrors).length) focusFirstInvalidField(newErrors, fieldRegistry, currentStep, setCurrentStep);
     return Object.keys(newErrors).length === 0;
   };
 
@@ -192,22 +214,25 @@ export const ServicePostFlow: React.FC<ServicePostFlowProps> = ({
 
   const handleSubmit = async () => {
     // Validate final step requirements
-    if (!validateStep(1) || !validateStep(7)) {
-      alert('Please complete all required fields in Step 1 and Step 7.');
+    const invalidStep = [1, 2, 3, 4, 5, 6, 7].find(step => !validateStep(step));
+    if (invalidStep) return;
+    if (agreementRequired && !postAgreementChecked) {
+      setErrors({ agreement: 'Accept the current User Agreement before submitting.' });
       return;
     }
 
     setIsSubmitting(true);
     try {
+      if (agreementRequired) await AuthService.acceptUserAgreement('post_listing');
       const result = await ListingSubmissionService.submitListing(draft);
       if (result.success) {
         setCreatedListing(result.listing);
         if (onSuccess) onSuccess(result.listing.id);
       } else {
-        alert(result.error || 'Failed to submit service listing.');
+        setErrors({ submit: result.error || 'Failed to submit service listing.' });
       }
     } catch (e: any) {
-      alert('An unexpected error occurred during submission.');
+      setErrors({ submit: e?.message || 'An unexpected error occurred during submission.' });
     } finally {
       setIsSubmitting(false);
     }
@@ -260,6 +285,12 @@ export const ServicePostFlow: React.FC<ServicePostFlowProps> = ({
 
       {/* Main Step Body */}
       <main className="max-w-xl mx-auto px-4 pt-4">
+        {draft.formValues.imagesNeedReselection && draft.images.length === 0 && (
+          <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+            Draft text was restored. Images must be reselected before posting.
+          </div>
+        )}
+        <div id={`service-step-${currentStep}`} tabIndex={-1} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 rounded-2xl">
         {currentStep === 1 && (
           <ServiceBasicInfoStep
             draft={draft}
@@ -324,6 +355,8 @@ export const ServicePostFlow: React.FC<ServicePostFlowProps> = ({
         )}
 
         {currentStep === 8 && (
+          <div className="space-y-4">
+          <PostAgreementCheckpoint required={agreementRequired} checked={postAgreementChecked} onCheckedChange={setPostAgreementChecked} onNavigate={onNavigate} />
           <ServiceReviewStep
             draft={draft}
             onGoToStep={setCurrentStep}
@@ -331,12 +364,17 @@ export const ServicePostFlow: React.FC<ServicePostFlowProps> = ({
             isSubmitting={isSubmitting}
             accentColor={accentColor}
           />
+          </div>
         )}
+        </div>
       </main>
 
       {/* Sticky Step Bottom Navigation Bar */}
       <div className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/90 py-3 px-4 shadow-lg">
         <div className="max-w-xl mx-auto flex items-center justify-between gap-3">
+          {Object.keys(errors).length > 0 && (
+            <p role="alert" className="max-w-[12rem] text-[11px] font-semibold text-rose-700">{Object.values(errors)[0]}</p>
+          )}
           <button
             type="button"
             onClick={handleBack}

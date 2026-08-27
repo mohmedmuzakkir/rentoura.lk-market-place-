@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Upload, X, Star, Image as ImageIcon, AlertCircle, Sparkles, CheckCircle2 } from 'lucide-react';
 import { ListingDraft, UploadedImage } from '../../../types/postFormTypes';
+import { createPendingImages, normalizeImagePositions, revokePendingImage } from '../../../utils/pendingUploadImages';
 
 interface ServiceGalleryStepProps {
   draft: ListingDraft;
@@ -29,44 +30,10 @@ export const ServiceGalleryStep: React.FC<ServiceGalleryStepProps> = ({
       return;
     }
 
-    const newImages: UploadedImage[] = [];
-    const incomingFiles = Array.from(files);
-
-    for (let i = 0; i < incomingFiles.length; i++) {
-      if (images.length + newImages.length >= 5) {
-        setUploadError('Maximum of 5 photos allowed per service listing.');
-        break;
-      }
-      const file = incomingFiles[i];
-
-      // Validate file type
-      if (!file.type.startsWith('image/')) {
-        setUploadError('Please select valid image files (JPG, PNG, WEBP).');
-        continue;
-      }
-      // Validate file size (max 5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        setUploadError(`File "${file.name}" exceeds 5MB limit.`);
-        continue;
-      }
-
-      const objectUrl = URL.createObjectURL(file);
-      const isCover = images.length === 0 && newImages.length === 0;
-
-      newImages.push({
-        id: `img-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-        url: objectUrl,
-        name: file.name,
-        size: file.size,
-        file: file,
-        isCover
-      });
-    }
-
-    if (newImages.length > 0) {
-      onChange({
-        images: [...images, ...newImages]
-      });
+    const result = createPendingImages(Array.from(files), images.length);
+    setUploadError(result.errors[0] || null);
+    if (result.images.length > 0) {
+      onChange({ images: normalizeImagePositions([...images, ...result.images]) });
     }
   };
 
@@ -79,12 +46,14 @@ export const ServiceGalleryStep: React.FC<ServiceGalleryStepProps> = ({
   };
 
   const handleRemoveImage = (id: string) => {
+    const removed = images.find(img => img.id === id);
+    if (removed) revokePendingImage(removed);
     const updated = images.filter(img => img.id !== id);
     // If cover was removed, assign first remaining as cover
     if (updated.length > 0 && !updated.some(i => i.isCover)) {
       updated[0].isCover = true;
     }
-    onChange({ images: updated });
+    onChange({ images: normalizeImagePositions(updated) });
   };
 
   const updateImageCaption = (id: string, caption: string) => {
@@ -122,7 +91,7 @@ export const ServiceGalleryStep: React.FC<ServiceGalleryStepProps> = ({
             type="file"
             id="service-image-upload"
             multiple
-            accept="image/*"
+            accept="image/jpeg,image/png,image/webp"
             onChange={e => handleFiles(e.target.files)}
             className="hidden"
           />
@@ -168,7 +137,7 @@ export const ServiceGalleryStep: React.FC<ServiceGalleryStepProps> = ({
                   }`}
                 >
                   <img
-                    src={img.url}
+                    src={img.previewUrl}
                     alt={img.name || 'Work photo'}
                     className="w-20 h-20 object-cover rounded-xl shrink-0 border border-slate-200"
                   />

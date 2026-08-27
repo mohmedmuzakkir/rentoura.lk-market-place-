@@ -113,7 +113,7 @@ export const ModuleCards: React.FC<ModuleCardsProps> = ({ onNavigate, stats }) =
               Book<br className="lg:hidden" /> Services
             </h3>
             <p className="text-orange-100 text-[9.5px] lg:text-xs leading-snug mt-1 font-medium opacity-90">
-              {stats !== undefined ? `${stats.activeServiceCount} Verified Pros` : 'Trusted Technicians'}
+              {stats !== undefined ? `${stats.activeServiceCount} Active Services` : 'Browse Services'}
             </p>
           </div>
 

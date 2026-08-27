@@ -268,7 +268,7 @@ export const NotificationModal: React.FC<NotificationModalProps> = ({ isOpen, on
     {
       id: '2',
       title: 'Safety Check Reminder',
-      message: 'Always use in-app verified badges when communicating with owners.',
+      message: 'Use in-app messaging and independently verify the person and listing before making arrangements.',
       time: '2h ago',
       unread: true
     },

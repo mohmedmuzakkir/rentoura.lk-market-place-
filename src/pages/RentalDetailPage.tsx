@@ -21,6 +21,8 @@ import { ReportModal } from '../components/listing-details/ReportModal';
 import { StickyActionBar } from '../components/listing-details/StickyActionBar';
 import { RentalListingDetail, RentalPeriodUnit } from '../types/listingDetailsTypes';
 import { ListingDetailService } from '../services/listingDetailService';
+import { ProtectedActionRequest } from '../services/protectedActionService';
+import { buildOwnerWhatsAppUrl } from '../utils/contactLinks';
 
 interface RentalDetailPageProps {
   listingId?: string;
@@ -29,6 +31,7 @@ interface RentalDetailPageProps {
   onNavigate: (route: string) => void;
   isSaved: boolean;
   onToggleSave: () => void;
+  onProtectedAction: (request: ProtectedActionRequest) => void;
 }
 
 export const RentalDetailPage: React.FC<RentalDetailPageProps> = ({
@@ -37,7 +40,8 @@ export const RentalDetailPage: React.FC<RentalDetailPageProps> = ({
   onBack,
   onNavigate,
   isSaved,
-  onToggleSave
+  onToggleSave,
+  onProtectedAction
 }) => {
   const [detail, setDetail] = useState<RentalListingDetail | null>(initialListing);
   const [loading, setLoading] = useState<boolean>(!initialListing && Boolean(listingId));
@@ -286,13 +290,14 @@ export const RentalDetailPage: React.FC<RentalDetailPageProps> = ({
               <h3 className="font-bold text-slate-900 text-sm">Contact Rental Owner</h3>
               
               {hasPhone ? (
-                <a
-                  href={`tel:${detail.contact.phone}`}
+                <button
+                  type="button"
+                  onClick={() => onProtectedAction({ type: 'call', returnRoute: `/rentals/${detail.id}`, execute: () => { window.location.href = `tel:${detail.contact.phone}`; } })}
                   className="w-full py-3 px-4 bg-[#1464F4] hover:bg-blue-600 text-white font-bold text-xs rounded-2xl flex items-center justify-center gap-2 shadow-md transition-all"
                 >
                   <Phone className="w-4 h-4" />
                   Call {detail.contact.phone}
-                </a>
+                </button>
               ) : (
                 <button
                   disabled
@@ -304,7 +309,7 @@ export const RentalDetailPage: React.FC<RentalDetailPageProps> = ({
               )}
 
               <button
-                onClick={() => onNavigate('/messages')}
+                onClick={() => onProtectedAction({ type: 'message', returnRoute: `/rentals/${detail.id}`, execute: () => onNavigate('/messages') })}
                 className="w-full py-3 px-4 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-2xl flex items-center justify-center gap-2 shadow-md transition-all"
               >
                 <MessageSquare className="w-4 h-4 text-sky-400" />
@@ -323,8 +328,9 @@ export const RentalDetailPage: React.FC<RentalDetailPageProps> = ({
           whatsappNumber={detail.contact?.whatsappNumber}
           isSaved={isSaved}
           onToggleSave={onToggleSave}
-          onSendMessage={() => onNavigate('/messages')}
-          listingTitle={detail.title}
+          onSendMessage={() => onProtectedAction({ type: 'message', returnRoute: `/rentals/${detail.id}`, execute: () => onNavigate('/messages') })}
+          onCall={detail.contact?.phone ? () => onProtectedAction({ type: 'call', returnRoute: `/rentals/${detail.id}`, execute: () => { window.location.href = `tel:${detail.contact.phone}`; } }) : undefined}
+          onWhatsApp={(detail.contact?.whatsappNumber || detail.contact?.phone) ? () => onProtectedAction({ type: 'whatsapp', returnRoute: `/rentals/${detail.id}`, execute: () => { const url = buildOwnerWhatsAppUrl(detail.contact?.whatsappNumber || detail.contact?.phone, detail.title); if (url) window.location.href = url; } }) : undefined}
         />
       </div>
 

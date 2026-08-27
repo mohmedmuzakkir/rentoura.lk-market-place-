@@ -55,6 +55,7 @@ export const JobsPage: React.FC<JobsPageProps> = ({
 
   // Saved Jobs State
   const [savedJobs, setSavedJobs] = useState<string[]>(savedListings);
+  useEffect(() => setSavedJobs(savedListings), [savedListings]);
 
   // Modals & Dropdowns State
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
@@ -153,15 +154,12 @@ export const JobsPage: React.FC<JobsPageProps> = ({
 
   // Helper toggle save
   const toggleSaveJob = async (id: string) => {
-    const res = await SavedListingService.toggleSaveListing(id);
-    if (res.requiresLogin) {
-      onNavigate('/login');
-      return;
-    }
-    setSavedJobs(prev => res.saved ? [...prev, id] : prev.filter(item => item !== id));
     if (onToggleSave) {
       onToggleSave(id);
+      return;
     }
+    const res = await SavedListingService.toggleSaveListing(id);
+    if (!res.requiresLogin) setSavedJobs(prev => res.saved ? [...prev, id] : prev.filter(item => item !== id));
   };
 
   // Check if any filter is active
@@ -770,7 +768,7 @@ export const JobsPage: React.FC<JobsPageProps> = ({
                 </span>
               </h2>
               <p className="text-xs text-slate-500 font-medium">
-                {isAnyFilterActive ? 'Showing filtered job opportunities' : 'Latest verified vacancies across Sri Lanka'}
+                {isAnyFilterActive ? 'Showing filtered job opportunities' : 'Latest active vacancies across Sri Lanka'}
               </p>
             </div>
 

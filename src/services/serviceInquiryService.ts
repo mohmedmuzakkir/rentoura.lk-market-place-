@@ -18,6 +18,7 @@ export class ServiceInquiryService {
    * Submits service inquiry to Supabase service_inquiries table & triggers notification.
    */
   static async submitInquiry(input: ServiceInquiryInput): Promise<{ success: boolean; error?: string }> {
+    if (!navigator.onLine) return { success: false, error: 'You are offline. Connect to the internet before sending an inquiry.' };
     try {
       // 1. Verify user authentication
       const { data: authData } = await supabase.auth.getUser();

@@ -25,7 +25,7 @@ export const RentalReviewStep: React.FC<RentalReviewStepProps> = ({
   const ratePeriod = draft.pricing?.ratePeriod || 'day';
   const { formatted: formattedRate } = normalizeNumericPrice(rate);
   const coverImage = draft.images.find(img => img.isCover) || draft.images[0];
-  const coverUrl = coverImage?.url || '';
+  const coverUrl = coverImage?.previewUrl || '';
 
   const handleFinalSubmit = () => {
     if (!agreedToTerms) {

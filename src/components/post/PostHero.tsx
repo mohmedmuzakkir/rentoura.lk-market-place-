@@ -31,7 +31,7 @@ export const PostHero: React.FC<PostHeroProps> = () => {
           </h1>
 
           <p className="text-xs sm:text-sm text-blue-100/90 leading-relaxed">
-            Choose the right category to publish your listing, find verified clients, and grow your presence across Sri Lanka.
+            Choose the right category to publish your listing and reach marketplace visitors across Sri Lanka.
           </p>
 
           {/* Key Trust Points */}

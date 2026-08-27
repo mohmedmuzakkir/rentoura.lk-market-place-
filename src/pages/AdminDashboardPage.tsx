@@ -36,9 +36,9 @@ import { AppRoute } from '../types';
 import { RentouraLogo } from '../components/RentouraLogo';
 import { StaffAccount, AuditLogItem, AdminKpiMetrics, PlatformAnnouncement } from '../types/adminTypes';
 import { UserListingItem } from '../types/profileTypes';
-import { ListingReport, ReportService } from '../services/reportService';
+import { ListingReport } from '../services/reportService';
 import { AdminService } from '../services/adminService';
-import { ProfileService } from '../services/profileService';
+import { AdminModerationService, AdminDashboardMetrics } from '../services/adminModerationService';
 import { ListingModerationModal } from '../components/admin/ListingModerationModal';
 import { AdminUsersView } from '../components/admin/AdminUsersView';
 import { AdminStaffView } from '../components/admin/AdminStaffView';
@@ -99,11 +99,12 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   
   // Single Source of Truth Data State
-  const [kpiMetrics, setKpiMetrics] = useState<AdminKpiMetrics>(() => AdminService.getKpiMetrics(moduleFilter));
-  const [listings, setListings] = useState<UserListingItem[]>(() => ProfileService.getUserListings());
-  const [reports, setReports] = useState<ListingReport[]>(() => ReportService.getReports());
-  const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>(() => AdminService.getAuditLogs());
-  const [announcements, setAnnouncements] = useState<PlatformAnnouncement[]>(() => AdminService.getAnnouncements());
+  const [kpiMetrics, setKpiMetrics] = useState<AdminKpiMetrics>({ totalListings:0, activeListings:0, pendingListings:0, rejectedListings:0, reportedListings:0, featuredListings:0, expiredListings:0, totalUsers:0, verifiedUsers:0, bannedUsers:0, totalViews:0, totalMessages:0, totalReviews:0, totalRevenue:0, rentalsCount:0, jobsCount:0, servicesCount:0 });
+  const [listings, setListings] = useState<UserListingItem[]>([]);
+  const [reports, setReports] = useState<ListingReport[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
+  const [announcements, setAnnouncements] = useState<PlatformAnnouncement[]>([]);
+  const [liveMetrics, setLiveMetrics] = useState<AdminDashboardMetrics | null>(null);
 
   // Moderation Target Listing
   const [selectedModerationListing, setSelectedModerationListing] = useState<UserListingItem | null>(null);
@@ -118,18 +119,21 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
 
   // Refresh single source of truth data
   const refreshDashboardData = async () => {
-    const updatedListings = ProfileService.getUserListings();
-    const updatedReports = ReportService.getReports();
-
-    setListings(updatedListings);
-    setReports(updatedReports);
-
     try {
-      const metrics = await AdminService.getKpiMetricsAsync(moduleFilter);
-      setKpiMetrics(metrics);
-
-      const updatedLogs = await AdminService.getAuditLogsAsync();
-      setAuditLogs(updatedLogs);
+      const module = moduleFilter === 'all' ? undefined : moduleFilter.slice(0, -1);
+      const [metrics, globalListings, reportPage] = await Promise.all([
+        AdminModerationService.getDashboardMetrics(module),
+        AdminModerationService.getGlobalListings({ module, page: 1, pageSize: 100 }),
+        AdminModerationService.reports({ page: 1, pageSize: 100 })
+      ]);
+      setLiveMetrics(metrics);
+      setKpiMetrics({ totalListings: metrics.totalListings, activeListings: metrics.activeListings, pendingListings: metrics.pendingListings, rejectedListings: metrics.rejectedListings, reportedListings: metrics.reportedListings, totalUsers: metrics.totalUsers, rentalsCount: metrics.rentalsCount, jobsCount: metrics.jobsCount, servicesCount: metrics.servicesCount });
+      setListings(globalListings.rows.map(row => ({ id: row.id, ownerId: row.ownerId, module: `${row.module}s` as UserListingItem['module'], title: row.title, status: row.status as UserListingItem['status'], imageUrl: '', location: row.provinceName, price: row.price === null ? 'Not specified' : row.price.toLocaleString(), pricePeriod: row.pricingPeriod, category: row.categoryName, postedDate: row.submittedAt, createdAt: row.createdAt, updatedAt: row.updatedAt, description: row.description })));
+      setReports(reportPage.rows as unknown as ListingReport[]);
+      if (staff.role === 'SUPER_ADMIN') {
+        const events = await AdminModerationService.getModerationAudit();
+        setAuditLogs(events.map(event => ({ id:event.id, actorId:event.actorId || '', actorName:event.actorName, actorRole:event.actorRole.toUpperCase() as AuditLogItem['actorRole'], action:event.action, targetType:'listing', targetId:event.listingId, targetTitle:event.listingTitle, details:event.reason || '', timestamp:new Date(event.createdAt).getTime(), createdAt:event.createdAt })));
+      } else setAuditLogs([]);
 
       const updatedAncs = await AdminService.getAnnouncementsAsync(moduleFilter);
       setAnnouncements(updatedAncs);
@@ -156,11 +160,11 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
   const activeListingsQueue = filteredListings.filter(l => l.status === 'active');
   const rejectedListingsQueue = filteredListings.filter(l => l.status === 'rejected');
 
-  const handleCreateAnnouncementSubmit = (e: React.FormEvent) => {
+  const handleCreateAnnouncementSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newAncTitle.trim() || !newAncMessage.trim()) return;
 
-    AdminService.createAnnouncement({
+    await AdminService.createAnnouncementAsync({
       title: newAncTitle.trim(),
       message: newAncMessage.trim(),
       targetModule: newAncModule,
@@ -171,7 +175,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
     setShowAnnouncementModal(false);
     setNewAncTitle('');
     setNewAncMessage('');
-    refreshDashboardData();
+    await refreshDashboardData();
   };
 
   // Helper title renderer for breadcrumbs
@@ -952,7 +956,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
                   <div className="text-2xl font-black text-slate-900 tracking-tight">{kpiMetrics.totalListings.toLocaleString()}</div>
                   <div className="text-[11px] text-emerald-600 font-bold mt-1.5 flex items-center gap-1">
                     <TrendingUp className="w-3.5 h-3.5 shrink-0" />
-                    <span className="truncate">+12.5% this week</span>
+                    <span className="truncate">{liveMetrics && liveMetrics.previousListings7d > 0 ? `${(((liveMetrics.newListings7d-liveMetrics.previousListings7d)/liveMetrics.previousListings7d)*100).toFixed(1)}% vs prior 7 days` : 'No comparison data'}</span>
                   </div>
                 </div>
 
@@ -967,7 +971,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
                   <div className="text-2xl font-black text-slate-900 tracking-tight">{kpiMetrics.activeListings.toLocaleString()}</div>
                   <div className="text-[11px] text-emerald-600 font-bold mt-1.5 flex items-center gap-1">
                     <TrendingUp className="w-3.5 h-3.5 shrink-0" />
-                    <span className="truncate">+8.7% active growth</span>
+                    <span className="truncate">Current live count</span>
                   </div>
                 </div>
 
@@ -1010,7 +1014,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
                   <div className="text-2xl font-black text-slate-900 tracking-tight">{kpiMetrics.totalUsers.toLocaleString()}</div>
                   <div className="text-[11px] text-emerald-600 font-bold mt-1.5 flex items-center gap-1">
                     <TrendingUp className="w-3.5 h-3.5 shrink-0" />
-                    <span className="truncate">+18.6% user growth</span>
+                    <span className="truncate">{liveMetrics && liveMetrics.previousUsers7d > 0 ? `${(((liveMetrics.newUsers7d-liveMetrics.previousUsers7d)/liveMetrics.previousUsers7d)*100).toFixed(1)}% vs prior 7 days` : 'No comparison data'}</span>
                   </div>
                 </div>
               </div>
@@ -1031,51 +1035,27 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
                       <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-3 py-1 rounded-xl">Last 7 Days</span>
                     </div>
 
-                    {/* SVG Analytics Graph */}
-                    <div className="h-44 w-full relative my-2">
-                      <svg className="w-full h-full overflow-visible" viewBox="0 0 500 150">
-                        <path
-                          d="M 0 110 Q 75 80, 150 95 T 300 60 T 450 40 T 500 20"
-                          fill="none"
-                          stroke="#1464F4"
-                          strokeWidth="3.5"
-                        />
-                        <path
-                          d="M 0 130 Q 75 110, 150 120 T 300 90 T 450 80 T 500 70"
-                          fill="none"
-                          stroke="#08A34F"
-                          strokeWidth="3"
-                          strokeDasharray="4 4"
-                        />
-                      </svg>
-                      <div className="flex justify-between text-[10px] font-bold text-slate-400 mt-2">
-                        <span>Mon</span>
-                        <span>Tue</span>
-                        <span>Wed</span>
-                        <span>Thu</span>
-                        <span>Fri</span>
-                        <span>Sat</span>
-                        <span>Sun</span>
-                      </div>
+                    <div className="flex h-28 items-center justify-center rounded-2xl bg-slate-50 text-sm font-semibold text-slate-500">
+                      Daily time-series analytics are not available yet.
                     </div>
 
                     {/* Breakdown Metrics */}
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-6 pt-6 border-t border-slate-100 text-xs">
                       <div className="p-3 bg-slate-50 rounded-2xl">
                         <div className="text-slate-400 text-[10px] font-bold uppercase">New Listings</div>
-                        <div className="text-base font-black text-slate-900 mt-0.5">+231</div>
+                        <div className="text-base font-black text-slate-900 mt-0.5">{liveMetrics?.newListings7d ?? 0}</div>
                       </div>
                       <div className="p-3 bg-slate-50 rounded-2xl">
                         <div className="text-slate-400 text-[10px] font-bold uppercase">New Users</div>
-                        <div className="text-base font-black text-slate-900 mt-0.5">+642</div>
+                        <div className="text-base font-black text-slate-900 mt-0.5">{liveMetrics?.newUsers7d ?? 0}</div>
                       </div>
                       <div className="p-3 bg-slate-50 rounded-2xl">
                         <div className="text-slate-400 text-[10px] font-bold uppercase">Total Views</div>
-                        <div className="text-base font-black text-slate-900 mt-0.5">128.6K</div>
+                        <div className="text-sm font-bold text-slate-500 mt-0.5">Not available yet</div>
                       </div>
                       <div className="p-3 bg-slate-50 rounded-2xl">
                         <div className="text-slate-400 text-[10px] font-bold uppercase">Messages</div>
-                        <div className="text-base font-black text-slate-900 mt-0.5">1,324</div>
+                        <div className="text-sm font-bold text-slate-500 mt-0.5">Not available yet</div>
                       </div>
                     </div>
                   </div>

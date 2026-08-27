@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   FileText, 
   Search, 
@@ -10,16 +10,36 @@ import {
   AlertCircle 
 } from 'lucide-react';
 import { AuditLogItem, StaffAccount } from '../../types/adminTypes';
-import { AdminService } from '../../services/adminService';
+import { AdminModerationService, StaffModerationMetric } from '../../services/adminModerationService';
 
 interface AdminAuditLogsViewProps {
   staff: StaffAccount;
 }
 
 export const AdminAuditLogsView: React.FC<AdminAuditLogsViewProps> = ({ staff }) => {
-  const [logs, setLogs] = useState<AuditLogItem[]>(() => AdminService.getAuditLogs());
+  const [logs, setLogs] = useState<AuditLogItem[]>([]);
+  const [metrics, setMetrics] = useState<StaffModerationMetric[]>([]);
+  const [loadError, setLoadError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [targetTypeFilter, setTargetTypeFilter] = useState<string>('all');
+
+  useEffect(() => {
+    if (staff.role !== 'SUPER_ADMIN') return;
+    const from = new Date(); from.setDate(from.getDate() - 6); from.setHours(0, 0, 0, 0);
+    void Promise.all([AdminModerationService.getModerationAudit({ from: from.toISOString() }), AdminModerationService.getStaffModerationAnalytics({ from: from.toISOString() })])
+      .then(([events, daily]) => {
+        setMetrics(daily);
+        setLogs(events.map(event => ({ id:event.id, actorId:event.actorId || '', actorName:event.actorName, actorRole:event.actorRole.toUpperCase() as AuditLogItem['actorRole'], action:event.action, targetType:'listing', targetId:event.listingId, targetTitle:event.listingTitle, details:event.reason || '', timestamp:new Date(event.createdAt).getTime(), createdAt:event.createdAt })));
+      }).catch(error => setLoadError(error instanceof Error ? error.message : 'Failed to load moderation oversight.'));
+  }, [staff.role]);
+
+  const staffTotals = Object.values(metrics.reduce<Record<string, StaffModerationMetric>>((result, item) => {
+    const current = result[item.actorId] || { ...item, reviewed:0, approved:0, rejected:0, changesRequested:0 };
+    current.reviewed += item.reviewed; current.approved += item.approved; current.rejected += item.rejected; current.changesRequested += item.changesRequested;
+    result[item.actorId] = current; return result;
+  }, {})) as StaffModerationMetric[];
+
+  if (staff.role !== 'SUPER_ADMIN') return <div className="rounded-2xl border bg-white p-8 text-sm text-slate-600">Super Admin authorization is required for staff moderation oversight.</div>;
 
   const filteredLogs = logs.filter(log => {
     const matchesQuery = !searchQuery.trim() || 
@@ -35,6 +55,8 @@ export const AdminAuditLogsView: React.FC<AdminAuditLogsViewProps> = ({ staff })
 
   return (
     <div className="space-y-6">
+      {loadError && <div role="alert" className="rounded-xl bg-rose-50 p-3 text-sm text-rose-700">{loadError}</div>}
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">{staffTotals.map(item => <div key={item.actorId} className="rounded-2xl border bg-white p-4"><div className="font-bold">{item.actorName}</div><div className="mt-2 grid grid-cols-2 gap-2 text-xs"><span>Reviewed: {item.reviewed}</span><span>Approved: {item.approved}</span><span>Rejected: {item.rejected}</span><span>Changes: {item.changesRequested}</span></div></div>)}</div>
       
       {/* Header Banner */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm">

@@ -160,6 +160,15 @@ export const AdminSlidesView: React.FC<AdminSlidesViewProps> = ({ staff }) => {
     }
   };
 
+  const handleReorder = async (slide: HomeSlideItem, action: 'up' | 'down' | 'first') => {
+    setActionLoading(true);
+    setErrorMsg(null);
+    const result = await AdminService.reorderHomeSlideAsync(slide.id, action);
+    if (!result.success) setErrorMsg(result.error || 'Reorder failed.');
+    await fetchSlides();
+    setActionLoading(false);
+  };
+
   return (
     <div className="space-y-6">
       
@@ -293,7 +302,10 @@ export const AdminSlidesView: React.FC<AdminSlidesViewProps> = ({ staff }) => {
                     <span className="text-slate-500">({slide.ctaRoute || '/'})</span>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    <button onClick={() => void handleReorder(slide, 'first')} disabled={actionLoading} className="p-1.5 rounded-lg bg-slate-800 text-slate-200 border border-slate-700" title="Make first"><MoveUp className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => void handleReorder(slide, 'up')} disabled={actionLoading} className="p-1.5 rounded-lg bg-slate-800 text-slate-200 border border-slate-700" title="Move up"><MoveUp className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => void handleReorder(slide, 'down')} disabled={actionLoading} className="p-1.5 rounded-lg bg-slate-800 text-slate-200 border border-slate-700" title="Move down"><MoveDown className="w-3.5 h-3.5" /></button>
                     <button
                       onClick={() => handleToggleActive(slide)}
                       className={`p-1.5 rounded-lg border text-xs font-bold transition-all flex items-center gap-1 ${
@@ -366,17 +378,7 @@ export const AdminSlidesView: React.FC<AdminSlidesViewProps> = ({ staff }) => {
                   </select>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-extrabold text-slate-300 mb-1">
-                    Display Order (Integer)
-                  </label>
-                  <input
-                    type="number"
-                    value={editingSlide.displayOrder ?? 0}
-                    onChange={e => setEditingSlide({ ...editingSlide, displayOrder: parseInt(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white focus:outline-none focus:border-[#1464F4]"
-                  />
-                </div>
+                <div className="flex items-end text-xs text-slate-400">Ordering is normalized automatically. Use Move Up, Move Down, or Make First after saving.</div>
               </div>
 
               <div>

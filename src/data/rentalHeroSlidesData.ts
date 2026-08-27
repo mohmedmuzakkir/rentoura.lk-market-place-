@@ -85,7 +85,7 @@ export const RENTAL_HERO_SLIDES: RentalHeroSlide[] = [
     title: 'List Your Rental',
     titleHighlight: 'For Free',
     subtitle: 'Turn Your Idle Assets Into Income',
-    description: 'Reach thousands of verified renters across Sri Lanka every single day.',
+    description: 'Publish your rental listing for people browsing across Sri Lanka.',
     imageUrl: 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=1200&q=80',
     ctaLabel: 'List Your Rental',
     ctaAction: 'post',

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { ShieldCheck } from 'lucide-react';
 import { Header } from './components/Header';
 import { BottomNavigation } from './components/BottomNavigation';
+import { PwaInstallPrompt } from './components/PwaInstallPrompt';
 import { NavigationDrawer } from './components/NavigationDrawer';
 import { SavedListingService } from './services/savedListingService';
 import { MessagingService } from './services/messagingService';
@@ -37,6 +38,7 @@ import { RegisterPage } from './pages/RegisterPage';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { UserAgreementPage } from './pages/UserAgreementPage';
+import { CompleteProfilePage } from './pages/CompleteProfilePage';
 import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage';
 import { SafetyCenterPage } from './pages/SafetyCenterPage';
 import { HelpCenterPage } from './pages/HelpCenterPage';
@@ -48,7 +50,7 @@ import { AdminService } from './services/adminService';
 import { StaffAccount } from './types/adminTypes';
 import { ForgotPasswordModal } from './components/auth/ForgotPasswordModal';
 import { LegalModal } from './components/auth/LegalModals';
-import { AuthService } from './services/authService';
+import { AuthService, getProfileCompletionState } from './services/authService';
 import { PostFlowContainer } from './components/post/PostFlowContainer';
 import { ListingDetailService } from './services/listingDetailService';
 import { RentalListingDetail, JobListingDetail, ServiceListingDetail } from './types/listingDetailsTypes';
@@ -63,10 +65,13 @@ import { ProfileService } from './services/profileService';
 import { ErrorBoundary, OfflineState, Page404 } from './components/common/StateComponents';
 import { Footer } from './components/Footer';
 import { isStaffRoute, resolveRoute } from './routing/routes';
+import { normalizeProtectedAction, PendingProtectedAction, ProtectedActionRequest } from './services/protectedActionService';
 
 import { isSuperAdmin, isAdmin, isModerator, isStaff } from './utils/roleUtils';
 
 export default function App() {
+  const isIdentityProfileComplete = (profile: UserProfile | null): boolean =>
+    !getProfileCompletionState(profile).missing.some(field => field === 'fullName' || field === 'phone');
   // Navigation Route State
   const [currentRoute, setCurrentRoute] = useState<AppRoute>(() => {
     const resolved = resolveRoute(window.location.pathname, window.location.search);
@@ -96,26 +101,8 @@ export default function App() {
   const [reviewsTargetListingId, setReviewsTargetListingId] = useState<string | null>(null);
   const [previousRoute, setPreviousRoute] = useState<AppRoute>('/');
   const [reportTargetListing, setReportTargetListing] = useState<ReportListingTarget | null>(null);
-  const [pendingAgreementRoute, setPendingAgreementRoute] = useState<AppRoute | null>(null);
-
-  const UNGATED_ROUTES: string[] = [
-    '/',
-    '/login',
-    '/register',
-    '/forgot-password',
-    '/reset-password',
-    '/user-agreement',
-    '/privacy-policy',
-    '/safety',
-    '/help'
-  ];
-
-  const isGatedMarketplaceRoute = (route: string): boolean => {
-    if (UNGATED_ROUTES.includes(route)) {
-      return false;
-    }
-    return true;
-  };
+  const [profileCompletionReturn, setProfileCompletionReturn] = useState<AppRoute>('/');
+  const [pendingProtectedAction, setPendingProtectedAction] = useState<PendingProtectedAction | null>(null);
 
   // Filter State
   const [filterState, setFilterState] = useState<FilterState>({
@@ -444,33 +431,7 @@ export default function App() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  // Gate check effect for direct URL or auth state changes
-  useEffect(() => {
-    if (!isAuthLoading && !isProfileLoading) {
-      if (isGatedMarketplaceRoute(currentRoute) && !AuthService.hasAcceptedCurrentAgreement(userProfile)) {
-        setPendingAgreementRoute(currentRoute);
-        setCurrentRoute('/user-agreement');
-        if (window.location.pathname !== '/user-agreement') {
-          window.history.replaceState({}, '', '/user-agreement');
-        }
-      }
-    }
-  }, [isAuthLoading, isProfileLoading, userProfile, currentRoute]);
-
-  const handleNavigate = (route: AppRoute) => {
-    if (isGatedMarketplaceRoute(route) && !AuthService.hasAcceptedCurrentAgreement(userProfile)) {
-      setPendingAgreementRoute(route);
-      if (currentRoute !== '/user-agreement' && !['/rental-detail', '/job-detail', '/service-detail'].includes(currentRoute) && !currentRoute.startsWith('/rentals/') && !currentRoute.startsWith('/jobs/') && !currentRoute.startsWith('/services/')) {
-        setPreviousRoute(currentRoute);
-      }
-      setCurrentRoute('/user-agreement');
-      if (window.location.pathname !== '/user-agreement') {
-        window.history.pushState({}, '', '/user-agreement');
-      }
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      return;
-    }
-
+  const navigateDirect = (route: AppRoute) => {
     if (currentRoute !== route && !['/rental-detail', '/job-detail', '/service-detail'].includes(currentRoute) && !currentRoute.startsWith('/rentals/') && !currentRoute.startsWith('/jobs/') && !currentRoute.startsWith('/services/')) {
       setPreviousRoute(currentRoute);
     }
@@ -480,6 +441,61 @@ export default function App() {
     }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
+
+  const requestProtectedAction = (request: ProtectedActionRequest) => {
+    const pending = normalizeProtectedAction(request);
+    setPendingProtectedAction(pending);
+
+    if (!userProfile) {
+      setPreviousRoute(pending.returnRoute);
+      navigateDirect('/login');
+      return;
+    }
+
+    if (!isIdentityProfileComplete(userProfile)) {
+      setProfileCompletionReturn(pending.returnRoute);
+      navigateDirect('/complete-profile' as AppRoute);
+      return;
+    }
+
+    if (pending.requiresAgreement && !AuthService.hasAcceptedCurrentAgreement(userProfile)) {
+      navigateDirect('/user-agreement');
+      return;
+    }
+
+    setPendingProtectedAction(null);
+    void pending.execute();
+  };
+
+  const handleNavigate = (route: AppRoute) => {
+    if (route === '/post' || route === '/post/rental' || route === '/post/job' || route === '/post/service') {
+      requestProtectedAction({ type: 'post', returnRoute: route, execute: () => navigateDirect(route) });
+      return;
+    }
+    navigateDirect(route);
+  };
+
+  useEffect(() => {
+    if (!pendingProtectedAction || isAuthLoading || isProfileLoading || !userProfile) return;
+
+    if (!isIdentityProfileComplete(userProfile)) {
+      if (currentRoute !== '/complete-profile') {
+        setProfileCompletionReturn(pendingProtectedAction.returnRoute);
+        navigateDirect('/complete-profile' as AppRoute);
+      }
+      return;
+    }
+
+    if (pendingProtectedAction.requiresAgreement && !AuthService.hasAcceptedCurrentAgreement(userProfile)) {
+      if (currentRoute !== '/user-agreement') navigateDirect('/user-agreement');
+      return;
+    }
+
+    const action = pendingProtectedAction;
+    setPendingProtectedAction(null);
+    if (currentRoute !== action.returnRoute) navigateDirect(action.returnRoute);
+    window.setTimeout(() => void action.execute(), 0);
+  }, [pendingProtectedAction, isAuthLoading, isProfileLoading, userProfile, currentRoute]);
 
   // Open Detail Pages
   const handleOpenListingDetail = (
@@ -496,17 +512,6 @@ export default function App() {
     } else if (normHint?.includes('serv') || id.includes('srv') || id.includes('service')) {
       targetRoute = `/services/${id}` as AppRoute;
       canonicalPath = `/services/${id}`;
-    }
-
-    if (!AuthService.hasAcceptedCurrentAgreement(userProfile)) {
-      setPendingAgreementRoute(targetRoute);
-      setPreviousRoute(currentRoute);
-      setCurrentRoute('/user-agreement');
-      if (window.location.pathname !== '/user-agreement') {
-        window.history.pushState({}, '', '/user-agreement');
-      }
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      return;
     }
 
     setSelectedListingId(id);
@@ -529,24 +534,20 @@ export default function App() {
   };
 
   const handleToggleSave = async (listingId: string): Promise<boolean> => {
-    if (!userProfile) {
-      handleNavigate('/login');
-      return false;
-    }
-    const result = await SavedListingService.toggleSaveListing(listingId);
-    if (result.requiresLogin) {
-      handleNavigate('/login');
-      return false;
-    }
-    if (result.error) {
-      throw new Error(result.error);
-    }
-    setSavedListings(prev => 
-      result.saved
-        ? (prev.includes(listingId) ? prev : [...prev, listingId])
-        : prev.filter(id => id !== listingId)
-    );
-    return result.saved;
+    let saved = false;
+    requestProtectedAction({
+      type: 'save',
+      returnRoute: currentRoute,
+      execute: async () => {
+        const result = await SavedListingService.toggleSaveListing(listingId);
+        if (result.error) throw new Error(result.error);
+        saved = result.saved;
+        setSavedListings(prev => result.saved
+          ? (prev.includes(listingId) ? prev : [...prev, listingId])
+          : prev.filter(id => id !== listingId));
+      }
+    });
+    return saved;
   };
 
   // Select conversation from inbox
@@ -608,11 +609,6 @@ export default function App() {
     location?: string;
     imageUrl?: string;
   }) => {
-    if (!userProfile) {
-      handleNavigate('/login');
-      return;
-    }
-
     let targetOwnerId = listingInfo.ownerId;
     if (!targetOwnerId) {
       const detail = await ListingDetailService.getListingDetail(listingInfo.id, listingInfo.module);
@@ -782,6 +778,7 @@ export default function App() {
           }}
           isSaved={savedListings.includes(activeListingId)}
           onToggleSave={() => handleToggleSave(activeListingId)}
+          onProtectedAction={requestProtectedAction}
         />
       );
     }
@@ -823,6 +820,7 @@ export default function App() {
           }}
           isSaved={savedListings.includes(activeJobId)}
           onToggleSave={() => handleToggleSave(activeJobId)}
+          onProtectedAction={requestProtectedAction}
         />
       );
     }
@@ -864,6 +862,7 @@ export default function App() {
           }}
           isSaved={savedListings.includes(activeServiceId)}
           onToggleSave={() => handleToggleSave(activeServiceId)}
+          onProtectedAction={requestProtectedAction}
         />
       );
     }
@@ -1024,6 +1023,7 @@ export default function App() {
             onOpenListingDetail={handleOpenListingDetail}
             savedListings={savedListings}
             onToggleSave={handleToggleSave}
+            onProtectedAction={requestProtectedAction}
           />
         );
       case '/saved':
@@ -1056,8 +1056,8 @@ export default function App() {
           <PostFlowContainer
             module="rentals"
             onNavigate={handleNavigate}
-            onListingCreated={(newListing) => {
-              setUserListings(prev => [newListing, ...prev]);
+            onListingCreated={() => {
+              void ProfileService.fetchUserListings(userProfile.id).then(setUserListings);
             }}
           />
         );
@@ -1069,8 +1069,8 @@ export default function App() {
           <PostFlowContainer
             module="jobs"
             onNavigate={handleNavigate}
-            onListingCreated={(newListing) => {
-              setUserListings(prev => [newListing, ...prev]);
+            onListingCreated={() => {
+              void ProfileService.fetchUserListings(userProfile.id).then(setUserListings);
             }}
           />
         );
@@ -1082,8 +1082,8 @@ export default function App() {
           <PostFlowContainer
             module="services"
             onNavigate={handleNavigate}
-            onListingCreated={(newListing) => {
-              setUserListings(prev => [newListing, ...prev]);
+            onListingCreated={() => {
+              void ProfileService.fetchUserListings(userProfile.id).then(setUserListings);
             }}
           />
         );
@@ -1218,10 +1218,11 @@ export default function App() {
           <UserAgreementPage
             onNavigate={handleNavigate}
             userProfile={userProfile}
-            onAgreeAndContinue={() => {
-              const target = pendingAgreementRoute || (previousRoute && previousRoute !== '/user-agreement' ? previousRoute : '/');
-              setPendingAgreementRoute(null);
-              handleNavigate(target);
+            onAgreeAndContinue={async () => {
+              const refreshed = await AuthService.refreshProfile();
+              if (refreshed) setUserProfile(refreshed);
+              const target = pendingProtectedAction?.returnRoute || (previousRoute && previousRoute !== '/user-agreement' ? previousRoute : '/');
+              navigateDirect(target);
             }}
           />
         );
@@ -1313,6 +1314,14 @@ export default function App() {
             onOpenListingDetail={handleOpenListingDetail}
           />
         );
+      case '/complete-profile':
+        if (!userProfile) return <LoginPage onNavigate={handleNavigate} returnUrl={profileCompletionReturn} />;
+        return <CompleteProfilePage profile={userProfile} onComplete={(completed) => {
+          setUserProfile(completed);
+          const target = profileCompletionReturn || (AuthService.consumeOAuthReturnTo() as AppRoute);
+          setProfileCompletionReturn('/');
+          handleNavigate(target);
+        }} />;
       case '/404':
       default:
         return <Page404 onGoHome={() => handleNavigate('/')} isAdmin={isStaffRoute(window.location.pathname)} />;
@@ -1348,6 +1357,7 @@ export default function App() {
 
         {/* Global Offline State Banner */}
         <OfflineState />
+        <PwaInstallPrompt />
 
         {/* Desktop Footer on Public Pages */}
         {!isAdminRoute && (

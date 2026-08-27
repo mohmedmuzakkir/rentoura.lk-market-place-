@@ -6,6 +6,7 @@ import {
 import { RentouraLogo } from './RentouraLogo';
 import { AppRoute } from '../types';
 import { isSuperAdmin, isAdmin, isModerator } from '../utils/roleUtils';
+import { RENTOURA_CONTACT } from '../config/contact';
 
 interface NavigationDrawerProps {
   isOpen: boolean;
@@ -200,7 +201,7 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
           </div>
           <div className="flex items-center gap-2 text-slate-600 text-xs">
             <PhoneCall className="w-4 h-4 text-[#08A34F]" />
-            <span>Support: +94 11 234 5678</span>
+            <span>Support: {RENTOURA_CONTACT.callDisplay}</span>
           </div>
           <div className="pt-2 text-[10px] text-slate-400 text-center">
             © 2026 RENTOURA.LK • All Rights Reserved

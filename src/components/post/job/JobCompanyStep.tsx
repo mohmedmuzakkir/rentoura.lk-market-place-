@@ -1,6 +1,7 @@
-import React, { useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Building2, User, Globe, Upload, Trash2, AlertCircle, Image as ImageIcon, Briefcase } from 'lucide-react';
 import { ListingDraft, UploadedImage } from '../../../types/postFormTypes';
+import { validateListingImage } from '../../../utils/pendingUploadImages';
 
 interface JobCompanyStepProps {
   draft: ListingDraft;
@@ -16,6 +17,7 @@ export const JobCompanyStep: React.FC<JobCompanyStepProps> = ({
   accentColor = '#08A34F'
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [logoError, setLogoError] = useState<string | null>(null);
 
   const employerType = draft.formValues.employerType || 'company';
   const companyName = draft.formValues.companyName || '';
@@ -23,6 +25,9 @@ export const JobCompanyStep: React.FC<JobCompanyStepProps> = ({
   const companyBio = draft.formValues.companyBio || '';
   const website = draft.formValues.website || '';
   const logoUrl = draft.formValues.logoUrl || '';
+  useEffect(() => () => {
+    if (typeof logoUrl === 'string' && logoUrl.startsWith('blob:')) URL.revokeObjectURL(logoUrl);
+  }, [logoUrl]);
 
   const updateFormValue = (key: string, val: any) => {
     onChange({
@@ -36,10 +41,9 @@ export const JobCompanyStep: React.FC<JobCompanyStepProps> = ({
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        alert('Company logo size must be under 5MB');
-        return;
-      }
+      const validationError = validateListingImage(file);
+      if (validationError) { setLogoError(validationError); return; }
+      setLogoError(null);
       const objectUrl = URL.createObjectURL(file);
       onChange({
         formValues: {
@@ -52,6 +56,7 @@ export const JobCompanyStep: React.FC<JobCompanyStepProps> = ({
   };
 
   const handleRemoveLogo = () => {
+    if (typeof logoUrl === 'string' && logoUrl.startsWith('blob:')) URL.revokeObjectURL(logoUrl);
     onChange({
       formValues: {
         ...draft.formValues,
@@ -81,6 +86,7 @@ export const JobCompanyStep: React.FC<JobCompanyStepProps> = ({
 
   return (
     <div className="space-y-6 text-left animate-in fade-in duration-200">
+      {logoError && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-700">{logoError}</p>}
       {/* Title Card */}
       <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
         <div className="flex items-center justify-between mb-1">

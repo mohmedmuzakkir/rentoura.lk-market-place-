@@ -94,7 +94,7 @@ export const PostPage: React.FC<PostPageProps> = ({
               Select What You Want to Post
             </h2>
             <p className="text-xs text-slate-500">
-              Each category includes specific fields, verified locations, and targeted discovery.
+              Each category includes relevant fields, canonical locations, and targeted discovery.
             </p>
           </div>
 

@@ -481,7 +481,7 @@ export const OfflineState: React.FC<{ onRetry?: () => void }> = ({ onRetry }) =>
         </div>
         <div>
           <div className="text-xs font-bold">You are offline</div>
-          <div className="text-[11px] text-slate-400">Check internet connection and try again.</div>
+          <div className="text-[11px] text-slate-400">Previously loaded public content may remain available. Posting, messaging and account updates need an internet connection.</div>
         </div>
       </div>
 

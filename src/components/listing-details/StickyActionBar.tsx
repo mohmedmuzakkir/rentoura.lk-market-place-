@@ -10,7 +10,8 @@ interface StickyActionBarProps {
   onToggleSave: () => void;
   onSendMessage: () => void;
   onApplyNow?: () => void;
-  listingTitle: string;
+  onCall?: () => void;
+  onWhatsApp?: () => void;
 }
 
 export const StickyActionBar: React.FC<StickyActionBarProps> = ({
@@ -21,34 +22,9 @@ export const StickyActionBar: React.FC<StickyActionBarProps> = ({
   onToggleSave,
   onSendMessage,
   onApplyNow,
-  listingTitle
+  onCall,
+  onWhatsApp
 }) => {
-  // Helper for normalizing Sri Lanka numbers to international WhatsApp format: 07XXXXXXXX -> 947XXXXXXXX
-  const getWhatsAppLink = (rawNumber?: string) => {
-    if (!rawNumber) return '#';
-    const cleaned = rawNumber.replace(/\D/g, '');
-    let formatted = cleaned;
-    if (cleaned.startsWith('0')) {
-      formatted = '94' + cleaned.slice(1);
-    } else if (!cleaned.startsWith('94')) {
-      formatted = '94' + cleaned;
-    }
-    const text = encodeURIComponent(`Hi, I'm contacting you about your listing on RENTOURA.LK: ${listingTitle}`);
-    return `https://wa.me/${formatted}?text=${text}`;
-  };
-
-  const handleCall = () => {
-    if (phone) {
-      window.location.href = `tel:${phone}`;
-    }
-  };
-
-  const handleWhatsApp = () => {
-    if (whatsappNumber || phone) {
-      window.open(getWhatsAppLink(whatsappNumber || phone), '_blank');
-    }
-  };
-
   // ---------------- RENTAL ACTIONS (Image 1) ----------------
   if (module === 'rentals') {
     return (
@@ -56,8 +32,8 @@ export const StickyActionBar: React.FC<StickyActionBarProps> = ({
         <div className="grid grid-cols-4 gap-2 max-w-lg mx-auto">
           {/* Call */}
           <button
-            onClick={handleCall}
-            disabled={!phone}
+            onClick={onCall}
+            disabled={!phone || !onCall}
             className="flex flex-col items-center justify-center p-2 rounded-xl bg-blue-50/70 border border-blue-200/80 text-[#1464F4] hover:bg-blue-100 transition-all tap-bounce disabled:opacity-50"
           >
             <div className="flex items-center gap-1">
@@ -71,8 +47,8 @@ export const StickyActionBar: React.FC<StickyActionBarProps> = ({
 
           {/* WhatsApp */}
           <button
-            onClick={handleWhatsApp}
-            disabled={!whatsappNumber && !phone}
+            onClick={onWhatsApp}
+            disabled={(!whatsappNumber && !phone) || !onWhatsApp}
             className="flex flex-col items-center justify-center p-2 rounded-xl bg-[#08A34F] text-white hover:bg-emerald-600 transition-all tap-bounce shadow-xs disabled:opacity-50"
           >
             <div className="flex items-center gap-1">
@@ -136,8 +112,8 @@ export const StickyActionBar: React.FC<StickyActionBarProps> = ({
 
           {/* Apply via WhatsApp */}
           <button
-            onClick={handleWhatsApp}
-            disabled={!whatsappNumber && !phone}
+            onClick={onWhatsApp}
+            disabled={(!whatsappNumber && !phone) || !onWhatsApp}
             className="col-span-1 flex items-center justify-center gap-1.5 py-2.5 px-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-[#08A34F] font-bold text-[11px] hover:bg-emerald-100 transition-all tap-bounce disabled:opacity-50"
           >
             <MessageCircle className="w-3.5 h-3.5 fill-[#08A34F]" />
@@ -146,8 +122,8 @@ export const StickyActionBar: React.FC<StickyActionBarProps> = ({
 
           {/* Call HR */}
           <button
-            onClick={handleCall}
-            disabled={!phone}
+            onClick={onCall}
+            disabled={!phone || !onCall}
             className="col-span-1 flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 font-bold text-xs hover:bg-slate-100 transition-all tap-bounce disabled:opacity-50"
           >
             <Phone className="w-3.5 h-3.5 text-slate-700" />
@@ -177,8 +153,8 @@ export const StickyActionBar: React.FC<StickyActionBarProps> = ({
       <div className="grid grid-cols-3 gap-2.5 max-w-lg mx-auto">
         {/* WhatsApp */}
         <button
-          onClick={handleWhatsApp}
-          disabled={!whatsappNumber && !phone}
+          onClick={onWhatsApp}
+          disabled={(!whatsappNumber && !phone) || !onWhatsApp}
           className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-[#08A34F] text-white font-bold text-xs hover:bg-emerald-600 transition-all tap-bounce shadow-xs disabled:opacity-50"
         >
           <MessageCircle className="w-4 h-4 fill-white" />
@@ -187,8 +163,8 @@ export const StickyActionBar: React.FC<StickyActionBarProps> = ({
 
         {/* Call Now */}
         <button
-          onClick={handleCall}
-          disabled={!phone}
+          onClick={onCall}
+          disabled={!phone || !onCall}
           className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-[#FF650A] text-white font-bold text-xs hover:bg-orange-600 transition-all tap-bounce shadow-xs disabled:opacity-50"
         >
           <Phone className="w-4 h-4 fill-white" />

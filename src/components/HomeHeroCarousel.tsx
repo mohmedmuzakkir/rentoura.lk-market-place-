@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { ChevronLeft, ChevronRight, ArrowRight, ShieldCheck, Sparkles, Building2, Briefcase, Wrench, PlusCircle } from 'lucide-react';
 import { HeroSlide, CarouselConfig } from '../types/heroSlide';
-import { DEFAULT_HERO_SLIDES, DEFAULT_CAROUSEL_CONFIG } from '../data/heroSlidesData';
+import { DEFAULT_CAROUSEL_CONFIG } from '../data/heroSlidesData';
 import { AppRoute } from '../types';
 import { RentouraLogo } from './RentouraLogo';
 
@@ -14,7 +14,7 @@ interface HomeHeroCarouselProps {
 const FALLBACK_IMAGE = 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=1200&q=85';
 
 export const HomeHeroCarousel: React.FC<HomeHeroCarouselProps> = ({
-  slides = DEFAULT_HERO_SLIDES,
+  slides = [],
   config = {},
   onNavigate
 }) => {

@@ -31,7 +31,7 @@ export const FeaturedListings: React.FC<FeaturedListingsProps> = ({
             Featured Listings
           </h2>
           <p className="hidden lg:block text-xs text-slate-500 font-medium mt-0.5">
-            Handpicked verified ads, top job openings, and premium services
+            Active featured rentals, job openings, and services
           </p>
         </div>
         <button

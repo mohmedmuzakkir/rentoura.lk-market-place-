@@ -8,8 +8,6 @@ import {
 import { ProfileService } from './profileService';
 
 export class ListingDetailService {
-  private static cache: Record<string, AnyListingDetail> = {};
-
   /**
    * Fetches full listing detail by UUID from Supabase.
    * RLS automatically filters active listings for anonymous viewers while allowing staff/owner access.
@@ -22,18 +20,16 @@ export class ListingDetailService {
       return null;
     }
 
-    // 1. Check memory cache
-    if (this.cache[id]) {
-      return this.cache[id];
-    }
-
-    // 2. Query Supabase listings table
+    // Query Supabase listings. Anonymous callers are explicitly limited to active rows;
+    // authenticated owner/staff visibility remains governed by RLS.
     try {
-      const { data: listingRow, error: listingErr } = await supabase
+      const { data: { user } } = await supabase.auth.getUser();
+      let listingQuery = supabase
         .from('listings')
         .select('*')
-        .eq('id', id)
-        .maybeSingle();
+        .eq('id', id);
+      if (!user) listingQuery = listingQuery.eq('status', 'active');
+      const { data: listingRow, error: listingErr } = await listingQuery.maybeSingle();
 
       if (listingErr || !listingRow) {
         console.warn(`Listing ${id} not found in Supabase:`, listingErr?.message);
@@ -186,7 +182,7 @@ export class ListingDetailService {
           categoryPath: categoryPath,
           status: listingRow.status,
           createdAt: listingRow.created_at,
-          postedDateStr: listingRow.created_at ? new Date(listingRow.created_at).toLocaleDateString() : 'Recently',
+          postedDateStr: listingRow.created_at ? new Date(listingRow.created_at).toLocaleDateString() : '',
           location: {
             city: locationCity,
             district: locationDistrict,
@@ -198,7 +194,7 @@ export class ListingDetailService {
             id: ownerInfo.id,
             name: listingRow.company_name || modData.company_name || ownerInfo.name,
             logoUrl: ownerInfo.photoUrl,
-            isVerified: Boolean(listingRow.is_verified || modData.company_verified),
+            isVerified: false,
             about: modData.company_description || modData.about_company || undefined,
             foundedYear: modData.founded_year ? String(modData.founded_year) : undefined,
             employeeCount: modData.employee_count ? String(modData.employee_count) : undefined,
@@ -263,11 +259,11 @@ export class ListingDetailService {
           title: listingRow.title,
           category: categoryName,
           categoryPath: categoryPath,
-          isVerified: Boolean(listingRow.is_verified || modData.is_verified),
+          isVerified: false,
           isFeatured: Boolean(listingRow.is_featured),
           status: listingRow.status,
           createdAt: listingRow.created_at,
-          postedDateStr: listingRow.created_at ? new Date(listingRow.created_at).toLocaleDateString() : 'Recently',
+          postedDateStr: listingRow.created_at ? new Date(listingRow.created_at).toLocaleDateString() : '',
           location: {
             city: locationCity,
             district: locationDistrict,
@@ -297,11 +293,11 @@ export class ListingDetailService {
             id: ownerInfo.id,
             name: listingRow.business_name || modData.business_name || ownerInfo.name,
             photoUrl: ownerInfo.photoUrl,
-            isVerified: Boolean(modData.provider_verified),
-            isBusinessRegistered: Boolean(modData.business_registered),
-            isBackgroundChecked: Boolean(modData.background_checked),
-            isIdVerified: Boolean(modData.id_verified),
-            isInsuranceCovered: Boolean(modData.insurance_covered),
+            isVerified: false,
+            isBusinessRegistered: false,
+            isBackgroundChecked: false,
+            isIdVerified: false,
+            isInsuranceCovered: false,
             completedJobsCount: modData.completed_jobs != null ? Number(modData.completed_jobs) : undefined,
             positiveReviewsPercentage: modData.positive_rating ? `${modData.positive_rating}%` : undefined,
             experience: modData.experience_years ? `${modData.experience_years} Years` : undefined
@@ -374,7 +370,6 @@ export class ListingDetailService {
         } as unknown as RentalListingDetail;
       }
 
-      this.cache[id] = detailResult;
       return detailResult;
 
     } catch (e) {
@@ -384,10 +379,6 @@ export class ListingDetailService {
   }
 
   static clearCache(id?: string) {
-    if (id) {
-      delete this.cache[id];
-    } else {
-      this.cache = {};
-    }
+    void id;
   }
 }

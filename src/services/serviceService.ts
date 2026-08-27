@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import { SERVICE_HERO_SLIDES, ServiceHeroSlide } from '../data/serviceHeroSlidesData';
+import { ServiceHeroSlide } from '../data/serviceHeroSlidesData';
 import { ServiceItem } from '../types';
 import { LocationValueModel } from './locationService';
 import { SearchService } from './searchService';
@@ -87,7 +87,7 @@ export class ServiceService {
         .order('display_order', { ascending: true });
 
       if (error || !data || data.length === 0) {
-        return SERVICE_HERO_SLIDES;
+        return [];
       }
 
       return data.map((row) => ({
@@ -98,7 +98,7 @@ export class ServiceService {
         titleHighlight: row.title_highlight || 'Services',
         subtitle: row.subtitle || '',
         description: row.description || '',
-        imageUrl: row.image_url || 'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?auto=format&fit=crop&w=1200&q=80',
+        imageUrl: row.image_url || '',
         mobileImageUrl: row.mobile_image_url || undefined,
         ctaLabel: row.cta_text || 'Explore All Services',
         ctaRoute: (row.cta_route || '/services') as any,
@@ -109,8 +109,8 @@ export class ServiceService {
         isEnabled: true
       }));
     } catch (e) {
-      console.warn('Error fetching service hero slides, falling back to local slides:', e);
-      return SERVICE_HERO_SLIDES;
+      console.warn('Error fetching canonical service hero slides:', e);
+      return [];
     }
   }
 
@@ -288,7 +288,7 @@ export class ServiceService {
 
           // Strict DB values only - NO fake defaults or forced ratings
           const realProviderName = row.provider_name || row.module_data?.provider_name || 'Service Provider';
-          const realIsVerified = Boolean(row.is_verified || row.module_data?.is_verified);
+          const realIsVerified = false;
           const realRating = row.rating !== null && row.rating !== undefined ? Number(row.rating) : 0;
           const realReviewsCount = row.reviews_count !== null && row.reviews_count !== undefined ? Number(row.reviews_count) : 0;
           const realWhatsapp = row.whatsapp_number || row.module_data?.whatsapp_number || undefined;

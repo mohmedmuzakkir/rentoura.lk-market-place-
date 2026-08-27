@@ -29,6 +29,7 @@ import {
   calculatePasswordStrength 
 } from '../services/authService';
 import { AppRoute } from '../types';
+import { featureFlags } from '../config/features';
 
 interface RegisterPageProps {
   onNavigate: (route: AppRoute) => void;
@@ -300,6 +301,12 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
     }
   };
 
+  const handleGoogle = async () => {
+    setGeneralError(''); setIsSubmitting(true);
+    try { await AuthService.signInWithGoogle(returnUrl || '/'); }
+    catch (err: any) { setGeneralError(err.message || 'Google sign-in could not be started.'); setIsSubmitting(false); }
+  };
+
   const languageLabels = {
     English: '🇱🇰 English',
     Sinhala: '🇱🇰 සිංහල',
@@ -349,7 +356,7 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
                   </div>
                   <div>
                     <h3 className="text-xs font-bold text-white">Trusted Platform</h3>
-                    <p className="text-[11px] text-slate-300 mt-0.5">Connect with verified renters and providers across Sri Lanka.</p>
+                    <p className="text-[11px] text-slate-300 mt-0.5">Connect with renters and providers across Sri Lanka.</p>
                   </div>
                 </div>
 
@@ -509,6 +516,12 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
                   </div>
                 )}
 
+                {featureFlags.googleAuth && (
+                  <>
+                    <button type="button" onClick={handleGoogle} disabled={isSubmitting} className="mb-4 flex w-full items-center justify-center gap-3 rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-60"><span className="text-lg font-black text-[#4285F4]">G</span> Continue with Google</button>
+                    <div className="mb-4 text-center text-xs text-slate-400">or create an account with email</div>
+                  </>
+                )}
                 <form onSubmit={handleSubmit} noValidate className="space-y-3.5">
                   {/* Full Name Field */}
                   <div>
@@ -615,7 +628,7 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
                       </p>
                     ) : (
                       <p className="mt-1 text-[10px] text-slate-400 font-medium">
-                        Valid 10-digit Sri Lankan mobile (e.g. 0771234567 or +94771234567)
+                        Valid 10-digit Sri Lankan mobile (for example, 07XXXXXXXX or +947XXXXXXXX)
                       </p>
                     )}
                   </div>

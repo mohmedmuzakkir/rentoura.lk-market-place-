@@ -1,252 +1,132 @@
 import { UserListingItem } from '../types/profileTypes';
 import { ListingDraft, normalizeNumericPrice } from '../types/postFormTypes';
+import { MAX_LISTING_IMAGES, validateListingImage } from '../utils/pendingUploadImages';
+import { applyRentouraWatermark } from '../utils/imageWatermark';
 import { PostDraftService } from './postDraftService';
 import { supabase } from '../lib/supabase';
+import { AuthService } from './authService';
+
+type SubmissionResult = { success: boolean; listing: UserListingItem; error?: string };
+const failed = (error: string): SubmissionResult => ({ success: false, listing: {} as UserListingItem, error });
 
 export class ListingSubmissionService {
-  /**
-   * Submits a listing draft for moderation review to Supabase.
-   * Inserts into `listings` and `listing_media` tables, uploading photos to `listing-images` storage bucket.
-   */
-  static async submitListing(draft: ListingDraft): Promise<{ success: boolean; listing: UserListingItem; error?: string }> {
+  static async submitListing(draft: ListingDraft): Promise<SubmissionResult> {
+    const uploadedPaths: string[] = [];
+    let listingId: string | null = null;
     try {
-      // Validate mandatory properties
-      if (!draft.formValues.title) {
-        return { success: false, listing: {} as any, error: 'Listing title is required' };
-      }
-      if (!draft.categoryId) {
-        return { success: false, listing: {} as any, error: 'Category selection is required' };
-      }
-
-      // 1. Get authenticated user
-      const { data: authData } = await supabase.auth.getUser();
-      const currentUser = authData?.user;
-
-      if (!currentUser) {
-        return {
-          success: false,
-          listing: {} as any,
-          error: 'You must be logged in to submit a listing. Please sign in.'
-        };
+      const title = String(draft.formValues.title || '').trim();
+      if (!title) return failed('Listing title is required.');
+      if (!draft.categoryId) return failed('A final category is required.');
+      if (draft.images.length > MAX_LISTING_IMAGES) return failed('A listing can have no more than 5 images.');
+      for (const image of draft.images) {
+        if (!image.file) return failed('Every selected image must be reselected before posting.');
+        const imageError = validateListingImage(image.file);
+        if (imageError) return failed(imageError);
       }
 
-      const ownerId = currentUser.id;
-
-      // 2. Normalize module string ('rentals' -> 'rental', 'jobs' -> 'job', 'services' -> 'service')
-      const rawMod = (draft.module || 'rentals').toLowerCase();
-      const moduleType = rawMod.startsWith('rental') ? 'rental' : (rawMod.startsWith('job') ? 'job' : 'service');
-
-      // 3. Normalize pricing
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError || !authData.user) return failed('You must be signed in to submit a listing.');
+      const ownerId = authData.user.id;
+      const profile = AuthService.getCurrentProfile() || await AuthService.refreshProfile();
+      if (!AuthService.hasAcceptedCurrentAgreement(profile)) {
+        return failed('Accept the current User Agreement before posting.');
+      }
+      const moduleType = draft.module === 'rentals' ? 'rental' : draft.module === 'jobs' ? 'job' : 'service';
       const rawPrice = draft.formValues.price || draft.formValues.minSalary || draft.formValues.fixedSalary || draft.pricing?.rate || 0;
       const { amount: priceAmount, formatted: priceFormatted } = normalizeNumericPrice(rawPrice);
-
-      let pricePeriod = '/ Month';
-      if (moduleType === 'rental') {
-        pricePeriod = draft.formValues.rentalPeriod === 'day' ? '/ Day' : (draft.formValues.rentalPeriod === 'hour' ? '/ Hour' : '/ Month');
-      } else if (moduleType === 'job') {
-        pricePeriod = '/ Month';
-      } else if (moduleType === 'service') {
-        const pricingModel = draft.formValues.pricingModel;
-        pricePeriod = pricingModel === 'visit' ? '/ Visit' : (pricingModel === 'hourly' ? '/ Hour' : '/ Job');
-      }
-
-      // Title & Summary
-      const title = draft.formValues.title.trim();
-      const description = draft.formValues.description || draft.formValues.summary || 'Listing submitted for review.';
-      const shortSummary = description.substring(0, 150);
-
-      // Handle company logo file upload if present
-      let finalLogoUrl = draft.formValues?.logoUrl || '';
-      if (draft.formValues?.logoFile) {
-        try {
-          const logoFile = draft.formValues.logoFile;
-          const ext = logoFile.name ? logoFile.name.split('.').pop() || 'png' : 'png';
-          const logoPath = `${ownerId}/logos/${Date.now()}_logo.${ext}`;
-          const { data: uploadData, error: uploadErr } = await supabase.storage
-            .from('listing-images')
-            .upload(logoPath, logoFile, {
-              cacheControl: '3600',
-              upsert: true,
-              contentType: logoFile.type || 'image/png'
-            });
-          if (!uploadErr && uploadData?.path) {
-            finalLogoUrl = uploadData.path;
-          }
-        } catch (e) {
-          console.warn('Failed to upload logo file:', e);
-        }
-      }
-
-      // Ensure no blob URLs remain in formValues
-      if (typeof finalLogoUrl === 'string' && finalLogoUrl.startsWith('blob:')) {
-        finalLogoUrl = '';
-      }
-
-      const cleanFormValues = { ...(draft.formValues || {}) };
-      delete (cleanFormValues as any).logoFile;
-      cleanFormValues.logoUrl = finalLogoUrl;
-
-      // Construct module_data JSON payload
-      const moduleData: Record<string, any> = {
-        rates: draft.pricing ? {
-          monthly: draft.pricing.ratePeriod === 'month' ? draft.pricing.rate : undefined,
-          daily: draft.pricing.ratePeriod === 'day' ? draft.pricing.rate : undefined,
-          hourly: draft.pricing.ratePeriod === 'hour' ? draft.pricing.rate : undefined,
-        } : undefined,
+      const pricePeriod = moduleType === 'rental'
+        ? draft.pricing?.ratePeriod === 'hour' ? '/ Hour' : draft.pricing?.ratePeriod === 'day' ? '/ Day' : '/ Month'
+        : moduleType === 'service'
+          ? draft.formValues.pricingModel === 'visit' ? '/ Visit' : draft.formValues.pricingModel === 'hourly' ? '/ Hour' : '/ Job'
+          : '/ Month';
+      const description = String(draft.formValues.description || draft.formValues.summary || '').trim();
+      const cleanFormValues = { ...draft.formValues };
+      const logoFile = cleanFormValues.logoFile;
+      delete cleanFormValues.logoFile;
+      delete cleanFormValues.restoredImageMetadata;
+      delete cleanFormValues.imagesNeedReselection;
+      if (typeof cleanFormValues.logoUrl === 'string' && cleanFormValues.logoUrl.startsWith('blob:')) cleanFormValues.logoUrl = '';
+      const moduleData = {
+        rates: draft.pricing ? { [draft.pricing.ratePeriod]: draft.pricing.rate } : undefined,
         salary_min: draft.formValues.minSalary || draft.formValues.fixedSalary || undefined,
         salary_max: draft.formValues.maxSalary || undefined,
-        employment_type: draft.formValues.employmentType || 'Full Time',
+        employment_type: draft.formValues.employmentType || undefined,
         starting_price: draft.formValues.startingPrice || draft.formValues.price || undefined,
         pricing_type: draft.formValues.pricingModel || undefined,
         condition: draft.condition || draft.formValues.condition || undefined,
         contact_preferences: draft.contactPreferences,
         rules: draft.rules,
-        form_values: cleanFormValues
+        form_values: cleanFormValues,
       };
 
-      // 4. Insert into `listings` table
-      const { data: insertedRow, error: insertError } = await supabase
-        .from('listings')
-        .insert({
-          owner_id: ownerId,
-          module: moduleType as any,
-          category_id: draft.categoryId || null,
-          subcategory_id: draft.subcategoryId || null,
-          third_level_category_id: draft.thirdLevelId || null,
-          title,
-          short_summary: shortSummary,
-          description,
-          province_id: draft.location.provinceId || null,
-          district_id: draft.location.districtId || null,
-          city_id: draft.location.cityId || null,
-          area_id: draft.location.areaId || null,
-          exact_address: draft.location.address || null,
-          latitude: draft.location.latitude || null,
-          longitude: draft.location.longitude || null,
-          price: priceAmount || null,
-          pricing_period: pricePeriod || null,
-          currency: 'LKR',
-          status: 'pending', // REQUIRED: ALWAYS pending
-          is_featured: false,
-          module_data: moduleData,
-          submitted_at: new Date().toISOString()
-        })
-        .select()
-        .single();
+      const { data: listing, error: listingError } = await supabase.from('listings').insert({
+        owner_id: ownerId, module: moduleType, category_id: draft.categoryId,
+        subcategory_id: draft.subcategoryId || null, third_level_category_id: draft.thirdLevelId || null,
+        title, short_summary: description.slice(0, 150), description,
+        province_id: draft.location.provinceId || null, district_id: draft.location.districtId || null,
+        city_id: draft.location.cityId || null, area_id: draft.location.areaId || null,
+        exact_address: draft.location.address || null, latitude: draft.location.latitude ?? null,
+        longitude: draft.location.longitude ?? null, price: priceAmount || null, pricing_period: pricePeriod,
+        currency: 'LKR', status: 'pending', is_featured: false, module_data: moduleData,
+        submitted_at: new Date().toISOString(),
+      }).select('id, created_at, updated_at').single();
+      if (listingError || !listing) return failed(listingError?.message || 'The listing could not be created.');
+      listingId = listing.id;
 
-      if (insertError || !insertedRow) {
-        console.error('Supabase listing insert failed:', insertError);
-        return {
-          success: false,
-          listing: {} as any,
-          error: insertError?.message || 'Database error occurred while submitting listing.'
-        };
+      const orderedImages = [...draft.images].sort((a, b) => a.position - b.position);
+      for (let index = 0; index < orderedImages.length; index += 1) {
+        const source = orderedImages[index];
+        const processed = await applyRentouraWatermark(source.file);
+        const storagePath = `${ownerId}/${listingId}/${crypto.randomUUID()}.webp`;
+        const { data: stored, error: uploadError } = await supabase.storage.from('listing-images').upload(
+          storagePath, processed.file, { cacheControl: '3600', upsert: false, contentType: processed.mimeType });
+        if (uploadError || !stored?.path) throw new Error(uploadError?.message || 'An image upload failed.');
+        uploadedPaths.push(stored.path);
+        const { error: mediaError } = await supabase.from('listing_media').insert({
+          listing_id: listingId, storage_path: stored.path, media_type: 'image', position: index,
+          is_cover: source.isCover || index === 0, width: processed.width, height: processed.height,
+          file_size: processed.size, mime_type: processed.mimeType,
+        });
+        if (mediaError) throw new Error(mediaError.message);
       }
 
-      const listingId = insertedRow.id;
-      const uploadedMediaPaths: string[] = [];
-
-      // 5. Upload Images to Supabase Storage & Insert `listing_media`
-      if (draft.images && draft.images.length > 0) {
-        for (let i = 0; i < draft.images.length; i++) {
-          const img = draft.images[i];
-          let storagePath = img.url;
-
-          if (img.file) {
-            const ext = img.file.name.split('.').pop() || 'jpg';
-            const fileName = `${ownerId}/${listingId}/${Date.now()}_${i}.${ext}`;
-
-            const { data: uploadData, error: uploadErr } = await supabase.storage
-              .from('listing-images')
-              .upload(fileName, img.file, {
-                cacheControl: '3600',
-                upsert: true,
-                contentType: img.file.type || 'image/jpeg'
-              });
-
-            if (uploadErr) {
-              console.warn('Storage upload error for image:', uploadErr.message);
-            } else if (uploadData?.path) {
-              storagePath = uploadData.path;
-            }
-          }
-
-          uploadedMediaPaths.push(storagePath);
-
-          await supabase.from('listing_media').insert({
-            listing_id: listingId,
-            storage_path: storagePath,
-            media_type: 'image',
-            position: i,
-            is_cover: img.isCover || i === 0
-          });
-        }
+      if (logoFile instanceof File) {
+        const processedLogo = await applyRentouraWatermark(logoFile);
+        const logoPath = `${ownerId}/${listingId}/logo-${crypto.randomUUID()}.webp`;
+        const { data: storedLogo, error: logoError } = await supabase.storage.from('listing-images').upload(
+          logoPath, processedLogo.file, { cacheControl: '3600', upsert: false, contentType: processedLogo.mimeType });
+        if (logoError || !storedLogo?.path) throw new Error(logoError?.message || 'The company logo upload failed.');
+        uploadedPaths.push(storedLogo.path);
+        cleanFormValues.logoUrl = storedLogo.path;
+        const { error: updateError } = await supabase.from('listings').update({
+          module_data: { ...moduleData, form_values: cleanFormValues },
+        }).eq('id', listingId).eq('owner_id', ownerId);
+        if (updateError) throw new Error(updateError.message);
       }
 
-      // Resolve cover URL using signed URL for private bucket
-      let coverImageUrl = '';
-      if (uploadedMediaPaths.length > 0) {
-        const firstPath = uploadedMediaPaths[0];
-        if (firstPath.startsWith('http') || firstPath.startsWith('blob:')) {
-          coverImageUrl = firstPath;
-        } else {
-          const { data: signedData } = await supabase.storage
-            .from('listing-images')
-            .createSignedUrl(firstPath, 3600);
-          if (signedData?.signedUrl) {
-            coverImageUrl = signedData.signedUrl;
-          }
-        }
-      }
-
-      // Location display text
-      const locationCity = draft.location.cityName || 'Sri Lanka';
-      const locationDistrict = draft.location.districtName || '';
-      const formattedLocation = locationDistrict ? `${locationCity}, ${locationDistrict}` : locationCity;
-
-      // Construct canonical UserListingItem for returning result
-      const newListing: UserListingItem = {
-        id: listingId,
-        ownerId,
-        module: draft.module,
-        title,
-        status: 'pending',
-        statusNote: 'Submitted and currently queued for moderation review.',
-        imageUrl: coverImageUrl,
-        location: formattedLocation,
-        price: priceFormatted,
-        pricePeriod,
-        category: draft.categoryName,
-        subcategory: draft.subcategoryName || draft.categoryName,
-        postedDate: 'Just now',
-        viewsCount: 0,
-        inquiriesCount: 0,
-        savesCount: 0,
-        imagesCount: Math.max(1, draft.images.length),
-        tags: [
-          draft.categoryName,
-          draft.subcategoryName,
-          draft.location.provinceName || ''
-        ].filter(Boolean) as string[],
-        description,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+      const result: UserListingItem = {
+        id: listingId, ownerId, module: draft.module, title, status: 'pending',
+        statusNote: 'Submitted and queued for moderation review.', imageUrl: '',
+        location: [draft.location.cityName, draft.location.districtName].filter(Boolean).join(', ') || 'Sri Lanka',
+        price: priceFormatted, pricePeriod, category: draft.categoryName,
+        subcategory: draft.subcategoryName || draft.categoryName, postedDate: 'Just now',
+        viewsCount: 0, inquiriesCount: 0, savesCount: 0, imagesCount: orderedImages.length,
+        tags: [draft.categoryName, draft.subcategoryName, draft.location.provinceName].filter(Boolean) as string[],
+        description, createdAt: listing.created_at, updatedAt: listing.updated_at,
       };
-
-      // Delete local draft upon successful submission
       PostDraftService.deleteDraft(draft.module, ownerId);
-
-      return {
-        success: true,
-        listing: newListing
-      };
-    } catch (error: any) {
-      console.error('Error submitting listing:', error);
-      return {
-        success: false,
-        listing: {} as any,
-        error: error?.message || 'Failed to submit listing. Please try again.'
-      };
+      return { success: true, listing: result };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Listing submission failed.';
+      if (uploadedPaths.length) {
+        const { error: cleanupError } = await supabase.storage.from('listing-images').remove(uploadedPaths);
+        if (cleanupError) console.error('Storage cleanup failed:', cleanupError.message);
+      }
+      if (listingId) {
+        const { error: cleanupError } = await supabase.from('listings').delete().eq('id', listingId);
+        if (cleanupError) console.error('Listing cleanup failed:', cleanupError.message);
+      }
+      return failed(message);
     }
   }
 }

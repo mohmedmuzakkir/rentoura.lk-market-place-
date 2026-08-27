@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { UploadedImage } from '../../../types/postFormTypes';
-import { Image, Upload, Trash2, Star, Plus, CheckCircle, Lightbulb, Sparkles, ArrowLeft, ArrowRight } from 'lucide-react';
+import { createPendingImages, normalizeImagePositions, revokePendingImage } from '../../../utils/pendingUploadImages';
+import { Image, Upload, Trash2, Star, CheckCircle, Lightbulb, ArrowLeft, ArrowRight } from 'lucide-react';
 
 interface RentalMediaStepProps {
   images: UploadedImage[];
@@ -18,27 +19,6 @@ export const RentalMediaStep: React.FC<RentalMediaStepProps> = ({
   accentColor = '#1464F4'
 }) => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [urlInput, setUrlInput] = useState('');
-  const [showUrlInput, setShowUrlInput] = useState(false);
-
-  // Sample curated rental presets for quick testing
-  const samplePresets: Record<string, UploadedImage[]> = {
-    car: [
-      { id: 'img-c1', url: 'https://images.unsplash.com/photo-1549399542-7e3f8b79c341?auto=format&fit=crop&w=800&q=80', name: 'Front Profile', isCover: true },
-      { id: 'img-c2', url: 'https://images.unsplash.com/photo-1552519507-da3b142c6e3d?auto=format&fit=crop&w=800&q=80', name: 'Cockpit & Interior', isCover: false },
-      { id: 'img-c3', url: 'https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=800&q=80', name: 'Rear & Trunk', isCover: false }
-    ],
-    house: [
-      { id: 'img-h1', url: 'https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=800&q=80', name: 'Front Elevation', isCover: true },
-      { id: 'img-h2', url: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=800&q=80', name: 'Living Room', isCover: false },
-      { id: 'img-h3', url: 'https://images.unsplash.com/photo-1600566753376-12c8ab7fb75b?auto=format&fit=crop&w=800&q=80', name: 'Master Bedroom', isCover: false }
-    ],
-    camera: [
-      { id: 'img-cam1', url: 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=800&q=80', name: 'Camera Body & Lens', isCover: true },
-      { id: 'img-cam2', url: 'https://images.unsplash.com/photo-1502920917128-1aa500764cbd?auto=format&fit=crop&w=800&q=80', name: 'Accessories & Pelican Case', isCover: false }
-    ]
-  };
-
   const MAX_PHOTOS = 5;
   const [maxPhotoError, setMaxPhotoError] = useState<string | null>(null);
 
@@ -52,47 +32,10 @@ export const RentalMediaStep: React.FC<RentalMediaStepProps> = ({
       return;
     }
 
-    const availableSlots = MAX_PHOTOS - images.length;
-    if (files.length > availableSlots) {
-      setMaxPhotoError(`Maximum 5 photos allowed. Only ${availableSlots} more photo(s) added.`);
-    } else {
-      setMaxPhotoError(null);
-    }
-
-    const filesToProcess = Array.from(files).slice(0, availableSlots) as File[];
-    const newImages: UploadedImage[] = [];
-    for (let i = 0; i < filesToProcess.length; i++) {
-      const file = filesToProcess[i];
-      const objectUrl = URL.createObjectURL(file);
-      newImages.push({
-        id: `upload-${Date.now()}-${i}`,
-        url: objectUrl,
-        name: file.name,
-        size: file.size,
-        isCover: images.length === 0 && i === 0
-      });
-    }
-
-    onChangeImages([...images, ...newImages]);
+    const result = createPendingImages(Array.from(files), images.length);
+    setMaxPhotoError(result.errors[0] || null);
+    onChangeImages(normalizeImagePositions([...images, ...result.images]));
     if (fileInputRef.current) fileInputRef.current.value = '';
-  };
-
-  const handleAddUrl = () => {
-    if (!urlInput.trim()) return;
-    if (images.length >= MAX_PHOTOS) {
-      setMaxPhotoError('Maximum 5 photos allowed per rental listing.');
-      return;
-    }
-    setMaxPhotoError(null);
-    const newImage: UploadedImage = {
-      id: `url-${Date.now()}`,
-      url: urlInput.trim(),
-      name: 'Web Image',
-      isCover: images.length === 0
-    };
-    onChangeImages([...images, newImage]);
-    setUrlInput('');
-    setShowUrlInput(false);
   };
 
   const handleSetCover = (id: string) => {
@@ -104,12 +47,14 @@ export const RentalMediaStep: React.FC<RentalMediaStepProps> = ({
   };
 
   const handleDeleteImage = (id: string) => {
+    const removed = images.find(img => img.id === id);
+    if (removed) revokePendingImage(removed);
     const remaining = images.filter(img => img.id !== id);
     // If the removed image was cover, make first remaining as cover
     if (remaining.length > 0 && !remaining.some(img => img.isCover)) {
       remaining[0].isCover = true;
     }
-    onChangeImages(remaining);
+    onChangeImages(normalizeImagePositions(remaining));
   };
 
   const handleMoveImage = (index: number, direction: 'left' | 'right') => {
@@ -119,14 +64,7 @@ export const RentalMediaStep: React.FC<RentalMediaStepProps> = ({
     const temp = updated[index];
     updated[index] = updated[newIndex];
     updated[newIndex] = temp;
-    onChangeImages(updated);
-  };
-
-  const handleApplyPreset = (presetKey: string) => {
-    const preset = samplePresets[presetKey];
-    if (preset) {
-      onChangeImages([...preset]);
-    }
+    onChangeImages(normalizeImagePositions(updated));
   };
 
   return (
@@ -137,7 +75,7 @@ export const RentalMediaStep: React.FC<RentalMediaStepProps> = ({
         <div className="text-xs">
           <p className="font-bold text-slate-900">Step 5: Photos & Media Management</p>
           <p className="text-slate-600 mt-0.5 leading-relaxed">
-            High-resolution photos increase rental inquiries by over 300%. Add up to 5 photos and select your preferred cover shot.
+            Clear, accurate photos help people understand the rental. Add up to 5 photos and select your preferred cover shot.
           </p>
         </div>
       </div>
@@ -169,15 +107,6 @@ export const RentalMediaStep: React.FC<RentalMediaStepProps> = ({
             </span>
           </div>
 
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => handleApplyPreset(categoryName?.toLowerCase().includes('vehic') ? 'car' : 'house')}
-              className="text-[10px] font-bold text-[#1464F4] hover:underline flex items-center gap-1 bg-blue-50 px-2 py-1 rounded-md"
-            >
-              <Sparkles className="w-3 h-3" /> Quick Sample Photos
-            </button>
-          </div>
         </div>
 
         {/* Drag & Drop Trigger */}
@@ -193,7 +122,7 @@ export const RentalMediaStep: React.FC<RentalMediaStepProps> = ({
               Click to select files or drag photos here
             </p>
             <p className="text-[10px] text-slate-500 mt-0.5">
-              Supports JPG, PNG, WEBP up to 10MB each
+              Supports JPEG, PNG, WEBP up to 5 MB each
             </p>
           </div>
         </div>
@@ -201,48 +130,11 @@ export const RentalMediaStep: React.FC<RentalMediaStepProps> = ({
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*"
+          accept="image/jpeg,image/png,image/webp"
           multiple
           onChange={handleFileUpload}
           className="hidden"
         />
-
-        {/* Add from URL option */}
-        <div className="flex items-center justify-between pt-1">
-          {!showUrlInput ? (
-            <button
-              type="button"
-              onClick={() => setShowUrlInput(true)}
-              className="text-[11px] font-bold text-slate-600 hover:text-slate-900 flex items-center gap-1"
-            >
-              <Plus className="w-3.5 h-3.5" /> Or paste image web link (URL)
-            </button>
-          ) : (
-            <div className="w-full flex gap-2 animate-in fade-in">
-              <input
-                type="url"
-                value={urlInput}
-                onChange={(e) => setUrlInput(e.target.value)}
-                placeholder="https://example.com/photo.jpg"
-                className="flex-1 px-3 py-1.5 rounded-xl border border-slate-200 text-xs text-slate-800"
-              />
-              <button
-                type="button"
-                onClick={handleAddUrl}
-                className="px-3 py-1.5 bg-[#1464F4] text-white text-xs font-bold rounded-xl"
-              >
-                Add
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowUrlInput(false)}
-                className="px-2 py-1.5 text-xs text-slate-500 font-bold"
-              >
-                Cancel
-              </button>
-            </div>
-          )}
-        </div>
 
         {/* Uploaded Photos Grid */}
         {images.length > 0 && (
@@ -260,7 +152,7 @@ export const RentalMediaStep: React.FC<RentalMediaStepProps> = ({
                   }`}
                 >
                   <img
-                    src={img.url}
+                    src={img.previewUrl}
                     alt={img.name || `Photo ${idx + 1}`}
                     className="w-full h-28 object-cover"
                   />

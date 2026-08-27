@@ -15,8 +15,20 @@ export class PostDraftService {
    */
   static saveDraft(draft: ListingDraft): void {
     try {
-      const updatedDraft: ListingDraft = {
+      const formValues = { ...draft.formValues };
+      delete formValues.logoFile;
+      if (typeof formValues.logoUrl === 'string' && formValues.logoUrl.startsWith('blob:')) delete formValues.logoUrl;
+      const imageMetadata = draft.images.map(({ name, size, mimeType, isCover, position }) => ({
+        name, size, mimeType, isCover, position
+      }));
+      const updatedDraft = {
         ...draft,
+        images: [],
+        formValues: {
+          ...formValues,
+          restoredImageMetadata: imageMetadata,
+          imagesNeedReselection: imageMetadata.length > 0,
+        },
         lastSavedAt: Date.now()
       };
       localStorage.setItem(this.getKey(draft.module, draft.ownerId || 'device_user'), JSON.stringify(updatedDraft));
@@ -32,7 +44,10 @@ export class PostDraftService {
     try {
       const stored = localStorage.getItem(this.getKey(module, ownerId));
       if (!stored) return null;
-      return JSON.parse(stored) as ListingDraft;
+      const parsed = JSON.parse(stored) as ListingDraft;
+      // Files and blob URLs are deliberately never restored from localStorage.
+      parsed.images = [];
+      return parsed;
     } catch (e) {
       console.warn('Failed to retrieve listing draft', e);
       return null;

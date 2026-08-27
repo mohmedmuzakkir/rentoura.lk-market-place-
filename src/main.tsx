@@ -3,6 +3,9 @@ import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 import { checkSupabaseConnection, isSupabaseConfigured } from './lib/supabase';
+import { registerSW } from 'virtual:pwa-register';
+
+registerSW({ immediate: true });
 
 if (import.meta.env.DEV && isSupabaseConfigured) {
   checkSupabaseConnection().then((res) => {

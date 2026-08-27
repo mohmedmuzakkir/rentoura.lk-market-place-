@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import { JOB_HERO_SLIDES, JobHeroSlide } from '../data/jobHeroSlidesData';
+import { JobHeroSlide } from '../data/jobHeroSlidesData';
 import { JobItem, CompanyPartner } from '../types';
 import { LocationValueModel } from './locationService';
 import { SearchService } from './searchService';
@@ -64,7 +64,7 @@ export class JobService {
         .order('display_order', { ascending: true });
 
       if (error || !data || data.length === 0) {
-        return JOB_HERO_SLIDES;
+        return [];
       }
 
       return data.map((row) => ({
@@ -75,7 +75,7 @@ export class JobService {
         titleHighlight: row.title_highlight || 'Dream Job',
         subtitle: row.subtitle || '',
         description: row.description || '',
-        imageUrl: row.image_url || 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=1200&q=80',
+        imageUrl: row.image_url || '',
         mobileImageUrl: row.mobile_image_url || undefined,
         ctaLabel: row.cta_text || 'Explore All Jobs',
         ctaRoute: (row.cta_route || '/jobs') as any,
@@ -86,8 +86,8 @@ export class JobService {
         isEnabled: true
       }));
     } catch (e) {
-      console.warn('Error fetching jobs hero slides, falling back to local slides:', e);
-      return JOB_HERO_SLIDES;
+      console.warn('Error fetching canonical jobs hero slides:', e);
+      return [];
     }
   }
 

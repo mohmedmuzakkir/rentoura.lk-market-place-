@@ -15,13 +15,15 @@ import {
   DollarSign,
   HelpCircle,
   FileQuestion,
-  AlertOctagon
+  AlertOctagon,
+  MessageCircle
 } from 'lucide-react';
 import { RentouraLogo } from '../components/RentouraLogo';
 import { AppRoute } from '../types';
 import { AuthService } from '../services/authService';
 import { ReportService } from '../services/reportService';
 import { supabase } from '../lib/supabase';
+import { RENTOURA_SUPPORT_WHATSAPP_URL } from '../config/contact';
 
 export interface ReportListingTarget {
   id: string;
@@ -120,7 +122,7 @@ export const ReportListingPage: React.FC<ReportListingPageProps> = ({
   const isSelfListing = currentUser && target?.ownerId && currentUser.id === target.ownerId;
 
   // Form State
-  const [selectedReason, setSelectedReason] = useState<string>('scam');
+  const [selectedReason, setSelectedReason] = useState<string>('');
   const [description, setDescription] = useState<string>('');
   const [contactInfo, setContactInfo] = useState<string>(currentUser ? (currentUser.email || '') : '');
   const [allowContact, setAllowContact] = useState<boolean>(true);
@@ -222,7 +224,7 @@ export const ReportListingPage: React.FC<ReportListingPageProps> = ({
           },
           {
             id: 'spam',
-            label: 'Spam or Unverified Service',
+            label: 'Spam or Duplicate Service',
             desc: 'Unsolicited advertising or duplicate listing.',
             icon: Ban,
             color: 'text-orange-500',
@@ -345,7 +347,8 @@ export const ReportListingPage: React.FC<ReportListingPageProps> = ({
       reasonLabel: activeReason ? activeReason.label : 'Reported Issue',
       description: description.trim(),
       contactInfo: contactInfo.trim(),
-      allowContact
+      allowContact,
+      source: 'listing_detail'
     });
 
     setIsSubmitting(false);
@@ -759,15 +762,18 @@ export const ReportListingPage: React.FC<ReportListingPageProps> = ({
                   <Lock className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-xs font-bold text-[#041C43]">Verified Moderation Standard</h3>
+                  <h3 className="text-xs font-bold text-[#041C43]">Moderation Review</h3>
                   <p className="text-[11px] text-slate-500 font-medium leading-relaxed mt-0.5">
-                    Our Trust & Safety moderators analyze every report against platform guidelines. Thank you for protecting the RENTOURA.LK community.
+                    Submitted reports are stored for moderation tracking and reviewed against platform guidelines.
                   </p>
                 </div>
               </div>
 
               {/* SUBMIT BUTTON */}
               <div className="space-y-2 pt-2">
+                <a href={RENTOURA_SUPPORT_WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 py-3 text-xs font-bold text-emerald-700">
+                  <MessageCircle className="w-4 h-4" /> Need help via WhatsApp?
+                </a>
                 <button
                   type="submit"
                   disabled={isSubmitting}
@@ -788,7 +794,7 @@ export const ReportListingPage: React.FC<ReportListingPageProps> = ({
 
                 <p className="text-center text-[11px] text-slate-400 font-medium flex items-center justify-center gap-1">
                   <Lock className="w-3 h-3 text-slate-400" />
-                  <span>Your submission is encrypted and confidential.</span>
+                  <span>Your submission is stored for moderation tracking.</span>
                 </p>
               </div>
 

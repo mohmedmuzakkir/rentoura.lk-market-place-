@@ -30,19 +30,23 @@ import { getCategoryIconComponent } from '../components/CategoryIcon';
 import { SavedListingService } from '../services/savedListingService';
 import { AuthService } from '../services/authService';
 import { SERVICES_CATEGORIES } from '../data/categories/servicesData';
+import { ProtectedActionRequest } from '../services/protectedActionService';
+import { buildOwnerWhatsAppUrl } from '../utils/contactLinks';
 
 interface ServicesPageProps {
   onNavigate: (route: AppRoute) => void;
   onOpenListingDetail?: (id: string, moduleHint?: 'rentals' | 'jobs' | 'services') => void;
   savedListings?: string[];
   onToggleSave?: (id: string) => void;
+  onProtectedAction: (request: ProtectedActionRequest) => void;
 }
 
 export const ServicesPage: React.FC<ServicesPageProps> = ({ 
   onNavigate, 
   onOpenListingDetail,
   savedListings = [],
-  onToggleSave
+  onToggleSave,
+  onProtectedAction
 }) => {
   // Main Filter State
   const [searchQuery, setSearchQuery] = useState('');
@@ -57,6 +61,7 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({
 
   // Saved Services State
   const [savedServices, setSavedServices] = useState<string[]>(savedListings);
+  useEffect(() => setSavedServices(savedListings), [savedListings]);
 
   // Modals & Dropdowns State
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
@@ -194,6 +199,7 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({
 
     if (onToggleSave) {
       onToggleSave(id);
+      return;
     }
 
     const isCurrentlySaved = savedServices.includes(id);
@@ -488,7 +494,7 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({
               </div>
               <div>
                 <h4 className="text-xs sm:text-sm font-extrabold text-slate-900 leading-tight">Offer Your Service</h4>
-                <p className="text-[10px] sm:text-[11px] text-slate-500 mt-0.5">Join thousands of verified providers.</p>
+                <p className="text-[10px] sm:text-[11px] text-slate-500 mt-0.5">Publish your service for marketplace visitors.</p>
               </div>
             </div>
             <div className="w-7 h-7 rounded-full bg-[#FF650A] text-white flex items-center justify-center shrink-0 shadow-xs group-hover:translate-x-0.5 transition-transform">
@@ -665,11 +671,11 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({
 
                       {/* Rating & Price */}
                       <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-                        <div className="flex items-center gap-1">
+                        {srv.reviewsCount > 0 && <div className="flex items-center gap-1">
                           <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
                           <span className="text-xs font-bold text-slate-900">{srv.rating}</span>
                           <span className="text-[11px] text-slate-400">({srv.reviewsCount})</span>
-                        </div>
+                        </div>}
                         <div className="text-sm font-black text-[#FF650A] font-heading">
                           {srv.price} <span className="text-[11px] text-slate-500 font-normal">{srv.priceUnit}</span>
                         </div>
@@ -677,16 +683,14 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({
 
                       {/* WhatsApp & View Details Action buttons */}
                       <div className="flex items-center gap-2 pt-1">
-                        <a
-                          href={`https://wa.me/${srv.whatsappNumber}?text=Hi%20${encodeURIComponent(srv.providerName)},%20I%20saw%20your%20service%20listing%20on%20RENTOURA`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
+                        {srv.whatsappNumber && <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); onProtectedAction({ type: 'whatsapp', returnRoute: `/services/${srv.id}`, execute: () => { const url = buildOwnerWhatsAppUrl(srv.whatsappNumber, srv.title); if (url) window.location.href = url; } }); }}
                           className="w-9 h-9 rounded-xl bg-[#25D366] text-white flex items-center justify-center hover:bg-[#20bd5a] tap-bounce shrink-0 shadow-xs"
                           aria-label="WhatsApp"
                         >
                           <MessageCircle className="w-4 h-4 fill-white text-white" />
-                        </a>
+                        </button>}
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -768,7 +772,7 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({
                 Explore Services
               </h2>
               <p className="text-xs text-slate-500 mt-0.5">
-                Showing {feedItems.length} of {totalServicesCount} verified service listings
+                Showing {feedItems.length} of {totalServicesCount} active service listings
               </p>
             </div>
 
@@ -884,12 +888,12 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({
                       <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-100">
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-[11px] font-semibold">
                           <Clock className="w-3 h-3 text-slate-500" />
-                          Verified Service
+                          Service listing
                         </span>
-                        <div className="flex items-center gap-1">
+                        {srv.reviewsCount > 0 && <div className="flex items-center gap-1">
                           <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
                           <span className="font-bold text-slate-900">{srv.rating}</span>
-                        </div>
+                        </div>}
                       </div>
 
                       {/* Price & Actions Row */}
@@ -902,16 +906,14 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({
                         </div>
 
                         <div className="flex items-center gap-1.5">
-                          <a
-                            href={`https://wa.me/${srv.whatsappNumber}?text=Hi%20${encodeURIComponent(srv.providerName)},%20I%20saw%20your%20listing%20on%20RENTOURA`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={(e) => e.stopPropagation()}
+                          {srv.whatsappNumber && <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); onProtectedAction({ type: 'whatsapp', returnRoute: `/services/${srv.id}`, execute: () => { const url = buildOwnerWhatsAppUrl(srv.whatsappNumber, srv.title); if (url) window.location.href = url; } }); }}
                             className="w-9 h-9 rounded-xl bg-[#25D366] text-white flex items-center justify-center hover:bg-[#20bd5a] tap-bounce shrink-0 shadow-xs"
                             aria-label="WhatsApp"
                           >
                             <MessageCircle className="w-4 h-4 fill-white text-white" />
-                          </a>
+                          </button>}
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -964,7 +966,7 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({
             <div className="min-w-0">
               <h3 className="text-sm sm:text-base font-bold font-heading text-white">Safe. Trusted. Verified.</h3>
               <p className="text-xs text-orange-100 truncate max-w-md">
-                All service providers are verified for your security and safety.
+                Review service details and independently verify providers before making arrangements.
               </p>
             </div>
           </div>

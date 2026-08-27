@@ -21,6 +21,7 @@ export class SupportTicketService {
    * Submits a support ticket to public.support_tickets table.
    */
   static async submitTicket(params: SubmitTicketParams): Promise<SubmitTicketResult> {
+    if (!navigator.onLine) return { success: false, error: 'You are offline. Connect to the internet before submitting a support request.' };
     try {
       const email = params.contactEmail.trim();
       const subject = params.subject.trim();
@@ -52,28 +53,23 @@ export class SupportTicketService {
         source: params.source || 'help_center'
       };
 
-      const { data, error } = await supabase
-        .from('support_tickets')
-        .insert([payload])
-        .select('id')
-        .single();
+      const insertQuery = supabase.from('support_tickets').insert([payload]);
+      const { data, error } = realUserId
+        ? await insertQuery.select('id').single()
+        : await insertQuery;
 
       if (error) {
         console.warn('[SupportTicketService] Supabase insert error:', error);
-        // Fallback gracefully if table isn't created in live DB yet
-        if (error.code === '42P01') {
-          return {
-            success: true,
-            ticketId: `local-ticket-${Date.now()}`,
-            error: undefined
-          };
-        }
         return { success: false, error: error.message || 'Failed to submit support ticket.' };
+      }
+
+      if (realUserId && !data?.id) {
+        return { success: false, error: 'The support ticket was not confirmed by the server.' };
       }
 
       return {
         success: true,
-        ticketId: data?.id || `ticket-${Date.now()}`
+        ticketId: data?.id
       };
     } catch (err: any) {
       console.error('[SupportTicketService] Exception submitting support ticket:', err);

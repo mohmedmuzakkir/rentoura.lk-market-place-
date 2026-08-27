@@ -240,25 +240,6 @@ export class ReportService {
         }
       }
 
-      const nowStr = new Date().toLocaleString('en-US', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true
-      });
-
-      const historyItem: ReportHistoryItem = {
-        id: `hist-${Date.now()}`,
-        action: 'REPORT_SUBMITTED',
-        actorName: params.reporterName || user?.email || 'User',
-        actorRole: 'Reporter',
-        details: `Submitted report regarding "${params.targetTitle}".`,
-        createdAt: nowStr,
-        timestamp: Date.now()
-      };
-
       // 3. DB insert
       const insertPayload: any = {
         reporter_id: realReporterId,
@@ -274,18 +255,13 @@ export class ReportService {
         reason_label: params.reasonLabel,
         details: params.description || '',
         contact_info: params.contactInfo || '',
-        allow_contact: params.allowContact ?? true,
-        status: 'submitted',
-        status_note: 'Thank you. Your report has been queued for moderation review.',
-        history: [historyItem],
-        internal_notes: []
+        allow_contact: params.allowContact ?? true
       };
 
-      const { data, error } = await supabase
-        .from('reports')
-        .insert(insertPayload)
-        .select()
-        .single();
+      const insertQuery = supabase.from('reports').insert(insertPayload);
+      const { data, error } = realReporterId
+        ? await insertQuery.select().single()
+        : await insertQuery;
 
       if (error) {
         console.warn('[ReportService] Supabase insert report error:', error.message);
@@ -295,12 +271,13 @@ export class ReportService {
         };
       }
 
-      const newReport = this.formatReportRow(data);
-      inMemoryReportsCache = [newReport, ...inMemoryReportsCache];
+      const newReport = data ? this.formatReportRow(data) : undefined;
+      if (newReport) inMemoryReportsCache = [newReport, ...inMemoryReportsCache];
 
       // 4. Create confirmation notification for reporter if logged in
       if (realReporterId) {
-        await NotificationService.addNotification({
+        try {
+          await NotificationService.addNotification({
           targetUserId: realReporterId,
           type: 'REPORT_UPDATE',
           category: 'system',
@@ -308,7 +285,10 @@ export class ReportService {
           body: `Your report regarding “${params.targetTitle}” has been received and queued for prompt review.`,
           entityType: (params.targetModule === 'general' ? 'system' : params.targetModule) as any,
           entityId: params.targetId
-        });
+          });
+        } catch (notificationError) {
+          console.warn('[ReportService] Report saved, but confirmation notification failed:', notificationError);
+        }
       }
 
       return {

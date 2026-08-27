@@ -1,9 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { AppRoute } from '../../../types';
 import { UserListingItem } from '../../../types/profileTypes';
 import { ListingDraft, validateSriLankanPhone, LocationDataState, RentalPricingState, RentalRulesState, UploadedImage } from '../../../types/postFormTypes';
 import { PostDraftService } from '../../../services/postDraftService';
 import { ListingSubmissionService } from '../../../services/listingSubmissionService';
+import { AuthService } from '../../../services/authService';
+import { PostAgreementCheckpoint } from '../PostAgreementCheckpoint';
+import { focusFirstInvalidField, ValidationFieldRegistration } from '../../../utils/validationNavigation';
+import { revokePendingImage } from '../../../utils/pendingUploadImages';
 import { PostStepIndicator, StepItem } from '../PostStepIndicator';
 import { SubmissionSuccessModal } from '../SubmissionSuccessModal';
 import { RentalBasicInfoStep } from './RentalBasicInfoStep';
@@ -59,6 +63,17 @@ export const RentalPostFlow: React.FC<RentalPostFlowProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submittedListing, setSubmittedListing] = useState<UserListingItem | null>(null);
   const [lastSavedText, setLastSavedText] = useState('Draft saved');
+  const [postAgreementChecked, setPostAgreementChecked] = useState(false);
+  const agreementRequired = !AuthService.hasAcceptedCurrentAgreement(AuthService.getCurrentProfile());
+  const imagesRef = useRef(draft.images);
+  useEffect(() => { imagesRef.current = draft.images; }, [draft.images]);
+  useEffect(() => () => imagesRef.current.forEach(revokePendingImage), []);
+  const fieldRegistry: ValidationFieldRegistration[] = [
+    ...['category', 'title'].map(key => ({ key, step: 1, id: 'rental-step-1' })),
+    ...['province', 'district', 'city'].map(key => ({ key, step: 2, id: 'rental-step-2' })),
+    { key: 'rate', step: 3, id: 'rental-step-3' }, { key: 'description', step: 4, id: 'rental-step-4' },
+    { key: 'images', step: 5, id: 'rental-step-5' }, { key: 'phone', step: 6, id: 'rental-step-6' },
+  ];
 
   // Autosave draft on change
   useEffect(() => {
@@ -125,18 +140,24 @@ export const RentalPostFlow: React.FC<RentalPostFlowProps> = ({
     if (stepNumber === 5) {
       // Allow moving even without photos, but give a reminder if zero
       if (draft.images.length === 0) {
-        errors.images = 'At least 1 photo is recommended for verified listings';
+        errors.images = 'Add at least 1 accurate photo before continuing';
       }
     }
 
     if (stepNumber === 6) {
-      const phoneCheck = validateSriLankanPhone(draft.contactPreferences.phone);
-      if (!phoneCheck.isValid) {
+      const contact = draft.contactPreferences;
+      if (!contact.showPhone && !contact.showWhatsApp && !contact.allowDirectChat) {
+        errors.phone = 'Select at least one contact method';
+      } else if (contact.showPhone && !validateSriLankanPhone(contact.phone).isValid) {
+        const phoneCheck = validateSriLankanPhone(contact.phone);
         errors.phone = phoneCheck.error || 'Please enter a valid Sri Lankan mobile number (e.g. 077 123 4567)';
+      } else if (contact.showWhatsApp && !validateSriLankanPhone(contact.whatsappNumber).isValid) {
+        errors.phone = 'Enter a valid Sri Lankan WhatsApp number';
       }
     }
 
     setStepErrors(errors);
+    if (Object.keys(errors).length) focusFirstInvalidField(errors, fieldRegistry, currentStep, setCurrentStep);
     return Object.keys(errors).length === 0;
   };
 
@@ -176,14 +197,16 @@ export const RentalPostFlow: React.FC<RentalPostFlowProps> = ({
 
   const handleSubmit = async () => {
     // Validate final checks
-    const isValid = validateStep(1) && validateStep(2) && validateStep(3) && validateStep(4) && validateStep(6);
-    if (!isValid) {
-      alert('Please fill all required steps before publishing.');
+    const invalidStep = [1, 2, 3, 4, 5, 6].find(step => !validateStep(step));
+    if (invalidStep) return;
+    if (agreementRequired && !postAgreementChecked) {
+      setStepErrors({ agreement: 'Accept the current User Agreement before submitting.' });
       return;
     }
 
     setIsSubmitting(true);
     try {
+      if (agreementRequired) await AuthService.acceptUserAgreement('post_listing');
       // Sync price into formValues for submission service compatibility
       const submissionDraft: ListingDraft = {
         ...draft,
@@ -203,11 +226,11 @@ export const RentalPostFlow: React.FC<RentalPostFlowProps> = ({
         }
         setSubmittedListing(result.listing);
       } else {
-        alert(result.error || 'Failed to submit listing. Please try again.');
+        setStepErrors({ submit: result.error || 'Failed to submit listing. Please try again.' });
       }
     } catch (e: any) {
       setIsSubmitting(false);
-      alert(e?.message || 'Failed to submit listing. Please try again.');
+      setStepErrors({ submit: e?.message || 'Failed to submit listing. Please try again.' });
     }
   };
 
@@ -264,6 +287,11 @@ export const RentalPostFlow: React.FC<RentalPostFlowProps> = ({
 
       {/* Main Content Area Container */}
       <main className="max-w-xl mx-auto px-4 pt-4">
+        {draft.formValues.imagesNeedReselection && draft.images.length === 0 && (
+          <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+            Draft text was restored. For your security, images are not stored in browser drafts and must be reselected.
+          </div>
+        )}
         {/* Step Validation Error Alert */}
         {Object.keys(stepErrors).length > 0 && (
           <div className="mb-4 p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold flex items-start gap-2.5 shadow-xs animate-in fade-in">
@@ -280,6 +308,7 @@ export const RentalPostFlow: React.FC<RentalPostFlowProps> = ({
         )}
 
         {/* Step 1: Category & Basic Info */}
+        <div id={`rental-step-${currentStep}`} tabIndex={-1} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-2xl">
         {currentStep === 1 && (
           <RentalBasicInfoStep
             categoryId={draft.categoryId}
@@ -418,6 +447,8 @@ export const RentalPostFlow: React.FC<RentalPostFlowProps> = ({
 
         {/* Step 7: Review & Final Submit */}
         {currentStep === 7 && (
+          <div className="space-y-4">
+          <PostAgreementCheckpoint required={agreementRequired} checked={postAgreementChecked} onCheckedChange={setPostAgreementChecked} onNavigate={onNavigate} />
           <RentalReviewStep
             draft={draft}
             onJumpToStep={handleJumpToStep}
@@ -425,7 +456,9 @@ export const RentalPostFlow: React.FC<RentalPostFlowProps> = ({
             isSubmitting={isSubmitting}
             accentColor={accentColor}
           />
+          </div>
         )}
+        </div>
       </main>
 
       {/* Bottom Floating Step Action Controls */}

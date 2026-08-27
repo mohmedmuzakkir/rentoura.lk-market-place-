@@ -58,7 +58,7 @@ export const RentalRulesContactStep: React.FC<RentalRulesContactStepProps> = ({
         <div className="text-xs">
           <p className="font-bold text-slate-900">Step 6: Contact Information & Rental Rules</p>
           <p className="text-slate-600 mt-0.5 leading-relaxed">
-            Provide validated Sri Lankan contact details for verified inquiries. Set required renter identity proofs and house/usage policies.
+            Provide valid Sri Lankan contact details for inquiries. Set any renter identity requirements and house or usage policies clearly.
           </p>
         </div>
       </div>

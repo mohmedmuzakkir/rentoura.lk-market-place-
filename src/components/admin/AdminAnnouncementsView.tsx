@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   Megaphone, 
   Plus, 
@@ -17,7 +17,8 @@ interface AdminAnnouncementsViewProps {
 }
 
 export const AdminAnnouncementsView: React.FC<AdminAnnouncementsViewProps> = ({ staff, onRefresh }) => {
-  const [announcements, setAnnouncements] = useState<PlatformAnnouncement[]>(() => AdminService.getAnnouncements());
+  const [announcements, setAnnouncements] = useState<PlatformAnnouncement[]>([]);
+  const [error, setError] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
 
   // Form State
@@ -26,16 +27,19 @@ export const AdminAnnouncementsView: React.FC<AdminAnnouncementsViewProps> = ({ 
   const [targetModule, setTargetModule] = useState<'all' | 'rentals' | 'jobs' | 'services'>('all');
   const [priority, setPriority] = useState<'normal' | 'urgent'>('normal');
 
-  const refreshAnnouncements = () => {
-    setAnnouncements(AdminService.getAnnouncements());
+  const refreshAnnouncements = async () => {
+    try { setAnnouncements(await AdminService.getAnnouncementsAsync()); setError(''); }
+    catch (reason) { setError(reason instanceof Error ? reason.message : 'Announcements are unavailable.'); }
     onRefresh();
   };
 
-  const handleCreateSubmit = (e: React.FormEvent) => {
+  useEffect(() => { void refreshAnnouncements(); }, []);
+
+  const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !message.trim()) return;
 
-    AdminService.createAnnouncement({
+    await AdminService.createAnnouncementAsync({
       title: title.trim(),
       message: message.trim(),
       targetModule,
@@ -46,23 +50,24 @@ export const AdminAnnouncementsView: React.FC<AdminAnnouncementsViewProps> = ({ 
     setShowCreateModal(false);
     setTitle('');
     setMessage('');
-    refreshAnnouncements();
+    await refreshAnnouncements();
   };
 
-  const handleToggleActive = (id: string) => {
-    AdminService.toggleAnnouncementActive(id, staff);
-    refreshAnnouncements();
+  const handleToggleActive = async (id: string) => {
+    await AdminService.toggleAnnouncementActiveAsync(id, staff);
+    await refreshAnnouncements();
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (window.confirm('Delete this announcement?')) {
-      AdminService.deleteAnnouncement(id, staff);
-      refreshAnnouncements();
+      await AdminService.deleteAnnouncementAsync(id, staff);
+      await refreshAnnouncements();
     }
   };
 
   return (
     <div className="space-y-6">
+      {error && <div role="alert" className="rounded-xl bg-rose-50 p-3 text-sm text-rose-700">{error}</div>}
       
       {/* Header Banner */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200/80 shadow-sm">

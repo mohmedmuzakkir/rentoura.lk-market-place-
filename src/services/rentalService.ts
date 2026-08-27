@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import { RENTAL_HERO_SLIDES, RentalHeroSlide } from '../data/rentalHeroSlidesData';
+import { RentalHeroSlide } from '../data/rentalHeroSlidesData';
 import { FeaturedListingItem } from '../types';
 import { matchesLocation } from './locationService';
 import { CategoryService, CategoryRecord } from './categoryService';
@@ -122,7 +122,7 @@ export class RentalService {
         .order('display_order', { ascending: true });
 
       if (error || !data || data.length === 0) {
-        return RENTAL_HERO_SLIDES;
+        return [];
       }
 
       return data.map((row) => ({
@@ -132,7 +132,7 @@ export class RentalService {
         titleHighlight: row.title_highlight || '',
         subtitle: row.subtitle || '',
         description: row.description || '',
-        imageUrl: row.image_url || 'https://images.unsplash.com/photo-1613490493576-7fde63acd811?auto=format&fit=crop&w=1200&q=80',
+        imageUrl: row.image_url || '',
         mobileImageUrl: row.mobile_image_url || undefined,
         ctaLabel: row.cta_text || 'Explore All Rentals',
         ctaRoute: (row.cta_route || '/rentals') as any,
@@ -143,8 +143,8 @@ export class RentalService {
         isEnabled: true
       }));
     } catch (e) {
-      console.warn('Error fetching rental hero slides, falling back to local slides:', e);
-      return RENTAL_HERO_SLIDES;
+      console.warn('Error fetching canonical rental hero slides:', e);
+      return [];
     }
   }
 

@@ -184,7 +184,7 @@ export const ServiceReviewStep: React.FC<ServiceReviewStepProps> = ({
           {draft.images && draft.images.length > 0 ? (
             <div className="flex gap-2 pt-2 overflow-x-auto pb-1">
               {draft.images.slice(0, 5).map(img => (
-                <img key={img.id} src={img.url} alt="Work thumbnail" className="w-14 h-14 object-cover rounded-xl border border-slate-200" />
+                <img key={img.id} src={img.previewUrl} alt="Work thumbnail" className="w-14 h-14 object-cover rounded-xl border border-slate-200" />
               ))}
             </div>
           ) : (

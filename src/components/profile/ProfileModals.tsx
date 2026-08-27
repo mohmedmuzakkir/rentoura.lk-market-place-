@@ -17,6 +17,7 @@ import {
   UploadCloud
 } from 'lucide-react';
 import { UserReviewItem, UserReportItem, UserProfile } from '../../types/profileTypes';
+import { RENTOURA_CONTACT, RENTOURA_SUPPORT_WHATSAPP_URL } from '../../config/contact';
 
 interface ProfileModalsProps {
   activeModal: string | null;
@@ -95,7 +96,7 @@ export const ProfileModals: React.FC<ProfileModalsProps> = ({
                   My Reviews & Ratings
                 </h3>
                 <p className="text-xs text-slate-500">
-                  {reviews.length} feedback from verified users
+                  {reviews.length} published feedback entr{reviews.length === 1 ? 'y' : 'ies'}
                 </p>
               </div>
             </div>
@@ -390,14 +391,14 @@ export const ProfileModals: React.FC<ProfileModalsProps> = ({
                   Help & Support
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Sri Lanka 24/7 customer service
+                  Official RENTOURA contact options
                 </p>
               </div>
             </div>
 
             <div className="space-y-3">
               <a
-                href="tel:+94112345678"
+                href={`tel:${RENTOURA_CONTACT.callIntl}`}
                 className="p-3.5 bg-slate-50 hover:bg-slate-100 rounded-2xl border border-slate-200 flex items-center gap-3 transition-colors text-left block"
               >
                 <div className="w-9 h-9 rounded-xl bg-orange-50 text-[#FF650A] flex items-center justify-center shrink-0">
@@ -405,12 +406,12 @@ export const ProfileModals: React.FC<ProfileModalsProps> = ({
                 </div>
                 <div>
                   <div className="text-xs font-bold text-slate-800">Helpline Phone</div>
-                  <div className="text-xs font-mono text-slate-600 mt-0.5">+94 11 234 5678 (24 Hours)</div>
+                  <div className="text-xs font-mono text-slate-600 mt-0.5">{RENTOURA_CONTACT.callDisplay}</div>
                 </div>
               </a>
 
               <a
-                href="mailto:support@rentoura.lk"
+                href={`mailto:${RENTOURA_CONTACT.email}`}
                 className="p-3.5 bg-slate-50 hover:bg-slate-100 rounded-2xl border border-slate-200 flex items-center gap-3 transition-colors text-left block"
               >
                 <div className="w-9 h-9 rounded-xl bg-blue-50 text-[#1464F4] flex items-center justify-center shrink-0">
@@ -418,8 +419,12 @@ export const ProfileModals: React.FC<ProfileModalsProps> = ({
                 </div>
                 <div>
                   <div className="text-xs font-bold text-slate-800">Email Support</div>
-                  <div className="text-xs font-mono text-slate-600 mt-0.5">support@rentoura.lk</div>
+                  <div className="text-xs font-mono text-slate-600 mt-0.5">{RENTOURA_CONTACT.email}</div>
                 </div>
+              </a>
+              <a href={RENTOURA_SUPPORT_WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="p-3.5 bg-emerald-50 hover:bg-emerald-100 rounded-2xl border border-emerald-200 flex items-center gap-3 transition-colors text-left block">
+                <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0"><PhoneCall className="w-4 h-4" /></div>
+                <div><div className="text-xs font-bold text-slate-800">WhatsApp Support</div><div className="text-xs font-mono text-slate-600 mt-0.5">{RENTOURA_CONTACT.whatsappDisplay}</div></div>
               </a>
             </div>
           </div>

@@ -20,6 +20,7 @@ import { RentouraLogo } from '../components/RentouraLogo';
 import { AuthService, validateAndNormalizeEmail } from '../services/authService';
 import { AppRoute } from '../types';
 import { getDashboardRouteForRole, isActiveAccount } from '../utils/roleUtils';
+import { featureFlags } from '../config/features';
 
 interface LoginPageProps {
   onNavigate: (route: AppRoute) => void;
@@ -79,7 +80,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             return;
           }
 
-          const cleanReturn = sanitizeReturnUrl(returnUrl);
+          const cleanReturn = new URLSearchParams(window.location.search).get('oauth') === 'google'
+            ? sanitizeReturnUrl(AuthService.consumeOAuthReturnTo()) : sanitizeReturnUrl(returnUrl);
           const staffDash = getDashboardRouteForRole(profile.role, profile.accountStatus);
           if (cleanReturn && cleanReturn !== '/') {
             onNavigate(cleanReturn);
@@ -177,6 +179,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     }
   };
 
+  const handleGoogle = async () => {
+    setGeneralError(''); setIsSubmitting(true);
+    try { await AuthService.signInWithGoogle(sanitizeReturnUrl(returnUrl)); }
+    catch (err: any) { setGeneralError(err.message || 'Google sign-in could not be started.'); setIsSubmitting(false); }
+  };
+
   const languageLabels = {
     English: '🇱🇰 English',
     Sinhala: '🇱🇰 සිංහල',
@@ -268,6 +276,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             </div>
           )}
 
+          {featureFlags.googleAuth && (
+            <>
+              <button type="button" onClick={handleGoogle} disabled={isSubmitting} className="mb-4 flex w-full items-center justify-center gap-3 rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-60">
+                <span className="text-lg font-black text-[#4285F4]">G</span> Continue with Google
+              </button>
+              <div className="relative mb-4 text-center text-xs text-slate-400"><span className="bg-white px-3">or use email</span><div className="absolute left-0 right-0 top-1/2 -z-10 border-t border-slate-200" /></div>
+            </>
+          )}
           <form onSubmit={handleSubmit} noValidate className="space-y-4">
             {/* Email Address Field */}
             <div>

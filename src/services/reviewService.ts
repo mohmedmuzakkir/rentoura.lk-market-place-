@@ -20,7 +20,7 @@ export class ReviewService {
     const profile = row.profiles || {};
 
     let experienceTag: CanonicalReview['experienceTag'] = 'Great Experience';
-    const rating = Number(row.rating || 5);
+    const rating = Number(row.rating ?? 0);
     if (rating >= 4.5) experienceTag = 'Great Experience';
     else if (rating >= 3.8) experienceTag = 'Good';
     else if (rating >= 2.8) experienceTag = 'Average';
@@ -55,7 +55,7 @@ export class ReviewService {
       ownerReply: row.owner_reply ? {
         authorName: 'Listing Owner',
         body: row.owner_reply,
-        createdAt: row.owner_reply_at ? new Date(row.owner_reply_at).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Recently'
+        createdAt: row.owner_reply_at ? new Date(row.owner_reply_at).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) : ''
       } : undefined,
       status: (row.status || 'published') as any,
       createdAt: dateStr,

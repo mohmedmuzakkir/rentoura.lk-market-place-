@@ -1,9 +1,9 @@
 import { supabase } from '../lib/supabase';
 import { HeroSlide } from '../types/heroSlide';
-import { DEFAULT_HERO_SLIDES } from '../data/heroSlidesData';
 import { FeaturedListingItem, LocationItem } from '../types';
 import { FeedListingItem } from '../components/HomeListingFeed';
 import { LocationService } from './locationService';
+import { getLocationImage } from '../data/locationImages';
 
 export interface MarketplaceStats {
   totalActiveListings: number;
@@ -40,7 +40,7 @@ export class HomeService {
   /**
    * 1. HERO SLIDES
    * Fetches hero slides from Supabase `home_slides` table where placement='home' and is_active=true.
-   * If DB query returns zero rows or errors out, safely falls back to local visual slide data.
+   * The database is the canonical source; no browser-local production slides are fabricated.
    */
   static async getHeroSlides(): Promise<HeroSlide[]> {
     try {
@@ -52,7 +52,7 @@ export class HomeService {
         .order('display_order', { ascending: true });
 
       if (error || !data || data.length === 0) {
-        return DEFAULT_HERO_SLIDES;
+        return [];
       }
 
       return data.map((row) => ({
@@ -60,7 +60,7 @@ export class HomeService {
         title: row.title || 'RENTOURA.LK',
         subtitle: row.subtitle || '',
         description: row.description || '',
-        imageUrl: row.image_url || 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=1200&q=85',
+        imageUrl: row.image_url || '',
         mobileImageUrl: row.mobile_image_url || undefined,
         module: (row.module || 'platform') as any,
         ctaLabel: row.cta_text || 'Explore Marketplace',
@@ -72,8 +72,8 @@ export class HomeService {
         overlayStrength: row.overlay_strength ?? 0.5
       }));
     } catch (e) {
-      console.warn('Fallback to local hero slides due to:', e);
-      return DEFAULT_HERO_SLIDES;
+      console.warn('Failed to load canonical hero slides:', e);
+      return [];
     }
   }
 
@@ -417,7 +417,7 @@ export class HomeService {
         id: item.location.id,
         name: item.location.name,
         province: item.location.provinceName || item.location.parentName || 'Sri Lanka',
-        imageUrl: 'https://images.unsplash.com/photo-1586861635167-e5223aadc9fe?auto=format&fit=crop&w=600&q=80',
+        imageUrl: getLocationImage(item.location.name, item.location.provinceName || item.location.parentName),
         listingsCount: `${item.listingCount} Ads`,
         searchCount: item.searchCount,
         listingCount: item.listingCount

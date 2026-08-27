@@ -26,6 +26,7 @@ export type AppRoute =
   | '/notifications'
   | '/login'
   | '/register'
+  | '/complete-profile'
   | '/forgot-password'
   | '/reset-password'
   | '/user-agreement'

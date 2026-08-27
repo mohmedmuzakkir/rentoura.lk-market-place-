@@ -16,6 +16,7 @@ export const JobApplicationStep: React.FC<JobApplicationStepProps> = ({
   accentColor = '#08A34F'
 }) => {
   const [phoneError, setPhoneError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const contactPrefs = draft.contactPreferences || {
     showPhone: true,
@@ -63,9 +64,10 @@ export const JobApplicationStep: React.FC<JobApplicationStepProps> = ({
   const toggleAppMethod = (method: string) => {
     if (appMethods.includes(method)) {
       if (appMethods.length === 1) {
-        alert('At least one application method must remain selected.');
+        setActionError('At least one application method must remain selected.');
         return;
       }
+      setActionError(null);
       updateFormValue('appMethods', appMethods.filter(m => m !== method));
     } else {
       updateFormValue('appMethods', [...appMethods, method]);
@@ -86,7 +88,7 @@ export const JobApplicationStep: React.FC<JobApplicationStepProps> = ({
   const handleAddQuestion = () => {
     if (!newQuestionInput.trim()) return;
     if (screeningQuestions.length >= 3) {
-      alert('Maximum of 3 custom screening questions allowed.');
+      setActionError('Maximum of 3 custom screening questions allowed.');
       return;
     }
     updateFormValue('screeningQuestions', [...screeningQuestions, newQuestionInput.trim()]);
@@ -99,6 +101,7 @@ export const JobApplicationStep: React.FC<JobApplicationStepProps> = ({
 
   return (
     <div className="space-y-6 text-left animate-in fade-in duration-200">
+      {actionError && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-700">{actionError}</p>}
       {/* Title Card */}
       <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs">
         <div className="flex items-center justify-between mb-1">

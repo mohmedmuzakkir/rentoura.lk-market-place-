@@ -10,6 +10,8 @@ import { StickyActionBar } from '../components/listing-details/StickyActionBar';
 import { ServiceInquiryModal } from '../components/listing-details/ServiceInquiryModal';
 import { ServiceListingDetail } from '../types/listingDetailsTypes';
 import { ListingDetailService } from '../services/listingDetailService';
+import { ProtectedActionRequest } from '../services/protectedActionService';
+import { buildOwnerWhatsAppUrl } from '../utils/contactLinks';
 
 interface ServiceDetailPageProps {
   listingId?: string;
@@ -18,6 +20,7 @@ interface ServiceDetailPageProps {
   onNavigate: (route: string) => void;
   isSaved: boolean;
   onToggleSave: () => void;
+  onProtectedAction: (request: ProtectedActionRequest) => void;
 }
 
 export const ServiceDetailPage: React.FC<ServiceDetailPageProps> = ({
@@ -26,7 +29,8 @@ export const ServiceDetailPage: React.FC<ServiceDetailPageProps> = ({
   onBack,
   onNavigate,
   isSaved,
-  onToggleSave
+  onToggleSave,
+  onProtectedAction
 }) => {
   const [detail, setDetail] = useState<ServiceListingDetail | null>(initialService);
   const [loading, setLoading] = useState<boolean>(!initialService && Boolean(listingId));
@@ -186,8 +190,9 @@ export const ServiceDetailPage: React.FC<ServiceDetailPageProps> = ({
           whatsappNumber={detail.contact?.whatsappNumber}
           isSaved={isSaved}
           onToggleSave={onToggleSave}
-          onSendMessage={() => setIsInquiryModalOpen(true)}
-          listingTitle={detail.title}
+          onSendMessage={() => onProtectedAction({ type: 'inquiry', returnRoute: `/services/${detail.id}`, execute: () => setIsInquiryModalOpen(true) })}
+          onCall={detail.contact?.phone ? () => onProtectedAction({ type: 'call', returnRoute: `/services/${detail.id}`, execute: () => { window.location.href = `tel:${detail.contact.phone}`; } }) : undefined}
+          onWhatsApp={(detail.contact?.whatsappNumber || detail.contact?.phone) ? () => onProtectedAction({ type: 'whatsapp', returnRoute: `/services/${detail.id}`, execute: () => { const url = buildOwnerWhatsAppUrl(detail.contact?.whatsappNumber || detail.contact?.phone, detail.title); if (url) window.location.href = url; } }) : undefined}
         />
       </div>
 

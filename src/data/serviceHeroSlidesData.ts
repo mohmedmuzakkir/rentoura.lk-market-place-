@@ -29,7 +29,7 @@ export const SERVICE_HERO_SLIDES: ServiceHeroSlide[] = [
     title: 'Home &',
     titleHighlight: 'Repair Experts',
     subtitle: 'Plumbing, Electrical, AC & Maintenance',
-    description: 'Connect with verified technicians for home repair, appliance servicing, and property maintenance.',
+    description: 'Browse technicians offering home repair, appliance servicing, and property maintenance.',
     imageUrl: 'https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=1200&q=80',
     ctaLabel: 'Find Repair Experts',
     ctaRoute: '/services',

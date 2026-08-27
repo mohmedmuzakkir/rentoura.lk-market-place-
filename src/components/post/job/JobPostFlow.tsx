@@ -4,6 +4,9 @@ import { UserListingItem } from '../../../types/profileTypes';
 import { ListingDraft, validateSriLankanPhone } from '../../../types/postFormTypes';
 import { PostDraftService } from '../../../services/postDraftService';
 import { ListingSubmissionService } from '../../../services/listingSubmissionService';
+import { AuthService } from '../../../services/authService';
+import { PostAgreementCheckpoint } from '../PostAgreementCheckpoint';
+import { focusFirstInvalidField, ValidationFieldRegistration } from '../../../utils/validationNavigation';
 import { PostStepIndicator, StepItem } from '../PostStepIndicator';
 import { SubmissionSuccessModal } from '../SubmissionSuccessModal';
 import { JobBasicInfoStep } from './JobBasicInfoStep';
@@ -91,6 +94,15 @@ export const JobPostFlow: React.FC<JobPostFlowProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submittedListing, setSubmittedListing] = useState<UserListingItem | null>(null);
   const [lastSavedText, setLastSavedText] = useState('Draft saved');
+  const [postAgreementChecked, setPostAgreementChecked] = useState(false);
+  const agreementRequired = !AuthService.hasAcceptedCurrentAgreement(AuthService.getCurrentProfile());
+  const fieldRegistry: ValidationFieldRegistration[] = [
+    ...['category', 'title', 'description'].map(key => ({ key, step: 1, id: 'job-step-1' })),
+    { key: 'companyName', step: 2, id: 'job-step-2' },
+    ...['province', 'district', 'city'].map(key => ({ key, step: 3, id: 'job-step-3' })),
+    { key: 'salary', step: 5, id: 'job-step-5' },
+    ...['appMethods', 'phone', 'email'].map(key => ({ key, step: 6, id: 'job-step-6' })),
+  ];
 
   // Autosave draft on change
   useEffect(() => {
@@ -180,10 +192,16 @@ export const JobPostFlow: React.FC<JobPostFlowProps> = ({
         errors.appMethods = 'Select at least one application method';
       }
       if (appMethods.includes('phone') || appMethods.includes('whatsapp')) {
-        const phoneCheck = validateSriLankanPhone(draft.contactPreferences.phone);
+        const number = appMethods.includes('whatsapp') && !appMethods.includes('phone')
+          ? draft.contactPreferences.whatsappNumber : draft.contactPreferences.phone;
+        const phoneCheck = validateSriLankanPhone(number);
         if (!phoneCheck.isValid) {
           errors.phone = phoneCheck.error || 'Please enter a valid Sri Lankan mobile number';
         }
+      }
+      if (draft.formValues.deadline) {
+        const deadline = new Date(`${draft.formValues.deadline}T23:59:59`);
+        if (Number.isNaN(deadline.getTime()) || deadline.getTime() < Date.now()) errors.deadline = 'Application deadline must be in the future';
       }
       if (appMethods.includes('email')) {
         const emailVal = (draft.contactPreferences.email || '').trim();
@@ -195,6 +213,7 @@ export const JobPostFlow: React.FC<JobPostFlowProps> = ({
     }
 
     setStepErrors(errors);
+    if (Object.keys(errors).length) focusFirstInvalidField(errors, fieldRegistry, currentStep, setCurrentStep);
     return Object.keys(errors).length === 0;
   };
 
@@ -258,10 +277,17 @@ export const JobPostFlow: React.FC<JobPostFlowProps> = ({
   };
 
   const handleSubmitFinal = async () => {
+    const invalidStep = [1, 2, 3, 4, 5, 6].find(step => !validateStep(step));
+    if (invalidStep) return;
+    if (agreementRequired && !postAgreementChecked) {
+      setStepErrors({ agreement: 'Accept the current User Agreement before submitting.' });
+      return;
+    }
     setIsSubmitting(true);
     setStepErrors({});
 
     try {
+      if (agreementRequired) await AuthService.acceptUserAgreement('post_listing');
       const result = await ListingSubmissionService.submitListing(draft);
       setIsSubmitting(false);
 
@@ -328,6 +354,7 @@ export const JobPostFlow: React.FC<JobPostFlowProps> = ({
 
       {/* Main Step Body */}
       <div className="max-w-3xl mx-auto px-4 pt-6">
+        <div id={`job-step-${currentStep}`} tabIndex={-1} className="focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 rounded-2xl">
         {currentStep === 1 && (
           <JobBasicInfoStep
             draft={draft}
@@ -383,6 +410,8 @@ export const JobPostFlow: React.FC<JobPostFlowProps> = ({
         )}
 
         {currentStep === 7 && (
+          <div className="space-y-4">
+          <PostAgreementCheckpoint required={agreementRequired} checked={postAgreementChecked} onCheckedChange={setPostAgreementChecked} onNavigate={onNavigate} />
           <JobReviewStep
             draft={draft}
             onEditStep={(s) => {
@@ -394,13 +423,18 @@ export const JobPostFlow: React.FC<JobPostFlowProps> = ({
             errors={stepErrors}
             accentColor={accentColor}
           />
+          </div>
         )}
+        </div>
       </div>
 
       {/* Sticky Bottom Navigation Bar */}
       {currentStep < 7 && (
         <div className="fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-md border-t border-slate-200/80 p-3 shadow-lg">
           <div className="max-w-3xl mx-auto flex items-center justify-between gap-3">
+            {Object.keys(stepErrors).length > 0 && (
+              <p role="alert" className="max-w-xs text-[11px] font-semibold text-rose-700">{Object.values(stepErrors)[0]}</p>
+            )}
             <button
               type="button"
               onClick={handleBack}

@@ -1,5 +1,6 @@
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
+import { featureFlags } from '../config/features';
 import { UserProfile } from '../types/profileTypes';
 import { ProfileService } from './profileService';
 
@@ -57,7 +58,7 @@ export function normalizeSriLankanPhone(phoneInput: string): PhoneValidationResu
   }
 
   if (localDigits.length !== 9) {
-    return { normalized: '', isValid: false, error: 'Sri Lankan mobile number must be 10 digits starting with 0 (e.g., 0771234567) or +947XXXXXXXX.' };
+    return { normalized: '', isValid: false, error: 'Sri Lankan mobile number must be 10 digits starting with 0 (07XXXXXXXX) or use +947XXXXXXXX.' };
   }
 
   if (!localDigits.startsWith('7')) {
@@ -92,6 +93,19 @@ export function calculatePasswordStrength(password: string): 'Weak' | 'Fair' | '
 }
 
 export const CURRENT_AGREEMENT_VERSION = '1.0';
+
+export interface ProfileCompletionState {
+  isComplete: boolean;
+  missing: Array<'fullName' | 'phone' | 'agreement'>;
+}
+
+export function getProfileCompletionState(profile: UserProfile | null): ProfileCompletionState {
+  const missing: ProfileCompletionState['missing'] = [];
+  if (!profile?.fullName?.trim() || profile.fullName.trim().toLowerCase() === 'rentoura member') missing.push('fullName');
+  if (!normalizeSriLankanPhone(profile?.phone || '').isValid) missing.push('phone');
+  if (profile?.agreementVersion !== CURRENT_AGREEMENT_VERSION || !profile.agreementAcceptedAt) missing.push('agreement');
+  return { isComplete: missing.length === 0, missing };
+}
 
 export class AuthService {
   private static currentUser: User | null = null;
@@ -227,48 +241,6 @@ export class AuthService {
       }
     }
 
-    // Fallback if public.profiles query failed or gave permission denied
-    const sessionUser = AuthService.currentUser;
-    if (sessionUser && sessionUser.id === uid) {
-      const meta = sessionUser.user_metadata || {};
-      const cachedProfile = ProfileService.getProfile();
-
-      console.log('[DIAGNOSTIC] Fallback user profile generated due to public.profiles query result for UID:', uid);
-
-      const rawCreatedAt = (sessionUser as any)?.created_at;
-      const dateObj = rawCreatedAt ? new Date(rawCreatedAt) : new Date();
-      const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-      const memberSinceStr = `${monthNames[dateObj.getMonth()]} ${dateObj.getFullYear()}`;
-
-      return {
-        id: uid,
-        fullName: meta.full_name || meta.name || cachedProfile?.fullName || sessionUser.email?.split('@')[0] || 'Rentoura Member',
-        displayName: meta.full_name || meta.name || cachedProfile?.displayName || 'Rentoura Member',
-        email: sessionUser.email || cachedProfile?.email || '',
-        phone: meta.phone_normalized || cachedProfile?.phone || '',
-        bio: cachedProfile?.bio || '',
-        avatarUrl: cachedProfile?.avatarUrl || '',
-        memberSince: memberSinceStr,
-        memberSinceYear: String(dateObj.getFullYear()),
-        accountType: '',
-        isVerified: false,
-        province: '',
-        district: '',
-        city: '',
-        preferredLanguage: '',
-        currency: 'LKR',
-        emailNotifications: true,
-        pushNotifications: true,
-        twoFactorEnabled: false,
-        totalReviews: 0,
-        averageRating: 0,
-        role: 'user',
-        accountStatus: 'active',
-        agreementVersion: meta.agreement_version || cachedProfile?.agreementVersion || '',
-        agreementAcceptedAt: meta.agreement_accepted_at || cachedProfile?.agreementAcceptedAt || ''
-      };
-    }
-
     console.warn('[DIAGNOSTIC] No row returned from public.profiles for UID:', uid);
     return null;
   }
@@ -277,33 +249,51 @@ export class AuthService {
     if (profile) {
       return profile.agreementVersion === CURRENT_AGREEMENT_VERSION && Boolean(profile.agreementAcceptedAt);
     }
-    const accepted = localStorage.getItem('rentoura_agreement_accepted') === 'true';
-    const version = localStorage.getItem('rentoura_agreement_version');
-    return accepted && version === CURRENT_AGREEMENT_VERSION;
+    return false;
   }
 
-  static async acceptUserAgreement(): Promise<boolean> {
-    const timestamp = new Date().toISOString();
-
-    if (AuthService.currentUser) {
-      await AuthService.safeUpdateProfile(AuthService.currentUser.id, {
-        agreement_version: CURRENT_AGREEMENT_VERSION,
-        agreement_accepted_at: timestamp
-      });
-
-      if (AuthService.currentUserProfile) {
-        AuthService.currentUserProfile.agreementVersion = CURRENT_AGREEMENT_VERSION;
-        AuthService.currentUserProfile.agreementAcceptedAt = timestamp;
-        ProfileService.saveProfile(AuthService.currentUserProfile);
-        AuthService.notifyListeners(AuthService.currentUser, AuthService.currentUserProfile);
-      }
-    }
-
-    localStorage.setItem('rentoura_agreement_accepted', 'true');
-    localStorage.setItem('rentoura_agreement_version', CURRENT_AGREEMENT_VERSION);
-    localStorage.setItem('rentoura_agreement_accepted_at', timestamp);
-
+  static async acceptUserAgreement(context: 'registration' | 'profile_completion' | 'post_listing' | 'protected_action' | 'material_version_update' = 'material_version_update'): Promise<boolean> {
+    if (!AuthService.currentUser) throw new Error('Please sign in before accepting the agreement.');
+    const { error } = await supabase.rpc('record_user_agreement_acceptance', {
+      p_context: context, p_user_agent: navigator.userAgent
+    });
+    if (error) throw new Error(error.message || 'Agreement acceptance could not be saved.');
+    const refreshed = await AuthService.refreshProfile();
+    if (!refreshed || !AuthService.hasAcceptedCurrentAgreement(refreshed)) throw new Error('Agreement acceptance could not be verified.');
     return true;
+  }
+
+  static async signInWithGoogle(returnTo: string = '/'): Promise<void> {
+    if (!featureFlags.googleAuth) {
+      throw new Error('Google sign-in is not currently available.');
+    }
+    const safeReturn = returnTo.startsWith('/') && !returnTo.startsWith('//') ? returnTo : '/';
+    sessionStorage.setItem('rentoura_oauth_return_to', safeReturn);
+    const origin = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+      ? window.location.origin : 'https://www.rentoura.lk';
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google', options: { redirectTo: `${origin}/login?oauth=google` }
+    });
+    if (error) throw new Error(error.message || 'Google sign-in could not be started.');
+  }
+
+  static consumeOAuthReturnTo(): string {
+    const value = sessionStorage.getItem('rentoura_oauth_return_to') || '/';
+    sessionStorage.removeItem('rentoura_oauth_return_to');
+    return value.startsWith('/') && !value.startsWith('//') ? value : '/';
+  }
+
+  static async completeProfile(fullName: string, phone: string, acceptAgreement: boolean): Promise<UserProfile> {
+    const phoneResult = normalizeSriLankanPhone(phone);
+    if (!phoneResult.isValid) throw new Error(phoneResult.error);
+    const { error } = await supabase.rpc('complete_marketplace_profile', {
+      p_full_name: fullName.trim(), p_phone: phoneResult.normalized,
+      p_accept_agreement: acceptAgreement, p_user_agent: navigator.userAgent
+    });
+    if (error) throw new Error(error.message || 'Profile could not be completed.');
+    const profile = await AuthService.refreshProfile();
+    if (!profile || !getProfileCompletionState(profile).isComplete) throw new Error('Profile completion could not be verified.');
+    return profile;
   }
 
   static async login(emailInput: string, passwordInput: string, rememberMe: boolean = true) {

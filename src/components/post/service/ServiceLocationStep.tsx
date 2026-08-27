@@ -18,6 +18,7 @@ export const ServiceLocationStep: React.FC<ServiceLocationStepProps> = ({
 }) => {
   const [isLocating, setIsLocating] = useState(false);
   const [geoSuccess, setGeoSuccess] = useState(false);
+  const [geoError, setGeoError] = useState<string | null>(null);
 
   const [provinces, setProvinces] = useState<CanonicalLocation[]>([]);
   const [districts, setDistricts] = useState<CanonicalLocation[]>([]);
@@ -140,7 +141,7 @@ export const ServiceLocationStep: React.FC<ServiceLocationStepProps> = ({
 
   const handleUseMyLocation = () => {
     if (!navigator.geolocation) {
-      alert('Geolocation is not supported by your browser.');
+      setGeoError('Geolocation is not supported by your browser. Please select a location manually.');
       return;
     }
 
@@ -148,6 +149,7 @@ export const ServiceLocationStep: React.FC<ServiceLocationStepProps> = ({
     navigator.geolocation.getCurrentPosition(
       (position) => {
         setIsLocating(false);
+        setGeoError(null);
         setGeoSuccess(true);
         updateLocation({
           latitude: position.coords.latitude,
@@ -155,9 +157,9 @@ export const ServiceLocationStep: React.FC<ServiceLocationStepProps> = ({
         });
         setTimeout(() => setGeoSuccess(false), 4000);
       },
-      (error) => {
+      () => {
         setIsLocating(false);
-        alert('Could not retrieve exact GPS position. Please select location manually.');
+        setGeoError('Could not retrieve your exact position. Please select a location manually.');
       },
       { timeout: 10000 }
     );
@@ -165,6 +167,7 @@ export const ServiceLocationStep: React.FC<ServiceLocationStepProps> = ({
 
   return (
     <div className="space-y-6 animate-fadeIn">
+      {geoError && <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-700">{geoError}</p>}
       {/* Intro Header */}
       <div className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/80 shadow-xs">
         <div className="flex items-center gap-2 mb-1">

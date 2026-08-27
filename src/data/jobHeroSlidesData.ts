@@ -12,7 +12,7 @@ export const JOB_HERO_SLIDES: JobHeroSlide[] = [
     title: 'Find Your',
     titleHighlight: 'Dream Job',
     subtitle: 'Career Opportunities Across Sri Lanka',
-    description: 'Explore thousands of verified full-time, part-time, and contract positions from Sri Lanka\'s leading employers.',
+    description: 'Explore active full-time, part-time, and contract job listings across Sri Lanka.',
     imageUrl: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=1200&q=80',
     ctaLabel: 'Explore All Jobs',
     ctaRoute: '/jobs',

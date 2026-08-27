@@ -42,6 +42,7 @@ import { RentouraLogo } from '../components/RentouraLogo';
 import { AppRoute } from '../types';
 import { SupportTicketService } from '../services/supportTicketService';
 import { supabase } from '../lib/supabase';
+import { RENTOURA_CONTACT, RENTOURA_SUPPORT_WHATSAPP_URL } from '../config/contact';
 
 interface HelpCenterPageProps {
   onNavigate: (route: AppRoute) => void;
@@ -355,7 +356,7 @@ export const HelpCenterPage: React.FC<HelpCenterPageProps> = ({
     },
     {
       q: 'Why is my listing in "Pending Review"?',
-      a: 'All new submissions undergo manual moderation to prevent spam and fake ads. Review typically completes within a few hours.'
+      a: 'Pending Review means the listing is not public yet. Review timing varies; check My Listings for the current status.'
     },
     {
       q: 'How do I reset my password?',
@@ -758,12 +759,12 @@ export const HelpCenterPage: React.FC<HelpCenterPageProps> = ({
                 Still need help?
               </h2>
               <p className="text-xs text-slate-600 font-medium leading-relaxed mt-0.5">
-                Our support team is ready to assist you. Submit an inquiry to our support backend.
+                Submit a tracked support ticket or use an official direct contact option.
               </p>
             </div>
           </div>
 
-          <div className="shrink-0 flex flex-col items-center gap-1 w-full sm:w-auto">
+          <div className="shrink-0 flex flex-col items-center gap-2 w-full sm:w-auto">
             <button
               type="button"
               onClick={() => {
@@ -776,7 +777,11 @@ export const HelpCenterPage: React.FC<HelpCenterPageProps> = ({
               <MessageSquare className="w-4 h-4" />
               <span>Contact Support</span>
             </button>
-            <span className="text-[10px] text-slate-400 font-bold tracking-wider uppercase">Direct Backend Support</span>
+            <div className="flex flex-wrap justify-center gap-3 text-xs font-bold">
+              <a href={RENTOURA_SUPPORT_WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="text-emerald-700 hover:underline">WhatsApp {RENTOURA_CONTACT.whatsappDisplay}</a>
+              <a href={`mailto:${RENTOURA_CONTACT.email}`} className="text-blue-700 hover:underline">{RENTOURA_CONTACT.email}</a>
+              <a href={`tel:${RENTOURA_CONTACT.callIntl}`} className="text-slate-700 hover:underline">Call {RENTOURA_CONTACT.callDisplay}</a>
+            </div>
           </div>
         </div>
 
@@ -1016,7 +1021,7 @@ export const HelpCenterPage: React.FC<HelpCenterPageProps> = ({
                 <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto" />
                 <h3 className="text-sm font-bold text-slate-800">Support Request Received</h3>
                 <p className="text-xs text-slate-600">
-                  Thank you! Your inquiry has been submitted to RENTOURA support. Our team will review and respond as soon as possible.
+                  Your inquiry was persisted as a support ticket. Keep this page available if you need the official direct contact options.
                 </p>
                 <button
                   type="button"

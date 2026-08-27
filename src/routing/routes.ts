@@ -3,7 +3,7 @@ import { AppRoute } from '../types';
 export const STATIC_ROUTES = [
   '/', '/rentals', '/jobs', '/services', '/saved', '/post', '/post/rental', '/post/job', '/post/service',
   '/messages', '/chat', '/profile', '/profile/edit', '/my-listings', '/search', '/select-location',
-  '/select-category', '/filters', '/notifications', '/login', '/register', '/forgot-password',
+  '/select-category', '/filters', '/notifications', '/login', '/register', '/complete-profile', '/forgot-password',
   '/reset-password', '/user-agreement', '/privacy-policy', '/safety', '/help', '/report-listing', '/reviews',
   '/admin', '/admin/dashboard', '/admin/moderation', '/admin/queue', '/admin/review', '/moderator', '/super-admin', '/404',
 ] as const satisfies readonly AppRoute[];

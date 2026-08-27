@@ -221,7 +221,7 @@ export const JobHeroCarousel: React.FC<JobHeroCarouselProps> = ({
                     </div>
                     <div className="flex items-center gap-2 bg-emerald-900/20 p-1.5 rounded-lg border border-emerald-500/10">
                       <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                      <span className="text-[11px]">Verified Corporate Recruiter Profiles</span>
+                      <span className="text-[11px]">Browse current employer listings</span>
                     </div>
                     <div className="flex items-center gap-2 bg-emerald-900/20 p-1.5 rounded-lg border border-emerald-500/10">
                       <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />

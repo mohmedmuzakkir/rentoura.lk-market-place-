@@ -173,7 +173,7 @@ export const HomePage: React.FC<HomePageProps> = ({
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 pb-16 overflow-x-hidden selection:bg-[#1464F4] selection:text-white">
       {/* 1. HERO CAROUSEL */}
-      <HomeHeroCarousel slides={slides.length > 0 ? slides : undefined} onNavigate={onNavigate} />
+      <HomeHeroCarousel slides={slides} onNavigate={onNavigate} />
 
       {/* 2. SEARCH AND FILTER PANEL (Overlaps Hero) */}
       <SearchAndFilterPanel

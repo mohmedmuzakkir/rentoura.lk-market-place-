@@ -138,7 +138,7 @@ export const ReviewSubmissionStep: React.FC<ReviewSubmissionStepProps> = ({
             {images.map((img) => (
               <img
                 key={img.id}
-                src={img.url}
+                src={img.previewUrl}
                 alt="Preview"
                 className="w-14 h-14 rounded-xl object-cover border border-slate-200 flex-shrink-0"
                 referrerPolicy="no-referrer"

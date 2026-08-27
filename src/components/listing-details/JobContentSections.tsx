@@ -162,7 +162,7 @@ export const JobContentSections: React.FC<JobContentSectionsProps> = ({ job, onO
           </div>
 
           <p className="text-xs text-slate-600 leading-relaxed mb-3">
-            {job.company.about || `${job.company.name} is a verified employer in Sri Lanka.`}
+            {job.company.about || `No company description has been provided for ${job.company.name}.`}
           </p>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-100 text-[11px]">

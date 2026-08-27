@@ -28,7 +28,7 @@ import {
   Car
 } from 'lucide-react';
 import { AppRoute, FeaturedListingItem } from '../types';
-import { RENTAL_HERO_SLIDES, RentalHeroSlide } from '../data/rentalHeroSlidesData';
+import { RentalHeroSlide } from '../data/rentalHeroSlidesData';
 import { GlobalLocationModal } from '../components/common/GlobalLocationModal';
 import { RentalCategoryModal } from '../components/RentalCategoryModal';
 import { RentalService, RentalCategoryRecord } from '../services/rentalService';
@@ -63,11 +63,12 @@ export const RentalsPage: React.FC<RentalsPageProps> = ({
   const [isPeriodModalOpen, setIsPeriodModalOpen] = useState(false);
 
   // Supabase Data States
-  const [heroSlides, setHeroSlides] = useState<RentalHeroSlide[]>(RENTAL_HERO_SLIDES);
+  const [heroSlides, setHeroSlides] = useState<RentalHeroSlide[]>([]);
   const [featuredRentals, setFeaturedRentals] = useState<FeaturedListingItem[]>([]);
   const [nearYouRentals, setNearYouRentals] = useState<FeaturedListingItem[]>([]);
   const [rentalFeed, setRentalFeed] = useState<FeaturedListingItem[]>([]);
   const [localSavedListings, setLocalSavedListings] = useState<string[]>(parentSavedListings || []);
+  useEffect(() => setLocalSavedListings(parentSavedListings || []), [parentSavedListings]);
   const [browseCategories, setBrowseCategories] = useState<RentalCategoryRecord[]>([]);
 
   const [totalCount, setTotalCount] = useState(0);
@@ -111,7 +112,7 @@ export const RentalsPage: React.FC<RentalsPageProps> = ({
       ]);
 
       if (isMounted) {
-        if (slidesData && slidesData.length > 0) setHeroSlides(slidesData);
+        setHeroSlides(slidesData || []);
         setFeaturedRentals(featuredData);
       }
     }
@@ -184,17 +185,6 @@ export const RentalsPage: React.FC<RentalsPageProps> = ({
 
   // Toggle Save with Supabase
   const handleToggleSaveListing = async (listingId: string) => {
-    const res = await SavedListingService.toggleSaveListing(listingId);
-    if (res.requiresLogin) {
-      onNavigate('/login');
-      return;
-    }
-
-    if (res.saved) {
-      setLocalSavedListings(prev => [...prev, listingId]);
-    } else {
-      setLocalSavedListings(prev => prev.filter(id => id !== listingId));
-    }
     parentOnToggleSave(listingId);
   };
 

@@ -81,14 +81,19 @@ export interface CategoryFormSchema {
   }[];
 }
 
-export interface UploadedImage {
+export interface PendingUploadImage {
   id: string;
-  url: string;
-  name?: string;
-  size?: number;
-  isCover?: boolean;
-  file?: File;
+  file: File;
+  previewUrl: string;
+  name: string;
+  size: number;
+  mimeType: string;
+  isCover: boolean;
+  position: number;
 }
+
+/** @deprecated Use PendingUploadImage. Kept as an alias while post-step APIs migrate. */
+export type UploadedImage = PendingUploadImage;
 
 export interface LocationDataState {
   provinceId?: string;

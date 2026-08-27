@@ -134,7 +134,7 @@ export class ProfileService {
         }
 
         // Date formatting
-        let postedDate = 'Recently';
+        let postedDate = '';
         if (row.created_at) {
           try {
             postedDate = new Date(row.created_at).toLocaleDateString('en-GB', {
@@ -357,9 +357,9 @@ export class ProfileService {
         id: r.id,
         reviewerName: r.author_name || r.reviewer_name || 'Anonymous User',
         reviewerAvatar: r.author_avatar || '',
-        rating: Number(r.rating || r.overall_rating || 5),
+        rating: Number(r.rating ?? r.overall_rating ?? 0),
         comment: r.body || r.comment || '',
-        date: r.created_at ? new Date(r.created_at).toLocaleDateString() : 'Recently',
+        date: r.created_at ? new Date(r.created_at).toLocaleDateString() : '',
         listingTitle: r.target_title || r.listing_title || 'Listing',
         module: r.target_module || 'rentals'
       }));
@@ -390,7 +390,7 @@ export class ProfileService {
         targetListingId: rep.target_id || '',
         reason: rep.reason_label || rep.reason_code || rep.reason || 'Safety Flag',
         status: rep.status === 'resolved' ? 'Resolved' : (rep.status === 'dismissed' ? 'Dismissed' : 'Pending Review'),
-        submittedDate: rep.created_at ? new Date(rep.created_at).toLocaleDateString() : 'Recently',
+        submittedDate: rep.created_at ? new Date(rep.created_at).toLocaleDateString() : '',
         resolutionNote: rep.status_note || rep.user_facing_message || undefined
       }));
     } catch (e) {
