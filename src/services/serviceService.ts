@@ -2,6 +2,7 @@ import { supabase } from '../lib/supabase';
 import { SERVICE_HERO_SLIDES, ServiceHeroSlide } from '../data/serviceHeroSlidesData';
 import { ServiceItem } from '../types';
 import { LocationValueModel } from './locationService';
+import { SearchService } from './searchService';
 
 export interface ServiceFeedParams {
   searchQuery?: string;
@@ -52,7 +53,7 @@ export class ServiceService {
    * NEVER uses getPublicUrl() for private buckets.
    */
   public static async resolveMediaUrl(storagePath: string | null | undefined): Promise<string> {
-    const fallbackImage = 'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?auto=format&fit=crop&w=600&q=80';
+    const fallbackImage = SearchService.NEUTRAL_PLACEHOLDER;
     if (!storagePath) return fallbackImage;
     if (storagePath.startsWith('http://') || storagePath.startsWith('https://')) {
       return storagePath;
@@ -265,7 +266,7 @@ export class ServiceService {
       const items: ServiceItem[] = await Promise.all(
         rawListings.map(async (row) => {
           const rawMediaPaths = mediaMap[row.id] || [];
-          let coverUrl = 'https://images.unsplash.com/photo-1621905251189-08b45d6a269e?auto=format&fit=crop&w=600&q=80';
+          let coverUrl = SearchService.NEUTRAL_PLACEHOLDER;
 
           if (rawMediaPaths.length > 0) {
             coverUrl = await ServiceService.resolveMediaUrl(rawMediaPaths[0]);

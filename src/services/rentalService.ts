@@ -3,6 +3,7 @@ import { RENTAL_HERO_SLIDES, RentalHeroSlide } from '../data/rentalHeroSlidesDat
 import { FeaturedListingItem } from '../types';
 import { matchesLocation } from './locationService';
 import { CategoryService, CategoryRecord } from './categoryService';
+import { SearchService } from './searchService';
 
 export interface RentalFeedParams {
   searchQuery?: string;
@@ -39,7 +40,7 @@ export class RentalService {
    * Helper: Resolves image storage path in private bucket 'listing-images' using signed URLs ONLY.
    */
   public static async resolveMediaUrl(storagePath: string | null | undefined): Promise<string> {
-    const fallbackImage = 'https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?auto=format&fit=crop&w=600&q=80';
+    const fallbackImage = SearchService.NEUTRAL_PLACEHOLDER;
     if (!storagePath) return fallbackImage;
     if (storagePath.startsWith('http://') || storagePath.startsWith('https://')) {
       return storagePath;

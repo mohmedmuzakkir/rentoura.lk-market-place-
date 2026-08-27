@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://www.rentoura.lk/</loc></url>
+  <url><loc>https://www.rentoura.lk/rentals</loc></url>
+  <url><loc>https://www.rentoura.lk/jobs</loc></url>
+  <url><loc>https://www.rentoura.lk/services</loc></url>
+  <url><loc>https://www.rentoura.lk/safety</loc></url>
+  <url><loc>https://www.rentoura.lk/help</loc></url>
+  <url><loc>https://www.rentoura.lk/privacy-policy</loc></url>
+  <url><loc>https://www.rentoura.lk/user-agreement</loc></url>
+</urlset>
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+
+  <url>
+    <loc>https://www.rentoura.lk/</loc>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+  </url>
+
+  <url>
+    <loc>https://www.rentoura.lk/rentals</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+
+  <url>
+    <loc>https://www.rentoura.lk/jobs</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+
+  <url>
+    <loc>https://www.rentoura.lk/services</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+
+</urlset>

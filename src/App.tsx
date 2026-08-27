@@ -50,101 +50,40 @@ import { ForgotPasswordModal } from './components/auth/ForgotPasswordModal';
 import { LegalModal } from './components/auth/LegalModals';
 import { AuthService } from './services/authService';
 import { PostFlowContainer } from './components/post/PostFlowContainer';
-import { getListingDetailById } from './data/listingDetailsData';
 import { ListingDetailService } from './services/listingDetailService';
 import { RentalListingDetail, JobListingDetail, ServiceListingDetail } from './types/listingDetailsTypes';
 import { AppRoute, FilterState } from './types';
 import { SelectedCategoryState } from './data/categorySelectorData';
 import { AdvancedFilterState, INITIAL_ADVANCED_FILTER_STATE } from './types/filterTypes';
 import { Conversation, ChatMessage } from './types/messagesTypes';
-import { INITIAL_CONVERSATIONS } from './data/messagesData';
 import { AppNotification, NotificationPreferences } from './types/notificationTypes';
 import { NotificationService } from './services/notificationService';
 import { UserProfile, UserListingItem, UserReviewItem, UserReportItem } from './types/profileTypes';
 import { ProfileService } from './services/profileService';
 import { ErrorBoundary, OfflineState, Page404 } from './components/common/StateComponents';
 import { Footer } from './components/Footer';
+import { isStaffRoute, resolveRoute } from './routing/routes';
 
 import { isSuperAdmin, isAdmin, isModerator, isStaff } from './utils/roleUtils';
 
 export default function App() {
   // Navigation Route State
   const [currentRoute, setCurrentRoute] = useState<AppRoute>(() => {
-    const path = window.location.pathname;
-    if (path.startsWith('/rentals/') && path.length > 9) {
-      return path as AppRoute;
-    }
-    if (path.startsWith('/rental-detail')) {
-      const params = new URLSearchParams(window.location.search);
-      const id = params.get('id');
-      if (id) {
-        window.history.replaceState({}, '', `/rentals/${id}`);
-        return `/rentals/${id}` as AppRoute;
-      }
-    }
-    if (path.startsWith('/jobs/') && path.length > 6) {
-      return path as AppRoute;
-    }
-    if (path.startsWith('/job-detail')) {
-      const params = new URLSearchParams(window.location.search);
-      const id = params.get('id');
-      if (id) {
-        window.history.replaceState({}, '', `/jobs/${id}`);
-        return `/jobs/${id}` as AppRoute;
-      }
-    }
-    if (path.startsWith('/services/') && path.length > 10) {
-      return path as AppRoute;
-    }
-    if (path.startsWith('/service-detail')) {
-      const params = new URLSearchParams(window.location.search);
-      const id = params.get('id');
-      if (id) {
-        window.history.replaceState({}, '', `/services/${id}`);
-        return `/services/${id}` as AppRoute;
-      }
-    }
-
-    const validRoutes: AppRoute[] = [
-      '/', 
-      '/rentals', 
-      '/jobs', 
-      '/services', 
-      '/saved', 
-      '/post', 
-      '/post/rental',
-      '/post/job',
-      '/post/service',
-      '/messages', 
-      '/chat',
-      '/profile',
-      '/profile/edit',
-      '/my-listings',
-      '/search',
-      '/select-location',
-      '/select-category',
-      '/filters',
-      '/rental-detail',
-      '/job-detail',
-      '/service-detail',
-      '/notifications',
-      '/login',
-      '/register',
-      '/forgot-password',
-      '/reset-password',
-      '/user-agreement',
-      '/privacy-policy',
-      '/safety',
-      '/help',
-      '/report-listing',
-      '/reviews',
-      '/admin',
-      '/admin/dashboard',
-      '/moderator',
-      '/super-admin'
-    ];
-    return validRoutes.includes(path as AppRoute) ? (path as AppRoute) : '/';
+    const resolved = resolveRoute(window.location.pathname, window.location.search);
+    if (resolved.canonicalPath) window.history.replaceState({}, '', resolved.canonicalPath);
+    return resolved.route;
   });
+
+  useEffect(() => {
+    const section = currentRoute.startsWith('/rentals') ? 'Rentals' : currentRoute.startsWith('/jobs') ? 'Jobs' : currentRoute.startsWith('/services') ? 'Services' : currentRoute === '/404' ? 'Page Not Found' : isStaffRoute(currentRoute) ? 'Administration' : currentRoute === '/' ? 'Rentals, Jobs & Services in Sri Lanka' : currentRoute.slice(1).replaceAll('-', ' ').replace(/\b\w/g, letter => letter.toUpperCase());
+    document.title = `RENTOURA.LK — ${section}`;
+    const indexable = currentRoute === '/' || ['/rentals', '/jobs', '/services', '/safety', '/help', '/privacy-policy', '/user-agreement'].includes(currentRoute) || currentRoute.startsWith('/rentals/') || currentRoute.startsWith('/jobs/') || currentRoute.startsWith('/services/');
+    const canonical = document.querySelector<HTMLLinkElement>('link[rel="canonical"]');
+    if (canonical) canonical.href = `https://www.rentoura.lk${indexable ? window.location.pathname : '/'}`;
+    let robots = document.querySelector<HTMLMetaElement>('meta[name="robots"]');
+    if (!robots) { robots = document.createElement('meta'); robots.name = 'robots'; document.head.appendChild(robots); }
+    robots.content = indexable ? 'index,follow' : 'noindex,nofollow';
+  }, [currentRoute]);
 
   // Auth & Profile Loading States
   const [isAuthLoading, setIsAuthLoading] = useState<boolean>(true);
@@ -152,26 +91,7 @@ export default function App() {
 
   // Selected Listing Detail State
   const [selectedListingId, setSelectedListingId] = useState<string>(() => {
-    const path = window.location.pathname;
-    if (path.startsWith('/rentals/') && path.length > 9) {
-      return path.slice(9);
-    }
-    if (path.startsWith('/rental-detail')) {
-      return new URLSearchParams(window.location.search).get('id') || '';
-    }
-    if (path.startsWith('/jobs/') && path.length > 6) {
-      return path.slice(6);
-    }
-    if (path.startsWith('/job-detail')) {
-      return new URLSearchParams(window.location.search).get('id') || '';
-    }
-    if (path.startsWith('/services/') && path.length > 10) {
-      return path.slice(10);
-    }
-    if (path.startsWith('/service-detail')) {
-      return new URLSearchParams(window.location.search).get('id') || '';
-    }
-    return '';
+    return resolveRoute(window.location.pathname, window.location.search).listingId || '';
   });
   const [reviewsTargetListingId, setReviewsTargetListingId] = useState<string | null>(null);
   const [previousRoute, setPreviousRoute] = useState<AppRoute>('/');
@@ -514,99 +434,10 @@ export default function App() {
   // Sync browser back/forward navigation
   useEffect(() => {
     const handlePopState = () => {
-      const path = window.location.pathname;
-      if (path.startsWith('/rentals/') && path.length > 9) {
-        const id = path.slice(9);
-        setSelectedListingId(id);
-        setCurrentRoute(path as AppRoute);
-        return;
-      }
-      if (path.startsWith('/rental-detail')) {
-        const params = new URLSearchParams(window.location.search);
-        const id = params.get('id');
-        if (id) {
-          window.history.replaceState({}, '', `/rentals/${id}`);
-          setSelectedListingId(id);
-          setCurrentRoute(`/rentals/${id}` as AppRoute);
-          return;
-        }
-      }
-      if (path.startsWith('/jobs/') && path.length > 6) {
-        const id = path.slice(6);
-        setSelectedListingId(id);
-        setCurrentRoute(path as AppRoute);
-        return;
-      }
-      if (path.startsWith('/job-detail')) {
-        const params = new URLSearchParams(window.location.search);
-        const id = params.get('id');
-        if (id) {
-          window.history.replaceState({}, '', `/jobs/${id}`);
-          setSelectedListingId(id);
-          setCurrentRoute(`/jobs/${id}` as AppRoute);
-          return;
-        }
-      }
-      if (path.startsWith('/services/') && path.length > 10) {
-        const id = path.slice(10);
-        setSelectedListingId(id);
-        setCurrentRoute(path as AppRoute);
-        return;
-      }
-      if (path.startsWith('/service-detail')) {
-        const params = new URLSearchParams(window.location.search);
-        const id = params.get('id');
-        if (id) {
-          window.history.replaceState({}, '', `/services/${id}`);
-          setSelectedListingId(id);
-          setCurrentRoute(`/services/${id}` as AppRoute);
-          return;
-        }
-      }
-
-      const validRoutes: AppRoute[] = [
-        '/', 
-        '/rentals', 
-        '/jobs', 
-        '/services', 
-        '/saved', 
-        '/post', 
-        '/post/rental',
-        '/post/job',
-        '/post/service',
-        '/messages', 
-        '/chat',
-        '/profile',
-        '/profile/edit',
-        '/my-listings',
-        '/search',
-        '/select-location',
-        '/select-category',
-        '/filters',
-        '/rental-detail',
-        '/job-detail',
-        '/service-detail',
-        '/notifications',
-        '/login',
-        '/register',
-        '/forgot-password',
-        '/reset-password',
-        '/user-agreement',
-        '/privacy-policy',
-        '/safety',
-        '/help',
-        '/report-listing',
-        '/reviews',
-        '/admin',
-        '/admin/dashboard',
-        '/moderator',
-        '/super-admin'
-      ];
-      if (validRoutes.includes(path as AppRoute)) {
-        setCurrentRoute(path as AppRoute);
-      } else {
-        setCurrentRoute('/');
-      }
+      const resolved = resolveRoute(window.location.pathname, window.location.search);
+      if (resolved.canonicalPath) window.history.replaceState({}, '', resolved.canonicalPath);
+      setSelectedListingId(resolved.listingId || '');
+      setCurrentRoute(resolved.route);
     };
 
     window.addEventListener('popstate', handlePopState);
@@ -1468,7 +1299,6 @@ export default function App() {
           />
         );
       case '/':
-      default:
         return (
           <HomePage
             filterState={filterState}
@@ -1483,10 +1313,13 @@ export default function App() {
             onOpenListingDetail={handleOpenListingDetail}
           />
         );
+      case '/404':
+      default:
+        return <Page404 onGoHome={() => handleNavigate('/')} isAdmin={isStaffRoute(window.location.pathname)} />;
     }
   };
 
-  const isAdminRoute = currentRoute.startsWith('/admin') || currentRoute === '/moderator' || currentRoute === '/super-admin';
+  const isAdminRoute = isStaffRoute(currentRoute);
 
   return (
     <div className={`min-h-screen bg-[#041C43] text-slate-800 flex justify-center selection:bg-[#1464F4] selection:text-white ${isAdminRoute ? 'w-full' : ''}`}>

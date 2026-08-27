@@ -1,5 +1,6 @@
 import React from 'react';
 import { Sparkles, CheckCircle2 } from 'lucide-react';
+import { RentouraLogo } from '../RentouraLogo';
 
 interface PostHeroProps {
   onExploreModule?: (module: 'rentals' | 'jobs' | 'services') => void;
@@ -56,9 +57,7 @@ export const PostHero: React.FC<PostHeroProps> = () => {
                 <div className="w-2.5 h-2.5 rounded-full bg-amber-400" />
                 <div className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
               </div>
-              <span className="text-[10px] uppercase font-bold tracking-widest text-blue-200">
-                RENTOURA POST
-              </span>
+              <RentouraLogo variant="horizontal" theme="dark-header" size="sm" />
             </div>
 
             <div className="space-y-2">

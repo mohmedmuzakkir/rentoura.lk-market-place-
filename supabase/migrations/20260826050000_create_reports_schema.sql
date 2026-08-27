@@ -59,25 +59,10 @@ CREATE POLICY "Anon users can submit reports"
 CREATE POLICY "Staff can view all reports"
   ON public.reports FOR SELECT
   TO authenticated
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.profiles
-      WHERE id = auth.uid() AND (role IN ('ADMIN', 'STAFF', 'SUPER_ADMIN') OR is_admin = true)
-    )
-  );
+  USING (public.is_staff((select auth.uid())));
 
 CREATE POLICY "Staff can update all reports"
   ON public.reports FOR UPDATE
   TO authenticated
-  USING (
-    EXISTS (
-      SELECT 1 FROM public.profiles
-      WHERE id = auth.uid() AND (role IN ('ADMIN', 'STAFF', 'SUPER_ADMIN') OR is_admin = true)
-    )
-  )
-  WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM public.profiles
-      WHERE id = auth.uid() AND (role IN ('ADMIN', 'STAFF', 'SUPER_ADMIN') OR is_admin = true)
-    )
-  );
+  USING (public.is_staff((select auth.uid())))
+  WITH CHECK (public.is_staff((select auth.uid())));

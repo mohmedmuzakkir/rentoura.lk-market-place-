@@ -61,13 +61,10 @@ export const MyListingsHero: React.FC = () => {
               <rect x="86" y="72" width="22" height="38" rx="6" fill="#1E3A8A" stroke="#60A5FA" strokeWidth="1.2" />
               <rect x="90" y="78" width="14" height="18" rx="3" fill="#2563EB" />
               
-              {/* Storefront Signboard with Rentoura R */}
+              {/* Storefront signboard with the official RENTOURA.LK mark */}
               <g transform="translate(60, 22)">
                 <rect x="-18" y="-12" width="36" height="24" rx="6" fill="#1E293B" stroke="#38BDF8" strokeWidth="1.5" />
-                <rect x="-15" y="-9" width="30" height="18" rx="4" fill="#0284C7" />
-                <text x="0" y="4.5" fill="white" fontSize="13" fontWeight="900" textAnchor="middle" fontFamily="sans-serif">
-                  R
-                </text>
+                <image href="/brand/rentoura-logo-mark.png" x="-10" y="-9" width="20" height="18" preserveAspectRatio="xMidYMid meet" />
               </g>
 
               {/* Little Potted Plant outside door */}

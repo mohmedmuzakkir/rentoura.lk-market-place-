@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, ArrowRight, ShieldCheck, Sparkles, Building2
 import { HeroSlide, CarouselConfig } from '../types/heroSlide';
 import { DEFAULT_HERO_SLIDES, DEFAULT_CAROUSEL_CONFIG } from '../data/heroSlidesData';
 import { AppRoute } from '../types';
+import { RentouraLogo } from './RentouraLogo';
 
 interface HomeHeroCarouselProps {
   slides?: HeroSlide[];
@@ -211,7 +212,7 @@ export const HomeHeroCarousel: React.FC<HomeHeroCarouselProps> = ({
               🇱🇰
             </div>
             <div>
-              <h3 className="text-white font-bold text-base">RENTOURA.LK</h3>
+              <RentouraLogo variant="horizontal" theme="dark-header" size="sm" />
               <p className="text-xs text-blue-200 font-medium">Sri Lanka's Trusted Network</p>
             </div>
           </div>

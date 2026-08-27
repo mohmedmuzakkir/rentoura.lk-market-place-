@@ -6,3 +6,11 @@ Disallow: /moderator
 Disallow: /moderator/
 Disallow: /super-admin
 Disallow: /super-admin/
+Disallow: /login
+Disallow: /register
+Disallow: /profile
+Disallow: /messages
+Disallow: /chat
+Disallow: /saved
+
+Sitemap: https://www.rentoura.lk/sitemap.xml

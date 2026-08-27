@@ -45,23 +45,23 @@ export const ListingModerationModal: React.FC<ListingModerationModalProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  const handleApprove = () => {
+  const handleApprove = async () => {
     setProcessing(true);
     setErrorMessage(null);
-    const result = AdminService.approveListing(listing.id, staff);
-    if (result.success) {
+    try {
+      await AdminService.moderateListing(listing.id, 'approve');
       setSuccessMessage('Listing approved successfully! Status is now Active & Live.');
       setTimeout(() => {
         onActionCompleted();
         onClose();
       }, 1200);
-    } else {
-      setErrorMessage(result.error || 'Failed to approve listing.');
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Failed to approve listing.');
       setProcessing(false);
     }
   };
 
-  const handleRejectSubmit = (e: React.FormEvent) => {
+  const handleRejectSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!reasonInput.trim()) {
       setErrorMessage('Rejection reason is mandatory.');
@@ -70,20 +70,20 @@ export const ListingModerationModal: React.FC<ListingModerationModalProps> = ({
     setProcessing(true);
     setErrorMessage(null);
 
-    const result = AdminService.rejectListing(listing.id, reasonInput, staff);
-    if (result.success) {
+    try {
+      await AdminService.moderateListing(listing.id, 'reject', reasonInput);
       setSuccessMessage('Listing rejected. Reason sent to owner via notification.');
       setTimeout(() => {
         onActionCompleted();
         onClose();
       }, 1200);
-    } else {
-      setErrorMessage(result.error || 'Failed to reject listing.');
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Failed to reject listing.');
       setProcessing(false);
     }
   };
 
-  const handleRequestChangesSubmit = (e: React.FormEvent) => {
+  const handleRequestChangesSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!reasonInput.trim()) {
       setErrorMessage('Feedback instructions are required.');
@@ -92,15 +92,15 @@ export const ListingModerationModal: React.FC<ListingModerationModalProps> = ({
     setProcessing(true);
     setErrorMessage(null);
 
-    const result = AdminService.requestListingChanges(listing.id, reasonInput, staff);
-    if (result.success) {
+    try {
+      await AdminService.moderateListing(listing.id, 'request_changes', reasonInput);
       setSuccessMessage('Changes requested successfully. Owner notified.');
       setTimeout(() => {
         onActionCompleted();
         onClose();
       }, 1200);
-    } else {
-      setErrorMessage(result.error || 'Failed to request changes.');
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Failed to request changes.');
       setProcessing(false);
     }
   };
@@ -353,15 +353,15 @@ export const ListingModerationModal: React.FC<ListingModerationModalProps> = ({
 
                 <div>
                   <h4 className="font-bold text-slate-900 text-base">
-                    Mohmed Muzakkir (Listing Owner)
+                    Listing Owner
                   </h4>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Member ID: <span className="font-mono text-slate-700 font-bold">{listing.ownerId || 'usr-muzakkir-1'}</span>
+                    Member ID: <span className="font-mono text-slate-700 font-bold">{listing.ownerId || 'Unavailable'}</span>
                   </p>
                   <div className="flex items-center gap-3 text-xs text-slate-600 mt-2">
-                    <span className="flex items-center gap-1"><Phone className="w-3.5 h-3.5 text-slate-400" /> +94 77 123 4567</span>
+                    <span>Contact details are available in the full review workspace</span>
                     <span>•</span>
-                    <span className="text-emerald-600 font-bold flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> ID Verified</span>
+                    <span className="text-slate-500 font-medium">Verification data unavailable</span>
                   </div>
                 </div>
               </div>
@@ -374,7 +374,7 @@ export const ListingModerationModal: React.FC<ListingModerationModalProps> = ({
 
                 <div className="p-3 bg-white border border-slate-200 rounded-xl">
                   <div className="text-slate-400 font-bold text-[10px] uppercase">Member Since</div>
-                  <div className="font-bold text-slate-800 mt-0.5">January 2025</div>
+                  <div className="font-bold text-slate-800 mt-0.5">Available in full review</div>
                 </div>
               </div>
             </div>

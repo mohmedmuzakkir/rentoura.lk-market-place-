@@ -1060,7 +1060,7 @@ export const RENTAL_MEDICAL_EQUIPMENT_SCHEMA: CategoryFormSchema = {
  */
 export function getFallbackSchema(module: 'rentals' | 'jobs' | 'services', categoryName: string, subcategoryName: string): CategoryFormSchema {
   return {
-    module: 'rentals',
+    module,
     categoryId: 'general',
     categoryName: categoryName || 'Rentals',
     subcategoryName: subcategoryName || 'General Item',

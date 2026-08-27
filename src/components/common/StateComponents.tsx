@@ -84,56 +84,56 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
           icon: <Search className="w-8 h-8 text-[#1464F4]" />,
           title: 'No Listings Found',
           description: 'There are no listings yet. Create a new listing to get started.',
-          defaultAction: { label: '+ Add Listing', onClick: () => {} }
+          defaultAction: undefined
         };
       case 'no_users':
         return {
           icon: <Users className="w-8 h-8 text-[#1464F4]" />,
           title: 'No Users Found',
           description: 'No users match your search or filters.',
-          defaultAction: { label: 'View All Users', onClick: () => {} }
+          defaultAction: undefined
         };
       case 'no_reports':
         return {
           icon: <Flag className="w-8 h-8 text-[#1464F4]" />,
           title: 'No Reports Found',
           description: 'No reports have been submitted. Great! Keep up the good work.',
-          defaultAction: { label: 'View All Reports', onClick: () => {} }
+          defaultAction: undefined
         };
       case 'no_notifications':
         return {
           icon: <Bell className="w-8 h-8 text-[#1464F4]" />,
           title: 'No Notifications',
           description: "You're all caught up! No new notifications.",
-          defaultAction: { label: 'View All Notifications', onClick: () => {} }
+          defaultAction: undefined
         };
       case 'no_messages':
         return {
           icon: <MessageSquare className="w-8 h-8 text-[#1464F4]" />,
           title: 'No Messages',
           description: 'No messages in your inbox. When you get messages, they will appear here.',
-          defaultAction: { label: 'Go to Inbox', onClick: () => {} }
+          defaultAction: undefined
         };
       case 'no_reviews':
         return {
           icon: <Star className="w-8 h-8 text-amber-500" />,
           title: 'No Reviews Yet',
           description: 'No reviews available at the moment. Reviews will appear here once users leave feedback.',
-          defaultAction: { label: 'View Reviews', onClick: () => {} }
+          defaultAction: undefined
         };
       case 'no_data':
         return {
           icon: <PieChart className="w-8 h-8 text-[#1464F4]" />,
           title: 'No Data Available',
           description: 'There is no data to display for the selected period.',
-          defaultAction: { label: 'Change Filters', onClick: () => {} }
+          defaultAction: undefined
         };
       case 'no_search':
         return {
           icon: <Search className="w-8 h-8 text-[#1464F4]" />,
           title: 'No Search Results',
           description: "We couldn't find anything matching your search.",
-          defaultAction: { label: 'Clear Search', onClick: () => {} }
+          defaultAction: undefined
         };
       case 'no_internet':
         return {

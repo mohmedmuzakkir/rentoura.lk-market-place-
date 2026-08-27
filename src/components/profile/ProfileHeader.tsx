@@ -1,6 +1,7 @@
 import React from 'react';
 import { Bell, MessageSquare, Settings } from 'lucide-react';
 import { AppRoute } from '../../types';
+import { RentouraLogo } from '../RentouraLogo';
 
 interface ProfileHeaderProps {
   onNavigate: (route: AppRoute) => void;
@@ -33,19 +34,9 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
         </button>
 
         {/* Centered Brand Logo */}
-        <div 
-          onClick={() => onNavigate('/')} 
-          className="cursor-pointer flex flex-col items-center select-none"
-        >
-          <div className="flex items-center gap-1">
-            <span className="text-xl font-black tracking-tight text-white font-heading">
-              R<span className="text-[#1464F4]">E</span>NTOURA<span className="text-[#1464F4]">.LK</span>
-            </span>
-          </div>
-          <p className="text-[9px] text-slate-300 font-medium tracking-wide">
-            Everything for Rent, All in One Place
-          </p>
-        </div>
+        <button onClick={() => onNavigate('/')} className="rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white" aria-label="Go to RENTOURA.LK home">
+          <RentouraLogo variant="header" theme="dark-header" size="sm" />
+        </button>
 
         {/* Action Shortcuts */}
         <div className="flex items-center gap-2">

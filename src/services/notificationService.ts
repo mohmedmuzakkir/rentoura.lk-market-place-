@@ -1,6 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { AppNotification, NotificationCategory, NotificationPreferences } from '../types/notificationTypes';
-import { INITIAL_NOTIFICATION_PREFERENCES } from '../data/notificationsData';
+const INITIAL_NOTIFICATION_PREFERENCES: NotificationPreferences = { messages: true, listingUpdates: true, jobUpdates: true, serviceUpdates: true, reviews: true, systemAnnouncements: true, promotions: false };
 
 export const NotificationService = {
   /**

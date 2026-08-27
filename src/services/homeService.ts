@@ -171,7 +171,7 @@ export class HomeService {
           
           let coverImg = '';
           if (row.listing_media && row.listing_media.length > 0) {
-            const sorted = [...row.listing_media].sort((a: any, b: any) => (a.position ?? a.sort_order ?? 0) - (b.position ?? b.sort_order ?? 0));
+            const sorted = [...row.listing_media].sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0));
             if (sorted[0]?.storage_path) {
               coverImg = await this.resolveSignedMediaUrl(sorted[0].storage_path);
             }
@@ -311,7 +311,7 @@ export class HomeService {
 
           let coverUrl = '';
           if (row.listing_media && row.listing_media.length > 0) {
-            const sortedMedia = [...row.listing_media].sort((a: any, b: any) => (a.position ?? a.sort_order ?? 0) - (b.position ?? b.sort_order ?? 0));
+            const sortedMedia = [...row.listing_media].sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0));
             if (sortedMedia[0]?.storage_path) {
               coverUrl = await this.resolveSignedMediaUrl(sortedMedia[0].storage_path);
             }

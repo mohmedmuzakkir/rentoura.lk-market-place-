@@ -36,8 +36,12 @@ export type AppRoute =
   | '/reviews'
   | '/admin'
   | '/admin/dashboard'
+  | '/admin/moderation'
+  | '/admin/queue'
+  | '/admin/review'
   | '/moderator'
-  | '/super-admin';
+  | '/super-admin'
+  | '/404';
 
 export interface SelectedLocationState {
   province?: { id: string; name: string } | null;

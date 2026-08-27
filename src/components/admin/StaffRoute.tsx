@@ -6,6 +6,7 @@ import { StaffAccount } from '../../types/adminTypes';
 import { AdminDashboardPage } from '../../pages/AdminDashboardPage';
 import { AdminLoginPage } from '../../pages/admin/AdminLoginPage';
 import { AuthService } from '../../services/authService';
+import { RentouraLogo } from '../RentouraLogo';
 import { 
   normalizeRole, 
   isActiveAccount, 
@@ -37,7 +38,8 @@ export const StaffRoute: React.FC<StaffRouteProps> = ({
     if (userProfile && isStaff(userProfile) && isActiveAccount(userProfile.accountStatus)) {
       const normRole = normalizeRole(userProfile.role);
       const targetDashboardRoute = getDashboardRouteForRole(normRole, userProfile.accountStatus);
-      if (currentRoute !== targetDashboardRoute && targetDashboardRoute !== '/') {
+      const isMatchingAdminRoute = targetDashboardRoute === '/admin' && currentRoute.startsWith('/admin');
+      if (!isMatchingAdminRoute && currentRoute !== targetDashboardRoute && targetDashboardRoute !== '/') {
         onNavigate(targetDashboardRoute);
       }
     }
@@ -48,7 +50,7 @@ export const StaffRoute: React.FC<StaffRouteProps> = ({
     return (
       <div className="min-h-screen bg-[#041C43] text-white flex flex-col items-center justify-center p-6">
         <div className="w-12 h-12 border-4 border-[#1464F4] border-t-transparent rounded-full animate-spin mb-4" />
-        <h2 className="text-xl font-bold tracking-tight mb-1 font-heading">RENTOURA.LK STAFF</h2>
+        <RentouraLogo variant="horizontal" theme="dark-header" size="md" className="mb-1" />
         <p className="text-slate-300 text-sm font-medium">Loading staff account...</p>
         <p className="text-slate-500 text-xs mt-1">Verifying server-authoritative permissions...</p>
       </div>

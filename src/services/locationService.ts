@@ -1,6 +1,4 @@
 import { supabase } from '../lib/supabase';
-import { StaffAccount } from '../types/adminTypes';
-import { CANONICAL_CITIES_AND_AREAS } from '../data/sriLankaLocations';
 
 export type LocationType = 'country' | 'province' | 'district' | 'city' | 'area';
 export type LocationStatus = 'active' | 'inactive';
@@ -92,9 +90,6 @@ export interface AddLocationPayload {
   status?: LocationStatus;
 }
 
-const GUEST_READER_EMAIL = 'guest_reader@rentoura.lk';
-const GUEST_READER_PASS = 'RentouraGuest123!';
-
 // Coordinates for Map representation
 export const PROVINCE_COORDINATES: Record<string, { lat: number; lng: number }> = {
   'western': { lat: 6.9271, lng: 79.8612 },
@@ -112,42 +107,6 @@ export class LocationService {
   private static cache: LocationRecord[] | null = null;
   private static cacheTimestamp = 0;
   private static CACHE_TTL_MS = 60000; // 1 minute
-  private static isEnsuringAuth = false;
-
-  /**
-   * Ensures reader session if guest auth is needed to query Supabase
-   */
-  private static async ensureReaderSession(): Promise<boolean> {
-    if (this.isEnsuringAuth) return false;
-    this.isEnsuringAuth = true;
-
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (sessionData?.session) {
-        this.isEnsuringAuth = false;
-        return true;
-      }
-
-      const { error: signInErr } = await supabase.auth.signInWithPassword({
-        email: GUEST_READER_EMAIL,
-        password: GUEST_READER_PASS,
-      });
-
-      if (signInErr) {
-        await supabase.auth.signUp({
-          email: GUEST_READER_EMAIL,
-          password: GUEST_READER_PASS,
-        });
-      }
-      this.isEnsuringAuth = false;
-      return true;
-    } catch (err) {
-      this.isEnsuringAuth = false;
-      console.warn('LocationService reader session init error:', err);
-      return false;
-    }
-  }
-
   /**
    * Loads all locations from Supabase public.locations
    */
@@ -158,108 +117,24 @@ export class LocationService {
     }
 
     try {
-      let { data, error } = await supabase
+      const { data, error } = await supabase
         .from('locations')
         .select('*')
         .order('sort_order', { ascending: true })
         .order('name', { ascending: true });
 
-      if (error && (error.code === '42501' || error.message?.includes('is_staff'))) {
-        await this.ensureReaderSession();
-        const retry = await supabase
-          .from('locations')
-          .select('*')
-          .order('sort_order', { ascending: true })
-          .order('name', { ascending: true });
-        data = retry.data;
-        error = retry.error;
-      }
-
       if (error) {
         console.error('Error loading locations from Supabase:', error);
-        return this.cache || this.hydrateCanonicalHierarchy([]);
+        return this.cache || [];
       }
 
-      this.cache = this.hydrateCanonicalHierarchy(data || []);
+      this.cache = (data || []) as LocationRecord[];
       this.cacheTimestamp = now;
       return this.cache;
     } catch (err) {
       console.error('Failed to query locations table:', err);
-      return this.cache || this.hydrateCanonicalHierarchy([]);
+      return this.cache || [];
     }
-  }
-
-  /**
-   * Ensures complete canonical hierarchy (Provinces -> Districts -> Cities -> Areas)
-   * DB records are primary. Static canonical dataset is ONLY used as fallback if DB has no records.
-   */
-  private static hydrateCanonicalHierarchy(dbRecords: LocationRecord[]): LocationRecord[] {
-    // Primary DB path: if DB records are present, use them directly without static merging
-    if (dbRecords && dbRecords.length > 0) {
-      return dbRecords;
-    }
-
-    console.warn('[LocationService] DB locations table unavailable or empty. Using static bootstrap locations dataset as fallback.');
-
-    const recordsMap = new Map<string, LocationRecord>();
-
-    // Lookup districts from DB records
-    const districtMap = new Map<string, LocationRecord>();
-
-    // Hydrate Cities and Areas from canonical dataset
-    for (const citySeed of CANONICAL_CITIES_AND_AREAS) {
-      const parentDistrict = districtMap.get(citySeed.districtCode);
-      const provinceId = parentDistrict?.province_id || parentDistrict?.parent_id || null;
-      const districtId = parentDistrict?.id || null;
-
-      const cityId = `city-${citySeed.code}`;
-      const cityRecord: LocationRecord = {
-        id: cityId,
-        code: citySeed.code,
-        name: citySeed.name,
-        type: 'city',
-        parent_id: districtId,
-        province_id: provinceId,
-        district_id: districtId,
-        city_id: null,
-        latitude: null,
-        longitude: null,
-        postal_code: citySeed.postalCode || null,
-        name_si: null,
-        name_ta: null,
-        status: 'active',
-        sort_order: 10,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-      recordsMap.set(cityId, cityRecord);
-
-      for (const areaSeed of citySeed.areas) {
-        const areaId = `area-${areaSeed.code}`;
-        const areaRecord: LocationRecord = {
-          id: areaId,
-          code: areaSeed.code,
-          name: areaSeed.name,
-          type: 'area',
-          parent_id: cityRecord.id,
-          province_id: provinceId,
-          district_id: districtId,
-          city_id: cityRecord.id,
-          latitude: null,
-          longitude: null,
-          postal_code: areaSeed.postalCode || citySeed.postalCode || null,
-          name_si: null,
-          name_ta: null,
-          status: 'active',
-          sort_order: 10,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        };
-        recordsMap.set(areaId, areaRecord);
-      }
-    }
-
-    return Array.from(recordsMap.values());
   }
 
   /**
@@ -268,6 +143,7 @@ export class LocationService {
   static invalidateCache(): void {
     this.cache = null;
     this.cacheTimestamp = 0;
+    if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('rentoura_locations_updated'));
   }
 
   /**
@@ -625,76 +501,15 @@ export class LocationService {
     return this.getLocationStats();
   }
 
-  /**
-   * Admin mutation: Add location record to Supabase
-   */
-  static async addLocation(
-    payload: AddLocationPayload, 
-    staffAccount?: StaffAccount
-  ): Promise<{ success: boolean; location?: CanonicalLocation; message: string }> {
-    try {
-      // Find parent if parentId is provided to set province_id or district_id correctly
-      const records = await this.loadLocationsFromDB();
-      const parent = payload.parentId ? records.find(r => r.id === payload.parentId) : null;
-
-      let provinceId: string | null = null;
-      let districtId: string | null = null;
-      let cityId: string | null = null;
-
-      if (payload.type === 'province') {
-        provinceId = null;
-      } else if (payload.type === 'district') {
-        provinceId = parent?.id || null;
-      } else if (payload.type === 'city') {
-        districtId = parent?.id || null;
-        provinceId = parent?.province_id || parent?.parent_id || null;
-      } else if (payload.type === 'area') {
-        cityId = parent?.id || null;
-        districtId = parent?.district_id || parent?.parent_id || null;
-        provinceId = parent?.province_id || null;
-      }
-
-      const generatedCode = payload.code || payload.name.toLowerCase().replace(/[^a-z0-9]+/g, '_');
-
-      const newRecord = {
-        name: payload.name.trim(),
-        type: payload.type,
-        code: generatedCode,
-        parent_id: payload.parentId || null,
-        province_id: provinceId,
-        district_id: districtId,
-        city_id: cityId,
-        postal_code: payload.postalCode || null,
-        name_si: payload.name_si || null,
-        name_ta: payload.name_ta || null,
-        latitude: payload.latitude || null,
-        longitude: payload.longitude || null,
-        status: payload.status || 'active',
-        sort_order: 10
-      };
-
-      const { data, error } = await supabase
-        .from('locations')
-        .insert(newRecord)
-        .select('*')
-        .single();
-
-      if (error) {
-        return { success: false, message: `Failed to add location: ${error.message}` };
-      }
-
-      this.invalidateCache();
-      const updatedRecords = await this.loadLocationsFromDB(true);
-      const canonical = this.transformToCanonical(data, updatedRecords);
-
-      return {
-        success: true,
-        location: canonical,
-        message: `Successfully added ${payload.type} "${payload.name}"`
-      };
-    } catch (err: any) {
-      return { success: false, message: err?.message || 'Failed to add location' };
-    }
+  private static slugify(value: string): string { return value.toLowerCase().trim().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); }
+  private static async mutate(action: string, id: string | null, values: Record<string, unknown>): Promise<{ success: boolean; message: string }> {
+    const { error } = await supabase.rpc('admin_manage_location', { p_action: action, p_location_id: id, p_values: values });
+    if (error) return { success: false, message: error.message };
+    this.invalidateCache(); await this.loadLocationsFromDB(true); return { success: true, message: 'Location saved successfully' };
+  }
+  static async addLocation(payload: AddLocationPayload): Promise<{ success: boolean; location?: CanonicalLocation; message: string }> {
+    const result = await this.mutate('create', null, { type: payload.type, name: payload.name.trim(), code: this.slugify(payload.code || payload.name), parent_id: payload.parentId || null, postal_code: payload.postalCode || null, name_si: payload.name_si || null, name_ta: payload.name_ta || null, latitude: payload.latitude ?? null, longitude: payload.longitude ?? null, status: payload.status || 'active', reason: 'Location created' });
+    return result;
   }
 
   /**
@@ -702,51 +517,21 @@ export class LocationService {
    */
   static async updateLocation(
     id: string, 
-    payload: Partial<AddLocationPayload>, 
-    staffAccount?: StaffAccount
+    payload: Partial<AddLocationPayload>
   ): Promise<{ success: boolean; location?: CanonicalLocation; message: string }> {
-    try {
-      const updates: Record<string, any> = {};
-      if (payload.name !== undefined) updates.name = payload.name.trim();
-      if (payload.code !== undefined) updates.code = payload.code;
-      if (payload.postalCode !== undefined) updates.postal_code = payload.postalCode;
-      if (payload.name_si !== undefined) updates.name_si = payload.name_si;
-      if (payload.name_ta !== undefined) updates.name_ta = payload.name_ta;
-      if (payload.latitude !== undefined) updates.latitude = payload.latitude;
-      if (payload.longitude !== undefined) updates.longitude = payload.longitude;
-      if (payload.status !== undefined) updates.status = payload.status;
-
-      const { data, error } = await supabase
-        .from('locations')
-        .update(updates)
-        .eq('id', id)
-        .select('*')
-        .single();
-
-      if (error) {
-        return { success: false, message: `Failed to update location: ${error.message}` };
-      }
-
-      this.invalidateCache();
-      const updatedRecords = await this.loadLocationsFromDB(true);
-      const canonical = this.transformToCanonical(data, updatedRecords);
-
-      return {
-        success: true,
-        location: canonical,
-        message: 'Location updated successfully'
-      };
-    } catch (err: any) {
-      return { success: false, message: err?.message || 'Failed to update location' };
-    }
+    const values: Record<string, unknown> = { reason: 'Location details updated' };
+    if (payload.name !== undefined) values.name = payload.name.trim(); if (payload.code !== undefined) values.code = this.slugify(payload.code);
+    if (payload.parentId !== undefined) values.parent_id = payload.parentId || null; if (payload.postalCode !== undefined) values.postal_code = payload.postalCode || null;
+    if (payload.name_si !== undefined) values.name_si = payload.name_si || null; if (payload.name_ta !== undefined) values.name_ta = payload.name_ta || null;
+    if (payload.latitude !== undefined) values.latitude = payload.latitude; if (payload.longitude !== undefined) values.longitude = payload.longitude; if (payload.status !== undefined) values.status = payload.status;
+    return this.mutate('update', id, values);
   }
 
   /**
    * Admin mutation: Toggle status in Supabase
    */
   static async toggleStatus(
-    id: string, 
-    staffAccount?: StaffAccount
+    id: string
   ): Promise<{ success: boolean; newStatus?: LocationStatus; message: string }> {
     try {
       const records = await this.loadLocationsFromDB();
@@ -757,17 +542,8 @@ export class LocationService {
 
       const nextStatus: LocationStatus = current.status === 'active' ? 'inactive' : 'active';
 
-      const { error } = await supabase
-        .from('locations')
-        .update({ status: nextStatus })
-        .eq('id', id);
-
-      if (error) {
-        return { success: false, message: `Failed to toggle status: ${error.message}` };
-      }
-
-      this.invalidateCache();
-      await this.loadLocationsFromDB(true);
+      const result = await this.mutate('set_status', id, { status: nextStatus, reason: `Location ${nextStatus}` });
+      if (!result.success) return result;
 
       return {
         success: true,
@@ -783,26 +559,9 @@ export class LocationService {
    * Admin mutation: Delete location from Supabase
    */
   static async deleteLocation(
-    id: string, 
-    staffAccount?: StaffAccount
+    id: string
   ): Promise<{ success: boolean; message: string }> {
-    try {
-      const { error } = await supabase
-        .from('locations')
-        .delete()
-        .eq('id', id);
-
-      if (error) {
-        return { success: false, message: `Failed to delete location: ${error.message}` };
-      }
-
-      this.invalidateCache();
-      await this.loadLocationsFromDB(true);
-
-      return { success: true, message: 'Location deleted successfully' };
-    } catch (err: any) {
-      return { success: false, message: err?.message || 'Failed to delete location' };
-    }
+    return this.mutate('delete', id, { reason: 'Confirmed deletion of unreferenced location' });
   }
 
   /**
@@ -810,16 +569,17 @@ export class LocationService {
    */
   static exportLocationsCSV(): string {
     const records = this.cache || [];
-    const headers = ['ID', 'Type', 'Name', 'Code', 'Parent ID', 'Province ID', 'District ID', 'Status'];
+    const quote = (value: unknown) => `"${String(value ?? '').replace(/"/g, '""')}"`;
+    const headers = ['ID','Type','Name','Code','Parent ID','Province ID','District ID','City ID','Postal Code','Sinhala Name','Tamil Name','Latitude','Longitude','Status','Sort Order'];
     const rows = records.map(r => [
       r.id,
       r.type,
-      `"${r.name.replace(/"/g, '""')}"`,
+      quote(r.name),
       r.code || '',
       r.parent_id || '',
       r.province_id || '',
       r.district_id || '',
-      r.status
+      r.city_id || '', r.postal_code || '', quote(r.name_si), quote(r.name_ta), r.latitude ?? '', r.longitude ?? '', r.status, r.sort_order
     ].join(','));
 
     return [headers.join(','), ...rows].join('\n');

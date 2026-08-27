@@ -1,0 +1,13 @@
+{
+  "name": "RENTOURA.LK",
+  "short_name": "RENTOURA",
+  "description": "Rentals, jobs and services marketplace in Sri Lanka.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FFFFFF",
+  "theme_color": "#1464F4",
+  "icons": [
+    { "src": "/brand/android-chrome-192x192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/brand/android-chrome-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

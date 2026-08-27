@@ -17,12 +17,9 @@ import {
   Check,
   AlertCircle
 } from 'lucide-react';
-import { 
-  JOB_CATEGORIES
-} from '../data/mockData';
 import { AppRoute, JobItem, CompanyPartner } from '../types';
 import { CompanyLogo } from '../components/BrandLogos';
-import { CategoryService } from '../services/categoryService';
+import { CategoryRecord, CategoryService } from '../services/categoryService';
 import { GlobalLocationModal } from '../components/common/GlobalLocationModal';
 import { LocationValueModel } from '../services/locationService';
 import { JobCategoryModal } from '../components/JobCategoryModal';
@@ -67,6 +64,7 @@ export const JobsPage: React.FC<JobsPageProps> = ({
   // Hero Slides & Companies State
   const [heroSlides, setHeroSlides] = useState<JobHeroSlide[]>([]);
   const [hiringCompanies, setHiringCompanies] = useState<CompanyPartner[]>([]);
+  const [jobCategories, setJobCategories] = useState<CategoryRecord[]>([]);
 
   // Feed & Featured Items
   const [feedItems, setFeedItems] = useState<JobItem[]>([]);
@@ -84,6 +82,7 @@ export const JobsPage: React.FC<JobsPageProps> = ({
   // 1. Initial Load: Hero Slides, Companies, Saved Jobs
   useEffect(() => {
     let isMounted = true;
+    CategoryService.getMainCategories('job').then(result => { if (isMounted && result.success) setJobCategories(result.data.slice(0, 8)); });
 
     JobService.getJobHeroSlides().then(slides => {
       if (isMounted) setHeroSlides(slides);
@@ -561,16 +560,13 @@ export const JobsPage: React.FC<JobsPageProps> = ({
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2.5">
-            {JOB_CATEGORIES.map((cat) => (
+            {jobCategories.map((cat) => (
               <button
                 key={cat.id}
                 onClick={() => {
-                  if (cat.name === 'More') {
-                    setIsCategoryModalOpen(true);
-                  } else {
-                    setSelectedCategory(cat.name);
-                    scrollToFeed();
-                  }
+                  setSelectedCategory(cat.name);
+                  setSelectedCategoryId(cat.id);
+                  scrollToFeed();
                 }}
                 className={`flex flex-col items-center gap-2 p-3 rounded-2xl bg-white border shadow-xs hover:border-[#08A34F] transition-all group tap-bounce cursor-pointer ${
                   selectedCategory.toLowerCase() === cat.name.toLowerCase()
@@ -578,11 +574,8 @@ export const JobsPage: React.FC<JobsPageProps> = ({
                     : 'border-slate-200/90'
                 }`}
               >
-                <div 
-                  className="w-11 h-11 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-105 shrink-0"
-                  style={{ backgroundColor: cat.bgColor || '#EAF8F0' }}
-                >
-                  {getCategoryIconComponent({ iconKey: cat.iconName, module: 'job', className: 'w-5 h-5 text-[#08A34F]' })}
+                <div className="w-11 h-11 rounded-2xl flex items-center justify-center bg-emerald-50 transition-transform group-hover:scale-105 shrink-0">
+                  {getCategoryIconComponent({ iconKey: cat.icon_key || undefined, module: 'job', className: 'w-5 h-5 text-[#08A34F]' })}
                 </div>
                 <span className="text-xs font-bold text-slate-800 text-center leading-tight truncate w-full">
                   {cat.name}

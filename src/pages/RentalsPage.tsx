@@ -27,7 +27,6 @@ import {
   CheckCircle2,
   Car
 } from 'lucide-react';
-import { CATEGORIES_DATA } from '../data/mockData';
 import { AppRoute, FeaturedListingItem } from '../types';
 import { RENTAL_HERO_SLIDES, RentalHeroSlide } from '../data/rentalHeroSlidesData';
 import { GlobalLocationModal } from '../components/common/GlobalLocationModal';
@@ -69,6 +68,7 @@ export const RentalsPage: React.FC<RentalsPageProps> = ({
   const [nearYouRentals, setNearYouRentals] = useState<FeaturedListingItem[]>([]);
   const [rentalFeed, setRentalFeed] = useState<FeaturedListingItem[]>([]);
   const [localSavedListings, setLocalSavedListings] = useState<string[]>(parentSavedListings || []);
+  const [browseCategories, setBrowseCategories] = useState<RentalCategoryRecord[]>([]);
 
   const [totalCount, setTotalCount] = useState(0);
   const [hasMore, setHasMore] = useState(false);
@@ -85,6 +85,12 @@ export const RentalsPage: React.FC<RentalsPageProps> = ({
   const periodOptions = ['Any Period', 'Per Day', 'Per Week', 'Per Month', 'Per Event'];
 
   // Load Saved Listings from Supabase
+  useEffect(() => {
+    let active = true;
+    RentalService.getRentalCategories().then(categories => { if (active) setBrowseCategories(categories.filter(category => category.level === 1).slice(0, 8)); });
+    return () => { active = false; };
+  }, []);
+
   useEffect(() => {
     let isMounted = true;
     SavedListingService.getSavedListingIds().then(ids => {
@@ -630,18 +636,14 @@ export const RentalsPage: React.FC<RentalsPageProps> = ({
           </div>
 
           <div className="grid grid-cols-4 sm:grid-cols-8 gap-2.5">
-            {CATEGORIES_DATA.map((cat) => (
+            {browseCategories.map((cat) => (
               <button
                 key={cat.id}
                 onClick={() => {
-                  if (cat.id === 'more') {
-                    setIsCategoryModalOpen(true);
-                  } else {
-                    setSelectedCategory(cat.name);
-                    setSelectedCategoryId(undefined);
-                    setSelectedCategorySlug(undefined);
-                    scrollToFeed();
-                  }
+                  setSelectedCategory(cat.name);
+                  setSelectedCategoryId(cat.id);
+                  setSelectedCategorySlug(cat.slug);
+                  scrollToFeed();
                 }}
                 className={`flex flex-col items-center gap-1.5 p-2 rounded-2xl bg-white border transition-all group tap-bounce cursor-pointer ${
                   selectedCategory === cat.name 
@@ -649,11 +651,8 @@ export const RentalsPage: React.FC<RentalsPageProps> = ({
                     : 'border-slate-200/80 shadow-xs hover:border-[#1464F4]'
                 }`}
               >
-                <div 
-                  className="w-11 h-11 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-105"
-                  style={{ backgroundColor: cat.bgColor, color: cat.color }}
-                >
-                  {getCategoryIcon(cat.iconName)}
+                <div className="w-11 h-11 rounded-2xl flex items-center justify-center bg-blue-50 text-[#1464F4] transition-transform group-hover:scale-105">
+                  {getCategoryIconComponent({ iconKey: cat.iconKey || undefined, module: 'rental', className: 'h-5 w-5' })}
                 </div>
                 <span className="text-[10.5px] font-bold text-slate-700 text-center leading-tight truncate w-full">
                   {cat.name}

@@ -30,16 +30,16 @@ export class ReviewService {
     return {
       id: row.id,
       authorId: row.author_id,
-      authorName: profile.full_name || profile.display_name || profile.email?.split('@')[0] || 'Community Member',
+      authorName: profile.full_name || profile.email?.split('@')[0] || 'Community Member',
       authorAvatar: profile.avatar_url || '',
       isAuthorVerified: false, // Neutral labeling as per prompt requirement
       targetType: 'listing',
       targetId: row.listing_id,
       targetModule: (listing.module || row.target_module || 'rentals') as ReviewModule,
       targetTitle: listing.title || 'Marketplace Listing',
-      targetImageUrl: listing.thumbnail_url || (Array.isArray(listing.images) ? listing.images[0] : ''),
-      targetLocation: listing.location_name || listing.district || 'Sri Lanka',
-      targetOwnerId: listing.user_id || '',
+      targetImageUrl: '',
+      targetLocation: 'Sri Lanka',
+      targetOwnerId: listing.owner_id || '',
       overallRating: rating,
       subratings: row.subratings || {
         communication: rating,
@@ -61,7 +61,7 @@ export class ReviewService {
       createdAt: dateStr,
       timestamp: createdDate.getTime(),
       updatedAt: row.updated_at ? new Date(row.updated_at).toLocaleDateString() : undefined,
-      locationName: listing.location_name || listing.district || 'Sri Lanka'
+      locationName: 'Sri Lanka'
     };
   }
 
@@ -85,16 +85,11 @@ export class ReviewService {
             id,
             title,
             module,
-            thumbnail_url,
-            images,
-            location_name,
-            district,
-            user_id
+            owner_id
           ),
           profiles:author_id (
             id,
             full_name,
-            display_name,
             avatar_url
           )
         `)
@@ -395,7 +390,7 @@ export class ReviewService {
       // 2. Fetch target listing from DB to check existence and owner
       const { data: listing, error: listingError } = await supabase
         .from('listings')
-        .select('id, title, user_id, status, module')
+        .select('id, title, owner_id, status, module')
         .eq('id', params.targetId)
         .maybeSingle();
 
@@ -404,7 +399,7 @@ export class ReviewService {
       }
 
       // 3. Self-review guard: owner cannot review own listing
-      if (listing.user_id && listing.user_id === realAuthorId) {
+      if (listing.owner_id && listing.owner_id === realAuthorId) {
         return { success: false, error: 'You cannot review your own listing.' };
       }
 
@@ -433,7 +428,7 @@ export class ReviewService {
           valueForMoney: params.overallRating,
           timeliness: params.overallRating
         },
-        status: 'published'
+        status: 'pending_moderation'
       };
 
       const { data, error } = await supabase
@@ -445,16 +440,11 @@ export class ReviewService {
             id,
             title,
             module,
-            thumbnail_url,
-            images,
-            location_name,
-            district,
-            user_id
+            owner_id
           ),
           profiles:author_id (
             id,
             full_name,
-            display_name,
             avatar_url
           )
         `)
@@ -469,9 +459,9 @@ export class ReviewService {
       inMemoryReviewsCache = [newReview, ...inMemoryReviewsCache];
 
       // Notify owner if available
-      if (listing.user_id && listing.user_id !== realAuthorId) {
+      if (listing.owner_id && listing.owner_id !== realAuthorId) {
         await NotificationService.addNotification({
-          targetUserId: listing.user_id,
+          targetUserId: listing.owner_id,
           type: 'SYSTEM_UPDATE',
           category: 'system',
           title: 'New Review Received ⭐',
@@ -516,16 +506,11 @@ export class ReviewService {
             id,
             title,
             module,
-            thumbnail_url,
-            images,
-            location_name,
-            district,
-            user_id
+            owner_id
           ),
           profiles:author_id (
             id,
             full_name,
-            display_name,
             avatar_url
           )
         `)
@@ -629,16 +614,11 @@ export class ReviewService {
             id,
             title,
             module,
-            thumbnail_url,
-            images,
-            location_name,
-            district,
-            user_id
+            owner_id
           ),
           profiles:author_id (
             id,
             full_name,
-            display_name,
             avatar_url
           )
         `)

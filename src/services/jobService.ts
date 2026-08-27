@@ -2,6 +2,7 @@ import { supabase } from '../lib/supabase';
 import { JOB_HERO_SLIDES, JobHeroSlide } from '../data/jobHeroSlidesData';
 import { JobItem, CompanyPartner } from '../types';
 import { LocationValueModel } from './locationService';
+import { SearchService } from './searchService';
 
 export interface JobFeedParams {
   searchQuery?: string;
@@ -29,7 +30,7 @@ export class JobService {
    * Helper: Resolves image storage path in private bucket 'listing-images'
    */
   public static async resolveMediaUrl(storagePath: string | null | undefined): Promise<string> {
-    const fallbackImage = 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=600&q=80';
+    const fallbackImage = SearchService.NEUTRAL_PLACEHOLDER;
     if (!storagePath) return fallbackImage;
     if (storagePath.startsWith('http://') || storagePath.startsWith('https://')) {
       return storagePath;

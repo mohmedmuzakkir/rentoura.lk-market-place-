@@ -33,7 +33,171 @@ const SEED_STAFF_ACCOUNTS: StaffAccount[] = [];
 // Seed Audit Logs
 const SEED_AUDIT_LOGS: AuditLogItem[] = [];
 
+export interface AdminReviewMedia {
+  id: string;
+  storagePath: string;
+  signedUrl: string;
+  position: number;
+  isCover: boolean;
+  mimeType: string | null;
+  fileSize: number | null;
+}
+
+export interface AdminReviewListing {
+  id: string;
+  ownerId: string;
+  module: 'rental' | 'job' | 'service';
+  title: string;
+  description: string | null;
+  shortSummary: string | null;
+  status: string;
+  price: number | null;
+  minimumPrice: number | null;
+  maximumPrice: number | null;
+  pricingPeriod: string | null;
+  currency: string;
+  exactAddress: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  moduleData: Record<string, unknown>;
+  submittedAt: string | null;
+  createdAt: string;
+  publishedAt: string | null;
+  category: string | null;
+  subcategory: string | null;
+  location: string;
+  owner: { fullName: string; email: string; phone: string | null; createdAt: string };
+  media: AdminReviewMedia[];
+  auditHistory: Array<{ id: string; action: string; actorName: string; reason: string | null; createdAt: string }>;
+  reports: Array<{ id: string; reason: string; details: string | null; status: string; createdAt: string }>;
+}
+
+export type ModerationAction = 'approve' | 'reject' | 'request_changes';
+
+export type AdminAccountStatus = 'active' | 'restricted' | 'suspended' | 'banned';
+export interface AdminDirectoryUser {
+  id: string; fullName: string; email: string; phone: string | null;
+  role: 'user' | 'moderator' | 'admin' | 'super_admin'; status: AdminAccountStatus;
+  createdAt: string; updatedAt: string; listingCount: number; reportCount: number;
+}
+export interface AdminDirectoryResult {
+  users: AdminDirectoryUser[]; total: number; page: number; pageSize: number;
+  statusCounts: Record<AdminAccountStatus | 'total', number>;
+}
+
 export class AdminService {
+  static async getAdminUsers(params: { search?: string; status?: AdminAccountStatus | 'all'; page?: number; pageSize?: number }): Promise<AdminDirectoryResult> {
+    const { data, error } = await supabase.rpc('admin_user_directory', {
+      p_search: params.search?.trim() || null,
+      p_status: !params.status || params.status === 'all' ? null : params.status,
+      p_page: params.page || 1,
+      p_page_size: params.pageSize || 20
+    });
+    if (error) throw new Error(error.message);
+    const counts = data.status_counts || {};
+    return {
+      users: (data.users || []).map((row: any) => ({
+        id: row.id, fullName: row.full_name || 'Name not provided', email: row.email || '', phone: row.phone_normalized,
+        role: row.role, status: row.account_status, createdAt: row.created_at, updatedAt: row.updated_at,
+        listingCount: Number(row.listing_count || 0), reportCount: Number(row.report_count || 0)
+      })),
+      total: Number(data.total || 0), page: Number(data.page || 1), pageSize: Number(data.page_size || 20),
+      statusCounts: { total: Number(counts.total || 0), active: Number(counts.active || 0), restricted: Number(counts.restricted || 0), suspended: Number(counts.suspended || 0), banned: Number(counts.banned || 0) }
+    };
+  }
+
+  static async changeUserStatus(userId: string, status: AdminAccountStatus, reason: string): Promise<void> {
+    if (!reason.trim()) throw new Error('A reason is required.');
+    const { error } = await supabase.rpc('admin_change_user_status', { p_user_id: userId, p_status: status, p_reason: reason.trim() });
+    if (error) throw new Error(error.message);
+  }
+
+  static async getAdminUserActivity(userId: string): Promise<{
+    listings: Array<{ id: string; title: string; module: string; status: string; createdAt: string }>;
+    reports: Array<{ id: string; relation: 'reported by user' | 'about user'; reason: string; status: string; createdAt: string }>;
+  }> {
+    const [listingResult, reportResult] = await Promise.all([
+      supabase.from('listings').select('id,title,module,status,created_at').eq('owner_id', userId).order('created_at', { ascending: false }),
+      supabase.from('reports').select('id,reporter_id,target_user_id,reason_label,status,created_at').or(`reporter_id.eq.${userId},target_user_id.eq.${userId}`).order('created_at', { ascending: false })
+    ]);
+    const error = listingResult.error || reportResult.error;
+    if (error) throw new Error(error.message);
+    return {
+      listings: (listingResult.data || []).map(row => ({ id: row.id, title: row.title, module: row.module, status: row.status, createdAt: row.created_at })),
+      reports: (reportResult.data || []).map(row => ({ id: row.id, relation: row.reporter_id === userId ? 'reported by user' : 'about user', reason: row.reason_label, status: row.status, createdAt: row.created_at }))
+    };
+  }
+  static async getListingForReview(listingId: string): Promise<AdminReviewListing | null> {
+    const { data: listing, error } = await supabase
+      .from('listings')
+      .select('*')
+      .eq('id', listingId)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!listing) return null;
+
+    const locationIds = [listing.province_id, listing.district_id, listing.city_id, listing.area_id].filter(Boolean) as string[];
+    const categoryIds = [listing.category_id, listing.subcategory_id].filter(Boolean) as string[];
+    const [ownerResult, categoryResult, locationResult, mediaResult, auditResult, reportsResult] = await Promise.all([
+      supabase.from('profiles').select('full_name,email,phone_normalized,created_at').eq('id', listing.owner_id).maybeSingle(),
+      categoryIds.length ? supabase.from('categories').select('id,name').in('id', categoryIds) : Promise.resolve({ data: [], error: null }),
+      locationIds.length ? supabase.from('locations').select('id,name,type').in('id', locationIds) : Promise.resolve({ data: [], error: null }),
+      supabase.from('listing_media').select('id,storage_path,position,is_cover,mime_type,file_size').eq('listing_id', listingId).order('position'),
+      supabase.from('audit_logs').select('id,action,actor_name,details,created_at').eq('target_type', 'listing').eq('target_id', listingId).order('created_at', { ascending: false }),
+      supabase.from('reports').select('id,reason_label,details,status,created_at').eq('listing_id', listingId).order('created_at', { ascending: false })
+    ]);
+
+    const criticalError = ownerResult.error || categoryResult.error || locationResult.error || mediaResult.error || auditResult.error || reportsResult.error;
+    if (criticalError) throw new Error(criticalError.message);
+    if (!ownerResult.data) throw new Error('Listing owner profile is unavailable.');
+
+    const mediaRows = mediaResult.data || [];
+    let signedUrls: Array<{ path: string; signedUrl: string }> = [];
+    if (mediaRows.length) {
+      const signed = await supabase.storage.from('listing-images').createSignedUrls(mediaRows.map(row => row.storage_path), 900);
+      if (signed.error) throw new Error(`Unable to securely load listing media: ${signed.error.message}`);
+      signedUrls = signed.data || [];
+    }
+    const categoryMap = new Map((categoryResult.data || []).map(item => [item.id, item.name]));
+    const locations = (locationResult.data || []) as Array<{ id: string; name: string; type: string }>;
+    const orderedLocation = ['area', 'city', 'district', 'province']
+      .map(type => locations.find(item => item.type === type)?.name)
+      .filter(Boolean).join(', ');
+
+    return {
+      id: listing.id, ownerId: listing.owner_id, module: listing.module, title: listing.title,
+      description: listing.description, shortSummary: listing.short_summary, status: listing.status,
+      price: listing.price, minimumPrice: listing.minimum_price, maximumPrice: listing.maximum_price,
+      pricingPeriod: listing.pricing_period, currency: listing.currency, exactAddress: listing.exact_address,
+      latitude: listing.latitude, longitude: listing.longitude, moduleData: listing.module_data || {},
+      submittedAt: listing.submitted_at, createdAt: listing.created_at, publishedAt: listing.published_at,
+      category: listing.category_id ? categoryMap.get(listing.category_id) || null : null,
+      subcategory: listing.subcategory_id ? categoryMap.get(listing.subcategory_id) || null : null,
+      location: orderedLocation || 'Location not provided',
+      owner: { fullName: ownerResult.data.full_name || 'Name not provided', email: ownerResult.data.email, phone: ownerResult.data.phone_normalized, createdAt: ownerResult.data.created_at },
+      media: mediaRows.map((row, index) => ({ id: row.id, storagePath: row.storage_path, signedUrl: signedUrls[index]?.signedUrl || '', position: row.position, isCover: row.is_cover, mimeType: row.mime_type, fileSize: row.file_size })),
+      auditHistory: (auditResult.data || []).map(row => ({ id: row.id, action: row.action, actorName: row.actor_name, reason: row.details, createdAt: row.created_at })),
+      reports: (reportsResult.data || []).map(row => ({ id: row.id, reason: row.reason_label, details: row.details, status: row.status, createdAt: row.created_at }))
+    };
+  }
+
+  static async getPendingReviewIds(): Promise<string[]> {
+    const { data, error } = await supabase.from('listings').select('id').eq('status', 'pending').order('submitted_at', { ascending: true });
+    if (error) throw new Error(error.message);
+    return (data || []).map(row => row.id);
+  }
+
+  static async moderateListing(listingId: string, action: ModerationAction, reason?: string): Promise<{ status: string; publishedAt: string | null }> {
+    if ((action === 'reject' || action === 'request_changes') && !reason?.trim()) {
+      throw new Error('A clear, actionable reason is required.');
+    }
+    const { data, error } = await supabase.rpc('moderate_listing', { p_listing_id: listingId, p_action: action, p_reason: reason?.trim() || null });
+    if (error) {
+      if (error.code === '40001' || error.message.includes('already handled')) throw new Error('Conflict: another moderator already handled this listing.');
+      throw new Error(error.message);
+    }
+    return { status: data.status, publishedAt: data.published_at };
+  }
   /**
    * Returns all registered staff accounts from persistent store
    */
@@ -168,9 +332,8 @@ export class AdminService {
           email: p.email || '',
           role: staffRole,
           status: isSuspended ? 'Suspended' : 'Active',
-          avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
+          avatarUrl: '',
           phone: p.phone_normalized || '',
-          lastLogin: 'Active',
           createdAt: p.created_at || new Date().toISOString()
         };
       });
@@ -201,46 +364,9 @@ export class AdminService {
       return { success: false, error: 'Newly provisioned staff accounts cannot be created directly as Super Admin. Create as Admin or Moderator first.' };
     }
 
-    const dbRole = newStaff.role === 'ADMIN' ? 'admin' : 'moderator';
-
     try {
-      // Find existing user in profiles by email
-      const { data: existingProf } = await supabase
-        .from('profiles')
-        .select('id, role')
-        .eq('email', cleanEmail)
-        .maybeSingle();
-
-      if (existingProf) {
-        // Update existing user profile role
-        const { error: updateErr } = await supabase
-          .from('profiles')
-          .update({
-            role: dbRole,
-            account_status: 'active',
-            full_name: newStaff.fullName,
-            phone_normalized: newStaff.phone || null
-          })
-          .eq('id', existingProf.id);
-
-        if (updateErr) {
-          return { success: false, error: updateErr.message };
-        }
-      }
-
-      // Send password setup / reset email via Supabase Auth
-      await supabase.auth.resetPasswordForEmail(cleanEmail);
-
-      this.addAuditLog({
-        actorId: currentStaff.id,
-        actorName: currentStaff.fullName,
-        actorRole: currentStaff.role,
-        action: 'STAFF_CREATED',
-        targetType: 'user',
-        targetId: existingProf?.id || cleanEmail,
-        targetTitle: newStaff.fullName,
-        details: `Provisioned staff access (${newStaff.role}) for ${cleanEmail} and sent password setup instructions.`
-      });
+      const { data, error } = await supabase.functions.invoke('provision-staff', { body: { fullName: newStaff.fullName, email: cleanEmail, role: newStaff.role, phone: newStaff.phone } });
+      if (error || !data?.success) return { success: false, error: data?.error || error?.message || 'Secure staff provisioning failed.' };
 
       return { success: true };
     } catch (e: any) {
@@ -260,77 +386,12 @@ export class AdminService {
       return { success: false, error: 'Unauthorized: Only Super Admin can change staff roles.' };
     }
 
-    const dbRole = newRole === 'SUPER_ADMIN' ? 'super_admin' : newRole === 'ADMIN' ? 'admin' : newRole === 'MODERATOR' ? 'moderator' : 'user';
+    const dbRole = newRole === 'ADMIN' ? 'admin' : newRole === 'MODERATOR' ? 'moderator' : 'user';
 
     try {
-      // Check target profile
-      const { data: targetProf } = await supabase
-        .from('profiles')
-        .select('id, role, email')
-        .eq('id', targetStaffId)
-        .maybeSingle();
-
-      if (!targetProf) {
-        return { success: false, error: 'Staff account record not found.' };
-      }
-
-      // Prevent demoting the final Super Admin
-      if (targetProf.role === 'super_admin' && newRole !== 'SUPER_ADMIN') {
-        const { data: superAdmins } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('role', 'super_admin')
-          .eq('account_status', 'active');
-
-        if (superAdmins && superAdmins.length <= 1) {
-          return { success: false, error: 'Cannot demote the final active Super Admin account.' };
-        }
-      }
-
-      const { error: updateErr } = await supabase
-        .from('profiles')
-        .update({ role: dbRole })
-        .eq('id', targetStaffId);
-
-      if (updateErr) {
-        return { success: false, error: updateErr.message };
-      }
-
-      // Send real in-app notification for role change
-      if (newRole === 'ADMIN') {
-        NotificationService.addNotification({
-          title: 'You now have Admin access',
-          message: 'Congratulations! Your RENTOURA.LK account has been granted Admin access. You can now access the Admin Dashboard from your account menu.',
-          category: 'system',
-          actionUrl: '/admin',
-          actionLabel: 'Admin Dashboard'
-        });
-      } else if (newRole === 'MODERATOR') {
-        NotificationService.addNotification({
-          title: 'You now have Moderator access',
-          message: 'Congratulations! Your RENTOURA.LK account has been granted Moderator access. You can now access the Moderator Dashboard from your account menu.',
-          category: 'system',
-          actionUrl: '/moderator',
-          actionLabel: 'Moderator Dashboard'
-        });
-      } else {
-        NotificationService.addNotification({
-          title: 'Your staff access has been removed',
-          message: 'Your RENTOURA.LK staff access has been removed. Your normal marketplace account remains active.',
-          category: 'system'
-        });
-      }
-
-      this.addAuditLog({
-        actorId: currentStaff.id,
-        actorName: currentStaff.fullName,
-        actorRole: currentStaff.role,
-        action: 'ROLE_UPDATED',
-        targetType: 'user',
-        targetId: targetStaffId,
-        targetTitle: targetProf.email || targetStaffId,
-        details: `Updated staff role to ${newRole}.`
-      });
+      if (newRole === 'SUPER_ADMIN') return { success: false, error: 'Super Admin promotion requires a separately governed process.' };
+      const { error } = await supabase.rpc('super_admin_change_staff_role', { p_user_id: targetStaffId, p_role: dbRole, p_reason: `Role changed to ${newRole} from Staff management.` });
+      if (error) return { success: false, error: error.message };
 
       return { success: true };
     } catch (e: any) {
@@ -367,40 +428,10 @@ export class AdminService {
         return { success: false, error: 'You cannot suspend or disable your own active Super Admin account.' };
       }
 
-      const { error: updateErr } = await supabase
-        .from('profiles')
-        .update({ account_status: dbStatus })
-        .eq('id', targetStaffId);
-
-      if (updateErr) {
-        return { success: false, error: updateErr.message };
-      }
-
-      // Send real in-app notification for status change
-      if (newStatus === 'Active') {
-        NotificationService.addNotification({
-          title: 'Staff access restored',
-          message: 'Your RENTOURA.LK staff dashboard access has been restored.',
-          category: 'system'
-        });
-      } else {
-        NotificationService.addNotification({
-          title: 'Staff access suspended',
-          message: 'Your RENTOURA.LK staff dashboard access has been suspended.',
-          category: 'system'
-        });
-      }
-
-      this.addAuditLog({
-        actorId: currentStaff.id,
-        actorName: currentStaff.fullName,
-        actorRole: currentStaff.role,
-        action: newStatus === 'Active' ? 'STAFF_ACTIVATED' : 'STAFF_SUSPENDED',
-        targetType: 'user',
-        targetId: targetStaffId,
-        targetTitle: targetProf.email || targetStaffId,
-        details: `Updated staff account status to ${newStatus}.`
+      const { error: updateErr } = await supabase.rpc('admin_change_user_status', {
+        p_user_id: targetStaffId, p_status: dbStatus, p_reason: `Staff account status changed to ${newStatus} from Staff management.`
       });
+      if (updateErr) return { success: false, error: updateErr.message };
 
       return { success: true };
     } catch (e: any) {

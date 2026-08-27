@@ -28,6 +28,7 @@ import {
   HelpCircle,
   ExternalLink
 } from 'lucide-react';
+import { RentouraLogo } from '../RentouraLogo';
 import { StaffAccount } from '../../types/adminTypes';
 import { EmptyState, ErrorState } from '../common/StateComponents';
 
@@ -543,7 +544,7 @@ export const AdminStatesView: React.FC<AdminStatesViewProps> = ({ staff, onNavig
             <div className="w-12 h-12 rounded-full bg-blue-100 text-[#1464F4] flex items-center justify-center mb-2">
               <Sparkles className="w-6 h-6" />
             </div>
-            <div className="text-[11px] font-bold text-slate-800">RENTOURA.LK</div>
+            <RentouraLogo variant="horizontal" theme="light" size="sm" />
             <div className="text-[10px] text-slate-500 font-medium">UX Design Resilience</div>
           </div>
         </div>

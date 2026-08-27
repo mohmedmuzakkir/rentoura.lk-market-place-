@@ -105,7 +105,7 @@ INSERT INTO public.categories (module, level, name, slug, parent_id, sort_order,
 SELECT t.module, t.level, t.name, t.slug, NULL, t.sort_order, t.icon_key, t.description, 'active'
 FROM temp_job_canonical_categories t
 WHERE t.level = 1
-ON CONFLICT (module, slug) DO UPDATE
+ON CONFLICT (module, slug) WHERE parent_id IS NULL DO UPDATE
 SET name = EXCLUDED.name,
     level = EXCLUDED.level,
     sort_order = EXCLUDED.sort_order,
@@ -120,7 +120,7 @@ SELECT t.module, t.level, t.name, t.slug, p.id, t.sort_order, t.icon_key, t.desc
 FROM temp_job_canonical_categories t
 JOIN public.categories p ON p.module = 'job' AND p.slug = t.parent_slug AND p.level = 1
 WHERE t.level = 2
-ON CONFLICT (module, slug) DO UPDATE
+ON CONFLICT (module, slug, parent_id) WHERE parent_id IS NOT NULL DO UPDATE
 SET name = EXCLUDED.name,
     level = EXCLUDED.level,
     parent_id = EXCLUDED.parent_id,
@@ -136,7 +136,7 @@ SELECT t.module, t.level, t.name, t.slug, p.id, t.sort_order, t.icon_key, t.desc
 FROM temp_job_canonical_categories t
 JOIN public.categories p ON p.module = 'job' AND p.slug = t.parent_slug AND p.level = 2
 WHERE t.level = 3
-ON CONFLICT (module, slug) DO UPDATE
+ON CONFLICT (module, slug, parent_id) WHERE parent_id IS NOT NULL DO UPDATE
 SET name = EXCLUDED.name,
     level = EXCLUDED.level,
     parent_id = EXCLUDED.parent_id,

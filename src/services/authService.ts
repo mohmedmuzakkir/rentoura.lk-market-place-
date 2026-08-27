@@ -123,40 +123,14 @@ export class AuthService {
 
     if (session?.user) {
       let profile = await AuthService.fetchUserProfile(session.user.id);
-      if (!profile) {
-        // Construct fallback/initial profile if missing from public.profiles
-        const rawCreatedAt = (session.user as any)?.created_at;
-        const dateObj = rawCreatedAt ? new Date(rawCreatedAt) : new Date();
-        const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-        const memberSinceStr = `${monthNames[dateObj.getMonth()]} ${dateObj.getFullYear()}`;
-        const metaName = session.user.user_metadata?.full_name || session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'Rentoura Member';
-        const metaPhone = session.user.user_metadata?.phone_normalized || session.user.phone || '';
-
-        profile = {
-          id: session.user.id,
-          fullName: metaName,
-          displayName: metaName,
-          email: session.user.email || '',
-          phone: metaPhone,
-          bio: '',
-          avatarUrl: '',
-          memberSince: memberSinceStr,
-          memberSinceYear: String(dateObj.getFullYear()),
-          accountType: '',
-          isVerified: false,
-          province: '',
-          district: '',
-          city: '',
-          preferredLanguage: '',
-          currency: 'LKR',
-          emailNotifications: true,
-          pushNotifications: true,
-          twoFactorEnabled: false,
-          totalReviews: 0,
-          averageRating: 0,
-          role: 'user',
-          accountStatus: 'active'
-        };
+      if (!profile || profile.accountStatus !== 'active') {
+        AuthService.currentSession = null;
+        AuthService.currentUser = null;
+        AuthService.currentUserProfile = null;
+        ProfileService.clearSessionData();
+        AuthService.notifyListeners(null, null);
+        await supabase.auth.signOut();
+        return;
       }
 
       AuthService.currentUserProfile = profile;
@@ -370,31 +344,18 @@ export class AuthService {
 
       let profile = await AuthService.fetchUserProfile(data.user.id);
       if (!profile) {
-        profile = {
-          id: data.user.id,
-          fullName: data.user.user_metadata?.full_name || emailVal.normalized.split('@')[0],
-          displayName: data.user.user_metadata?.full_name || emailVal.normalized.split('@')[0],
-          email: emailVal.normalized,
-          phone: data.user.user_metadata?.phone_normalized || '',
-          bio: '',
-          avatarUrl: '',
-          memberSince: 'Recently',
-          memberSinceYear: String(new Date().getFullYear()),
-          accountType: '',
-          isVerified: false,
-          province: '',
-          district: '',
-          city: '',
-          preferredLanguage: 'English',
-          currency: 'LKR',
-          emailNotifications: true,
-          pushNotifications: true,
-          twoFactorEnabled: false,
-          totalReviews: 0,
-          averageRating: 0,
-          role: 'user',
-          accountStatus: 'active'
-        };
+        await supabase.auth.signOut();
+        AuthService.currentSession = null;
+        AuthService.currentUser = null;
+        throw new Error('Your account profile is unavailable. Please contact support.');
+      }
+      if (profile.accountStatus !== 'active') {
+        const status = profile.accountStatus;
+        await supabase.auth.signOut();
+        AuthService.currentSession = null;
+        AuthService.currentUser = null;
+        AuthService.currentUserProfile = null;
+        throw new Error(`This account is ${status}. Please contact support if you need assistance.`);
       }
 
       ProfileService.saveProfile(profile);
@@ -621,11 +582,9 @@ export class AuthService {
       throw new Error(`Failed to upload photo to storage: ${error.message}`);
     }
 
-    const { data: publicUrlData } = supabase.storage
-      .from('avatars')
-      .getPublicUrl(filePath);
-
-    return publicUrlData.publicUrl;
+    const { data: signed, error: signedError } = await supabase.storage.from('avatars').createSignedUrl(filePath, 3600);
+    if (signedError || !signed?.signedUrl) throw new Error(signedError?.message || 'Unable to access uploaded avatar.');
+    return signed.signedUrl;
   }
 
   static async updateUserProfile(updatedProfile: UserProfile): Promise<void> {

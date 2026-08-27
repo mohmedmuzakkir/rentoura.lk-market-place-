@@ -251,7 +251,7 @@ export const UserAgreementPage: React.FC<UserAgreementPageProps> = ({
           {/* Hero Illustration Graphic */}
           <div className="shrink-0 w-36 h-36 sm:w-44 sm:h-44 rounded-3xl bg-gradient-to-tr from-[#041C43] via-[#08285C] to-[#1464F4] p-4 text-white flex flex-col items-center justify-center text-center shadow-lg shadow-blue-500/20 relative">
             <FileText className="w-12 h-12 text-[#00C2FF] mb-2" />
-            <span className="text-xs font-bold tracking-wide text-white">RENTOURA.LK</span>
+            <RentouraLogo variant="icon-only" theme="dark-header" size="sm" />
             <span className="text-[10px] text-slate-200">Terms of Service</span>
             <div className="absolute -bottom-2 -right-2 w-10 h-10 rounded-2xl bg-emerald-500 text-white flex items-center justify-center shadow-md">
               <CheckCircle2 className="w-6 h-6" />

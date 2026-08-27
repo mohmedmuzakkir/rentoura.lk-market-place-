@@ -27,7 +27,7 @@ export const BrowseCategories: React.FC<BrowseCategoriesProps> = ({
     setLoading(true);
     setError(null);
     try {
-      const res = await CategoryService.getMainCategories(activeModule);
+      const res = await CategoryService.getMainCategories(activeModule, forceRefresh);
       if (!res.success) {
         setError(res.error || 'Unable to load categories.');
         setCategories([]);

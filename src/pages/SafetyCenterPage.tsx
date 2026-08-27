@@ -333,7 +333,7 @@ export const SafetyCenterPage: React.FC<SafetyCenterPageProps> = ({
           <div className="shrink-0 w-36 h-36 sm:w-44 sm:h-44 rounded-3xl bg-gradient-to-tr from-[#041C43] via-[#08285C] to-[#1464F4] p-4 text-white flex flex-col items-center justify-center text-center shadow-lg shadow-blue-500/20 relative">
             <ShieldCheck className="w-16 h-16 text-[#00C2FF] mb-1" />
             <span className="text-xs font-bold tracking-wide text-white">SAFETY CENTER</span>
-            <span className="text-[10px] text-slate-200">RENTOURA.LK</span>
+            <RentouraLogo variant="icon-only" theme="dark-header" size="sm" />
           </div>
         </div>
 

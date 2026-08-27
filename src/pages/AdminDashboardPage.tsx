@@ -33,6 +33,7 @@ import {
   Building2
 } from 'lucide-react';
 import { AppRoute } from '../types';
+import { RentouraLogo } from '../components/RentouraLogo';
 import { StaffAccount, AuditLogItem, AdminKpiMetrics, PlatformAnnouncement } from '../types/adminTypes';
 import { UserListingItem } from '../types/profileTypes';
 import { ListingReport, ReportService } from '../services/reportService';
@@ -90,7 +91,8 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
   onNavigate,
   onLogout
 }) => {
-  const [activeSection, setActiveSection] = useState<ActiveSection>('overview');
+  const directReviewId = new URLSearchParams(window.location.search).get('listing');
+  const [activeSection, setActiveSection] = useState<ActiveSection>(() => window.location.pathname === '/admin/review' ? 'listing-review' : 'overview');
   const [moduleFilter, setModuleFilter] = useState<'all' | 'rentals' | 'jobs' | 'services'>('all');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
@@ -105,7 +107,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
 
   // Moderation Target Listing
   const [selectedModerationListing, setSelectedModerationListing] = useState<UserListingItem | null>(null);
-  const [selectedReviewListingId, setSelectedReviewListingId] = useState<string>('rent-prius-2018');
+  const [selectedReviewListingId, setSelectedReviewListingId] = useState<string>(directReviewId || '');
 
   // Announcement Creation Modal State
   const [showAnnouncementModal, setShowAnnouncementModal] = useState(false);
@@ -544,14 +546,12 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
           </button>
 
           {/* Logo & Portal Branding */}
-          <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => setActiveSection('overview')}>
-            <span className="text-xl font-black tracking-tight text-white">
-              <span className="text-[#1464F4]">R</span>ENTOURA<span className="text-[#1464F4]">.LK</span>
-            </span>
+          <button type="button" className="flex items-center gap-2.5 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1464F4]" onClick={() => setActiveSection('overview')} aria-label="Open staff dashboard overview">
+            <RentouraLogo variant="horizontal" theme="dark-header" size="sm" />
             <span className="hidden sm:inline-block bg-[#1464F4]/20 border border-[#1464F4]/40 text-[#1464F4] text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full">
               Admin Portal
             </span>
-          </div>
+          </button>
 
           <div className="hidden xl:flex items-center gap-2 text-xs text-slate-400 border-l border-slate-800 pl-4 font-semibold">
             <span>Dashboard</span>
@@ -824,15 +824,17 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
               onReviewListing={(id) => {
                 setSelectedReviewListingId(id);
                 setActiveSection('listing-review');
+                window.history.pushState({}, '', `/admin/review?listing=${encodeURIComponent(id)}`);
               }}
               onRefresh={refreshDashboardData} 
             />
           ) : activeSection === 'listing-review' ? (
             <AdminListingReview 
-              listingId={selectedReviewListingId || 'rent-prius-2018'} 
+              listingId={selectedReviewListingId}
               staff={staff} 
-              onBackToQueue={() => setActiveSection('moderation-queue')} 
-              onNavigateToListing={(id) => setSelectedReviewListingId(id)}
+              onBackToQueue={() => { setActiveSection('moderation-queue'); window.history.pushState({}, '', '/admin/queue'); }}
+              onNavigateToListing={(id) => { setSelectedReviewListingId(id); window.history.pushState({}, '', `/admin/review?listing=${encodeURIComponent(id)}`); }}
+              onOpenReports={() => setActiveSection('reports')}
               onRefresh={refreshDashboardData}
             />
           ) : activeSection === 'all-users' ? (
