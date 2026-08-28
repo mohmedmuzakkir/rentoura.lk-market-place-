@@ -9,13 +9,15 @@ export default defineConfig(() => {
     plugins: [react(), tailwindcss(), VitePWA({
       registerType: 'autoUpdate',
       manifestFilename: 'site.webmanifest',
-      includeAssets: ['brand/rentoura-icon-v2.png', 'brand/rentoura-icon-v2-16.png', 'brand/rentoura-icon-v2-32.png', 'brand/rentoura-icon-v2-180.png', 'brand/rentoura-icon-v2-192.png', 'brand/rentoura-icon-v2-512.png'],
+      includeAssets: ['brand/rentoura-official-icon-v3.png', 'brand/rentoura-official-icon-v3-16.png', 'brand/rentoura-official-icon-v3-32.png', 'brand/rentoura-official-icon-v3-48.png', 'brand/rentoura-official-icon-v3-180.png', 'brand/rentoura-official-icon-v3-192.png', 'brand/rentoura-official-icon-v3-512.png', 'brand/rentoura-official-icon-v3-maskable-192.png', 'brand/rentoura-official-icon-v3-maskable-512.png'],
       manifest: {
         name: 'RENTOURA.LK', short_name: 'RENTOURA', description: 'Rentals, jobs and services marketplace in Sri Lanka.',
         start_url: '/', scope: '/', display: 'standalone', background_color: '#041C43', theme_color: '#1464F4',
         icons: [
-          { src: '/brand/rentoura-icon-v2-192.png', sizes: '192x192', type: 'image/png', purpose: 'any maskable' },
-          { src: '/brand/rentoura-icon-v2-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
+          { src: '/brand/rentoura-official-icon-v3-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: '/brand/rentoura-official-icon-v3-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: '/brand/rentoura-official-icon-v3-maskable-192.png', sizes: '192x192', type: 'image/png', purpose: 'maskable' },
+          { src: '/brand/rentoura-official-icon-v3-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
         ]
       },
       workbox: {
