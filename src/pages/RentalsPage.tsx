@@ -3,12 +3,8 @@ import { CategoryIcon, getCategoryIconComponent } from '../components/CategoryIc
 import { 
   Search, 
   ChevronDown, 
-  ChevronLeft,
-  ChevronRight,
   SlidersHorizontal, 
-  Home, 
-  Briefcase, 
-  Drill, 
+  Home,
   LayoutGrid, 
   Heart, 
   MapPin, 
@@ -28,7 +24,7 @@ import {
   Car
 } from 'lucide-react';
 import { AppRoute, FeaturedListingItem } from '../types';
-import { RentalHeroSlide } from '../data/rentalHeroSlidesData';
+import { RentalHeroCarousel } from '../components/RentalHeroCarousel';
 import { GlobalLocationModal } from '../components/common/GlobalLocationModal';
 import { RentalCategoryModal } from '../components/RentalCategoryModal';
 import { RentalService, RentalCategoryRecord } from '../services/rentalService';
@@ -63,7 +59,6 @@ export const RentalsPage: React.FC<RentalsPageProps> = ({
   const [isPeriodModalOpen, setIsPeriodModalOpen] = useState(false);
 
   // Supabase Data States
-  const [heroSlides, setHeroSlides] = useState<RentalHeroSlide[]>([]);
   const [featuredRentals, setFeaturedRentals] = useState<FeaturedListingItem[]>([]);
   const [nearYouRentals, setNearYouRentals] = useState<FeaturedListingItem[]>([]);
   const [rentalFeed, setRentalFeed] = useState<FeaturedListingItem[]>([]);
@@ -76,10 +71,7 @@ export const RentalsPage: React.FC<RentalsPageProps> = ({
   const [isLoading, setIsLoading] = useState(true);
   const [isMoreLoading, setIsMoreLoading] = useState(false);
 
-  // Carousel State
-  const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
-  const [isPaused, setIsPaused] = useState(false);
-  const touchStartXRef = useRef<number | null>(null);
+  const categoriesRef = useRef<HTMLDivElement>(null);
   const mainFeedRef = useRef<HTMLDivElement>(null);
 
   const priceOptions = ['Any Price', '< Rs. 25,000', 'Rs. 25,000 - 75,000', 'Rs. 75,000 - 150,000', 'Rs. 150,000+'];
@@ -102,17 +94,13 @@ export const RentalsPage: React.FC<RentalsPageProps> = ({
     return () => { isMounted = false; };
   }, []);
 
-  // Fetch Hero Slides & Featured Rentals on Mount
+  // Fetch Featured Rentals on Mount
   useEffect(() => {
     let isMounted = true;
     async function loadInitialData() {
-      const [slidesData, featuredData] = await Promise.all([
-        RentalService.getRentalHeroSlides(),
-        RentalService.getFeaturedRentals()
-      ]);
+      const featuredData = await RentalService.getFeaturedRentals();
 
       if (isMounted) {
-        setHeroSlides(slidesData || []);
         setFeaturedRentals(featuredData);
       }
     }
@@ -197,68 +185,6 @@ export const RentalsPage: React.FC<RentalsPageProps> = ({
     }
   };
 
-  // Active Slides
-  const slides = heroSlides.filter(s => s.isEnabled !== false);
-
-  // Auto-play slider effect (~5 seconds per slide)
-  useEffect(() => {
-    if (isPaused || slides.length <= 1) return;
-    const duration = slides[currentSlideIndex]?.durationMs || 5000;
-    const timer = setTimeout(() => {
-      setCurrentSlideIndex((prev) => (prev + 1) % slides.length);
-    }, duration);
-
-    return () => clearTimeout(timer);
-  }, [currentSlideIndex, isPaused, slides]);
-
-  const handleNextSlide = () => {
-    setCurrentSlideIndex((prev) => (prev + 1) % slides.length);
-  };
-
-  const handlePrevSlide = () => {
-    setCurrentSlideIndex((prev) => (prev - 1 + slides.length) % slides.length);
-  };
-
-  const handleTouchStart = (e: React.TouchEvent) => {
-    touchStartXRef.current = e.touches[0].clientX;
-  };
-
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    if (touchStartXRef.current === null) return;
-    const touchEndX = e.changedTouches[0].clientX;
-    const diffX = touchStartXRef.current - touchEndX;
-
-    if (diffX > 40) handleNextSlide();
-    else if (diffX < -40) handlePrevSlide();
-    touchStartXRef.current = null;
-  };
-
-  const handleSlideCTA = (slide: RentalHeroSlide) => {
-    if (slide.ctaAction === 'post' || slide.ctaRoute === '/post/rental') {
-      onNavigate('/post/rental');
-    } else if (slide.ctaAction === 'category_property') {
-      setSelectedCategory('Property Rentals');
-      setSelectedCategoryId(undefined);
-      setSelectedCategorySlug('property-rentals');
-      scrollToFeed();
-    } else if (slide.ctaAction === 'category_vehicles') {
-      setSelectedCategory('Vehicles');
-      setSelectedCategoryId(undefined);
-      setSelectedCategorySlug('vehicles');
-      scrollToFeed();
-    } else if (slide.ctaAction === 'category_equipment') {
-      setSelectedCategory('Construction & Tools');
-      setSelectedCategoryId(undefined);
-      setSelectedCategorySlug('construction-tools');
-      scrollToFeed();
-    } else if (slide.ctaAction === 'explore') {
-      clearAllFilters();
-      scrollToFeed();
-    } else {
-      onNavigate('/post/rental');
-    }
-  };
-
   const scrollToFeed = () => {
     if (mainFeedRef.current) {
       mainFeedRef.current.scrollIntoView({ behavior: 'smooth' });
@@ -273,6 +199,15 @@ export const RentalsPage: React.FC<RentalsPageProps> = ({
     setSelectedCategorySlug(undefined);
     setSelectedPrice('Any Price');
     setSelectedPeriod('Any Period');
+  };
+
+  const exploreAllRentals = () => {
+    clearAllFilters();
+    window.setTimeout(scrollToFeed, 0);
+  };
+
+  const scrollToCategories = () => {
+    categoriesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
   const hasActiveFilters = 
@@ -300,126 +235,10 @@ export const RentalsPage: React.FC<RentalsPageProps> = ({
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 pb-28 overflow-x-hidden selection:bg-[#1464F4] selection:text-white">
-      {/* 1. DATA-DRIVEN 5-SLIDE RENTALS HERO CAROUSEL */}
-      <div 
-        className="relative bg-[#041C43] text-white pt-4 pb-8 px-4 overflow-hidden shadow-md group"
-        onMouseEnter={() => setIsPaused(true)}
-        onMouseLeave={() => setIsPaused(false)}
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
-      >
-        {slides.map((slide, idx) => (
-          <div 
-            key={slide.id}
-            className={`absolute inset-0 z-0 transition-opacity duration-700 ease-in-out ${
-              idx === currentSlideIndex ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
-            }`}
-          >
-            <img
-              src={slide.imageUrl}
-              alt={slide.title}
-              className="w-full h-full object-cover object-center"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-[#041C43] via-[#041C43]/75 to-[#041C43]/40" />
-            <div className="absolute inset-0 bg-gradient-to-r from-[#041C43] via-[#041C43]/80 to-transparent" />
-          </div>
-        ))}
-
-        <div className="relative z-10 max-w-md lg:max-w-6xl mx-auto min-h-[170px] flex flex-col justify-between">
-          {slides[currentSlideIndex] && (
-            <div className="animate-in fade-in slide-in-from-left-2 duration-300">
-              <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-white/15 backdrop-blur-md border border-white/20 text-[10px] font-bold tracking-wider uppercase text-blue-200 mb-1.5">
-                <Home className="w-3 h-3 text-[#1464F4]" />
-                <span>{slides[currentSlideIndex].subtitle}</span>
-              </div>
-
-              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-black tracking-tight leading-tight font-heading text-white">
-                {slides[currentSlideIndex].title}{' '}
-                {slides[currentSlideIndex].titleHighlight && (
-                  <span className="text-blue-300">{slides[currentSlideIndex].titleHighlight}</span>
-                )}
-              </h1>
-
-              <p className="text-xs sm:text-sm text-blue-100/90 mt-1 max-w-md leading-relaxed font-medium">
-                {slides[currentSlideIndex].description}
-              </p>
-
-              <div className="mt-3">
-                <button
-                  onClick={() => handleSlideCTA(slides[currentSlideIndex])}
-                  className="px-4 py-2 rounded-xl bg-[#1464F4] hover:bg-blue-600 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-lg shadow-blue-500/30 tap-bounce cursor-pointer"
-                >
-                  <span>{slides[currentSlideIndex].ctaLabel}</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Desktop Arrow Controls */}
-          <div className="hidden sm:flex items-center justify-between absolute top-1/2 -translate-y-1/2 left-0 right-0 px-2 pointer-events-none">
-            <button
-              onClick={handlePrevSlide}
-              className="w-8 h-8 rounded-full bg-black/40 hover:bg-black/70 text-white flex items-center justify-center backdrop-blur-xs pointer-events-auto tap-bounce border border-white/20"
-              aria-label="Previous slide"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <button
-              onClick={handleNextSlide}
-              className="w-8 h-8 rounded-full bg-black/40 hover:bg-black/70 text-white flex items-center justify-center backdrop-blur-xs pointer-events-auto tap-bounce border border-white/20"
-              aria-label="Next slide"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-
-          {/* Carousel Slide Indicators */}
-          <div className="flex items-center justify-center gap-1.5 mt-4">
-            {slides.map((_, idx) => (
-              <button
-                key={idx}
-                onClick={() => setCurrentSlideIndex(idx)}
-                className={`h-1.5 rounded-full transition-all duration-300 ${
-                  idx === currentSlideIndex 
-                    ? 'w-6 bg-[#1464F4]' 
-                    : 'w-1.5 bg-white/40 hover:bg-white/70'
-                }`}
-                aria-label={`Go to slide ${idx + 1}`}
-              />
-            ))}
-          </div>
-
-          {/* Module Switcher Tabs (Rentals / Jobs / Services) */}
-          <div className="bg-white rounded-full p-1.5 mt-4 flex items-center justify-between shadow-xl border border-white/20">
-            <button 
-              className="flex-1 py-2 px-3 rounded-full bg-[#1464F4] text-white text-xs font-extrabold flex items-center justify-center gap-1.5 shadow-sm tap-bounce cursor-pointer"
-            >
-              <Home className="w-3.5 h-3.5" />
-              <span>RENTALS</span>
-            </button>
-
-            <button
-              onClick={() => onNavigate('/jobs')}
-              className="flex-1 py-2 px-3 rounded-full text-[#08A34F] hover:bg-slate-50 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors tap-bounce cursor-pointer"
-            >
-              <Briefcase className="w-3.5 h-3.5" />
-              <span>JOBS</span>
-            </button>
-
-            <button
-              onClick={() => onNavigate('/services')}
-              className="flex-1 py-2 px-3 rounded-full text-[#FF650A] hover:bg-slate-50 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors tap-bounce cursor-pointer"
-            >
-              <Drill className="w-3.5 h-3.5" />
-              <span>SERVICES</span>
-            </button>
-          </div>
-        </div>
-      </div>
+      <RentalHeroCarousel onNavigate={onNavigate} onExploreRentals={exploreAllRentals} onBrowseCategories={scrollToCategories} />
 
       {/* 2. FLOATING SEARCH & FILTER CONTROLS */}
-      <div className="max-w-md lg:max-w-5xl mx-auto px-4 -mt-3 relative z-20 space-y-4">
+      <div className="max-w-md lg:max-w-5xl mx-auto px-4 -mt-4 relative z-20 space-y-4">
         <div className="bg-white rounded-2xl p-3 shadow-md border border-slate-200/80 space-y-2.5">
           <div className="flex items-center gap-2 bg-slate-50 rounded-xl px-3 py-1.5 border border-slate-200 focus-within:border-[#1464F4] transition-colors">
             <Search className="w-4 h-4 text-slate-400 shrink-0" />
@@ -612,7 +431,7 @@ export const RentalsPage: React.FC<RentalsPageProps> = ({
         </div>
 
         {/* 5. BROWSE CATEGORIES */}
-        <div className="space-y-3">
+        <div ref={categoriesRef} className="space-y-3 scroll-mt-4">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-bold text-slate-900 font-heading">
               Browse Categories
