@@ -26,8 +26,8 @@ export const SearchAndFilterPanel: React.FC<SearchAndFilterPanelProps> = ({
   };
 
   return (
-    <div className="relative px-4 -mt-6 lg:-mt-10 z-20 max-w-md lg:max-w-7xl mx-auto">
-      <div className="bg-white rounded-3xl p-3.5 lg:p-5 shadow-[0_12px_36px_rgba(4,28,67,0.12)] border border-slate-100/90 transition-all">
+    <div className="relative z-20 mx-auto -mt-5 max-w-md px-4 sm:-mt-6 lg:-mt-7 lg:max-w-6xl">
+      <div className="rounded-3xl border border-slate-100/90 bg-white p-3.5 shadow-[0_16px_42px_rgba(4,28,67,0.16)] transition-all lg:p-5">
         {/* Mobile View & Desktop Container */}
         <div className="lg:flex lg:items-center lg:gap-3 space-y-2.5 lg:space-y-0">
           {/* Main Search Input */}
