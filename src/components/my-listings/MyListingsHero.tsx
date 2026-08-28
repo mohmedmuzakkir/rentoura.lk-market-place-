@@ -64,7 +64,7 @@ export const MyListingsHero: React.FC = () => {
               {/* Storefront signboard with the official RENTOURA.LK mark */}
               <g transform="translate(60, 22)">
                 <rect x="-18" y="-12" width="36" height="24" rx="6" fill="#1E293B" stroke="#38BDF8" strokeWidth="1.5" />
-                <image href="/brand/rentoura-official-icon-v3.png" x="-9" y="-9" width="18" height="18" preserveAspectRatio="xMidYMid meet" />
+                <image href="/brand/rentoura-official-icon-48.png" x="-9" y="-9" width="18" height="18" preserveAspectRatio="xMidYMid meet" />
               </g>
 
               {/* Little Potted Plant outside door */}

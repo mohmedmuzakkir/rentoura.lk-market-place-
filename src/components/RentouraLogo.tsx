@@ -1,6 +1,6 @@
 import React from 'react';
 
-export const BRAND_ASSETS = { mark: '/brand/rentoura-official-icon-v3.png' } as const;
+export const BRAND_ASSETS = { mark: '/brand/rentoura-official-icon-512.png' } as const;
 
 interface RentouraLogoProps {
   variant?: 'header' | 'stacked' | 'horizontal' | 'icon-only' | 'footer';
@@ -17,7 +17,7 @@ export const RentouraLogo: React.FC<RentouraLogoProps> = ({ variant = 'header', 
   const iconOnly = variant === 'icon-only';
   const stacked = variant === 'stacked';
   return <span className={`inline-flex ${stacked ? 'flex-col' : 'flex-row'} items-center justify-center gap-2 select-none ${className}`}>
-    <img src={BRAND_ASSETS.mark} alt="RENTOURA.LK logo" width="1254" height="1254" className={`${dimensions[size]} w-auto shrink-0 object-contain`} decoding="async" draggable={false} />
+    <img src={BRAND_ASSETS.mark} alt="RENTOURA.LK logo" width="512" height="512" className={`${dimensions[size]} w-auto shrink-0 rounded-[22%] object-contain`} decoding="async" draggable={false} />
     {!iconOnly && <span className={stacked ? 'text-center' : ''}>
       <span className={`block whitespace-nowrap font-heading text-lg font-black leading-none tracking-[0.02em] sm:text-xl ${dark ? 'text-white' : 'text-[#041C43]'}`}>RENTOURA<span className="text-[#1464F4]">.LK</span></span>
       {(showTagline || variant === 'footer') && <span className={`mt-1 hidden whitespace-nowrap text-[8px] font-bold uppercase tracking-wider sm:block ${dark ? 'text-slate-300' : 'text-slate-500'}`}>Rentals · Jobs · Services</span>}

@@ -8,7 +8,6 @@ import { FeaturedListings } from '../components/FeaturedListings';
 import { HomeListingFeed, FeedListingItem } from '../components/HomeListingFeed';
 import { TrustBanner } from '../components/TrustBanner';
 import { AppRoute, FilterState, FeaturedListingItem, LocationItem } from '../types';
-import { HeroSlide } from '../types/heroSlide';
 import { HomeService, MarketplaceStats } from '../services/homeService';
 import { SavedListingService } from '../services/savedListingService';
 
@@ -38,7 +37,6 @@ export const HomePage: React.FC<HomePageProps> = ({
   onOpenListingDetail
 }) => {
   // State from Supabase
-  const [slides, setSlides] = useState<HeroSlide[]>([]);
   const [stats, setStats] = useState<MarketplaceStats | undefined>(undefined);
   const [featured, setFeatured] = useState<FeaturedListingItem[]>([]);
   const [popularLocations, setPopularLocations] = useState<(LocationItem & { searchCount?: number })[]>([]);
@@ -61,8 +59,7 @@ export const HomePage: React.FC<HomePageProps> = ({
 
     async function loadHomeData() {
       try {
-        const [fetchedSlides, fetchedStats, fetchedFeatured, fetchedLocations, initialSaved] = await Promise.all([
-          HomeService.getHeroSlides(),
+        const [fetchedStats, fetchedFeatured, fetchedLocations, initialSaved] = await Promise.all([
           HomeService.getMarketplaceStats(),
           HomeService.getFeaturedListings(),
           HomeService.getPopularLocations(),
@@ -70,7 +67,6 @@ export const HomePage: React.FC<HomePageProps> = ({
         ]);
 
         if (isMounted) {
-          setSlides(fetchedSlides);
           setStats(fetchedStats);
           setFeatured(fetchedFeatured);
           setPopularLocations(fetchedLocations);
@@ -173,7 +169,7 @@ export const HomePage: React.FC<HomePageProps> = ({
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 pb-16 overflow-x-hidden selection:bg-[#1464F4] selection:text-white">
       {/* 1. HERO CAROUSEL */}
-      <HomeHeroCarousel slides={slides} onNavigate={onNavigate} />
+      <HomeHeroCarousel onNavigate={onNavigate} />
 
       {/* 2. SEARCH AND FILTER PANEL (Overlaps Hero) */}
       <SearchAndFilterPanel
