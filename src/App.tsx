@@ -103,6 +103,7 @@ export default function App() {
   const [reportTargetListing, setReportTargetListing] = useState<ReportListingTarget | null>(null);
   const [profileCompletionReturn, setProfileCompletionReturn] = useState<AppRoute>('/');
   const [pendingProtectedAction, setPendingProtectedAction] = useState<PendingProtectedAction | null>(null);
+  const [myListingsInitialModule, setMyListingsInitialModule] = useState<'all' | 'rentals' | 'jobs' | 'services'>('all');
 
   // Filter State
   const [filterState, setFilterState] = useState<FilterState>({
@@ -468,11 +469,19 @@ export default function App() {
   };
 
   const handleNavigate = (route: AppRoute) => {
+    if (route === '/my-listings' && currentRoute !== '/my-listings') {
+      setMyListingsInitialModule('all');
+    }
     if (route === '/post' || route === '/post/rental' || route === '/post/job' || route === '/post/service') {
       requestProtectedAction({ type: 'post', returnRoute: route, execute: () => navigateDirect(route) });
       return;
     }
     navigateDirect(route);
+  };
+
+  const handleOpenMyServices = () => {
+    setMyListingsInitialModule('services');
+    navigateDirect('/my-listings');
   };
 
   useEffect(() => {
@@ -1019,7 +1028,8 @@ export default function App() {
       case '/services':
         return (
           <ServicesPage 
-            onNavigate={handleNavigate} 
+            onNavigate={handleNavigate}
+            onOpenMyServices={handleOpenMyServices}
             onOpenListingDetail={handleOpenListingDetail}
             savedListings={savedListings}
             onToggleSave={handleToggleSave}
@@ -1177,6 +1187,7 @@ export default function App() {
         return (
           <MyListingsPage
             listings={userListings}
+            initialModuleFilter={myListingsInitialModule}
             onNavigate={handleNavigate}
             onOpenListingDetail={handleOpenListingDetail}
             onDeleteListing={handleDeleteUserListing}

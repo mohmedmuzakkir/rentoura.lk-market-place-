@@ -431,7 +431,7 @@ export const RentalsPage: React.FC<RentalsPageProps> = ({
         </div>
 
         {/* 5. BROWSE CATEGORIES */}
-        <div ref={categoriesRef} className="space-y-3 scroll-mt-4">
+        <div ref={categoriesRef} className="scroll-mt-24 space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-bold text-slate-900 font-heading">
               Browse Categories

@@ -25,7 +25,6 @@ import { LocationValueModel } from '../services/locationService';
 import { JobCategoryModal } from '../components/JobCategoryModal';
 import { JobHeroCarousel } from '../components/JobHeroCarousel';
 import { JobService, JobFeedParams } from '../services/jobService';
-import { JobHeroSlide } from '../data/jobHeroSlidesData';
 import { getCategoryIconComponent } from '../components/CategoryIcon';
 import { SavedListingService } from '../services/savedListingService';
 
@@ -62,8 +61,7 @@ export const JobsPage: React.FC<JobsPageProps> = ({
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState<'jobType' | 'salary' | null>(null);
 
-  // Hero Slides & Companies State
-  const [heroSlides, setHeroSlides] = useState<JobHeroSlide[]>([]);
+  // Companies & categories state
   const [hiringCompanies, setHiringCompanies] = useState<CompanyPartner[]>([]);
   const [jobCategories, setJobCategories] = useState<CategoryRecord[]>([]);
 
@@ -79,15 +77,12 @@ export const JobsPage: React.FC<JobsPageProps> = ({
   // Ref for Main Feed Anchor
   const feedRef = useRef<HTMLDivElement>(null);
   const companiesRef = useRef<HTMLDivElement>(null);
+  const categoriesRef = useRef<HTMLDivElement>(null);
 
-  // 1. Initial Load: Hero Slides, Companies, Saved Jobs
+  // 1. Initial Load: Companies, Categories, Saved Jobs
   useEffect(() => {
     let isMounted = true;
     CategoryService.getMainCategories('job').then(result => { if (isMounted && result.success) setJobCategories(result.data.slice(0, 8)); });
-
-    JobService.getJobHeroSlides().then(slides => {
-      if (isMounted) setHeroSlides(slides);
-    });
 
     JobService.getHiringCompanies().then(comps => {
       if (isMounted) setHiringCompanies(comps);
@@ -196,6 +191,15 @@ export const JobsPage: React.FC<JobsPageProps> = ({
     }
   };
 
+  const exploreAllJobs = () => {
+    handleClearAllFilters();
+    window.setTimeout(scrollToFeed, 0);
+  };
+
+  const scrollToCategories = () => {
+    categoriesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   const jobTypeOptions = ['All Types', 'Full Time', 'Part Time', 'Contract', 'Internship', 'Temporary', 'Remote'];
   const salaryOptions = ['Any Salary', '< Rs. 50,000', 'Rs. 50,000 - 100,000', 'Rs. 100,000 - 200,000', 'Rs. 200,000+'];
 
@@ -210,35 +214,10 @@ export const JobsPage: React.FC<JobsPageProps> = ({
         />
       )}
 
-      {/* 1. HERO SECTION & CAROUSEL */}
-      <div className="bg-gradient-to-b from-[#021A12] via-[#04281A] to-[#0A3D29] pt-4 pb-8 px-4 sm:px-6 lg:px-8 text-white shadow-md">
-        <div className="max-w-7xl mx-auto space-y-4">
-          {heroSlides.length > 0 && (
-            <JobHeroCarousel
-              slides={heroSlides}
-              onNavigate={onNavigate}
-              onFilterRemote={() => {
-                setIsRemoteOnly(true);
-                scrollToFeed();
-              }}
-              onFilterCompanies={() => {
-                scrollToCompanies();
-              }}
-              onFilterFastHiring={() => {
-                setSelectedJobType('Full Time');
-                scrollToFeed();
-              }}
-              onExploreAll={() => {
-                handleClearAllFilters();
-                scrollToFeed();
-              }}
-            />
-          )}
-        </div>
-      </div>
+      <JobHeroCarousel onNavigate={onNavigate} onExploreJobs={exploreAllJobs} onBrowseCategories={scrollToCategories} />
 
       {/* 2. MAIN CONTAINER */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-6 relative z-20 space-y-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-4 relative z-20 space-y-6">
         
         {/* Floating Search & Filter Bar Card */}
         <div className="bg-white rounded-2xl p-3.5 sm:p-5 shadow-lg border border-slate-200/90 space-y-3">
@@ -541,7 +520,7 @@ export const JobsPage: React.FC<JobsPageProps> = ({
         </div>
 
         {/* 4. POPULAR JOB CATEGORIES SECTION */}
-        <div className="space-y-3">
+        <div ref={categoriesRef} className="scroll-mt-24 space-y-3">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-base sm:text-lg font-extrabold text-slate-900 font-heading">
@@ -758,7 +737,7 @@ export const JobsPage: React.FC<JobsPageProps> = ({
         )}
 
         {/* 7. ALL JOBS FEED SECTION (PAGINATED & CONTINUOUS) */}
-        <div ref={feedRef} className="space-y-4 pt-4 border-t border-slate-200">
+        <div ref={feedRef} className="scroll-mt-24 space-y-4 border-t border-slate-200 pt-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <div>
               <h2 className="text-base sm:text-xl font-extrabold text-slate-900 font-heading flex items-center gap-2">

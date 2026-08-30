@@ -25,7 +25,6 @@ import { LocationValueModel } from '../services/locationService';
 import { ServiceCategoryModal } from '../components/ServiceCategoryModal';
 import { ServiceHeroCarousel } from '../components/ServiceHeroCarousel';
 import { ServiceService, ServiceFeedParams } from '../services/serviceService';
-import { ServiceHeroSlide } from '../data/serviceHeroSlidesData';
 import { getCategoryIconComponent } from '../components/CategoryIcon';
 import { SavedListingService } from '../services/savedListingService';
 import { AuthService } from '../services/authService';
@@ -35,6 +34,7 @@ import { buildOwnerWhatsAppUrl } from '../utils/contactLinks';
 
 interface ServicesPageProps {
   onNavigate: (route: AppRoute) => void;
+  onOpenMyServices?: () => void;
   onOpenListingDetail?: (id: string, moduleHint?: 'rentals' | 'jobs' | 'services') => void;
   savedListings?: string[];
   onToggleSave?: (id: string) => void;
@@ -42,7 +42,8 @@ interface ServicesPageProps {
 }
 
 export const ServicesPage: React.FC<ServicesPageProps> = ({ 
-  onNavigate, 
+  onNavigate,
+  onOpenMyServices,
   onOpenListingDetail,
   savedListings = [],
   onToggleSave,
@@ -70,8 +71,7 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({
   const [isServiceTypeModalOpen, setIsServiceTypeModalOpen] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState<'price' | 'serviceType' | null>(null);
 
-  // Hero Slides & Items State
-  const [heroSlides, setHeroSlides] = useState<ServiceHeroSlide[]>([]);
+  // Marketplace items state
   const [featuredItems, setFeaturedItems] = useState<ServiceItem[]>([]);
   const [nearYouItems, setNearYouItems] = useState<ServiceItem[]>([]);
   const [feedItems, setFeedItems] = useState<ServiceItem[]>([]);
@@ -86,18 +86,14 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({
 
   // Ref for Main Feed Anchor
   const feedRef = useRef<HTMLDivElement>(null);
+  const categoriesRef = useRef<HTMLDivElement>(null);
 
   const priceOptions = ['Any Price', 'Under Rs. 5,000', 'Rs. 5,000 - 10,000', 'Rs. 10,000 - 25,000', 'Rs. 25,000+'];
   const serviceTypeOptions = ['All Types', 'On-site / In-person', 'Online / Remote', 'Emergency / 24/7', 'Scheduled Visit', 'Package Service'];
 
-  // 1. Initial Load: Hero Slides, Featured Services, Saved Services, Profile Location
+  // 1. Initial Load: Featured Services, Saved Services, Profile Location
   useEffect(() => {
     let isMounted = true;
-
-    // Load Hero Slides
-    ServiceService.getServiceHeroSlides().then(slides => {
-      if (isMounted) setHeroSlides(slides);
-    });
 
     // Load Featured Services
     ServiceService.getFeaturedServices(6).then(items => {
@@ -255,6 +251,15 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({
     setIsNearMeOnly(false);
   };
 
+  const exploreAllServices = () => {
+    handleClearAllFilters();
+    window.setTimeout(() => feedRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0);
+  };
+
+  const scrollToCategories = () => {
+    categoriesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
   const hasActiveFilters = 
     selectedCategory !== 'All Categories' || 
     selectedPrice !== 'Any Price' || 
@@ -269,7 +274,7 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 pb-28 selection:bg-[#FF650A] selection:text-white">
+    <div className="min-h-screen overflow-x-hidden bg-slate-50 pb-28 text-slate-800 selection:bg-[#FF650A] selection:text-white">
       {/* Backdrop for Active Dropdowns */}
       {activeDropdown && (
         <div 
@@ -278,24 +283,15 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({
         />
       )}
 
+      <ServiceHeroCarousel
+        onNavigate={onNavigate}
+        onExploreServices={exploreAllServices}
+        onBrowseCategories={scrollToCategories}
+        onOpenMyServices={onOpenMyServices}
+      />
+
       {/* Main Container - Desktop Max-Width System */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4 space-y-6">
-        
-        {/* 1. HERO SLIDES CAROUSEL */}
-        <ServiceHeroCarousel
-          slides={heroSlides}
-          onNavigate={onNavigate}
-          onFilterHomeRepair={() => {
-            setSelectedCategory('Home Services');
-            if (feedRef.current) feedRef.current.scrollIntoView({ behavior: 'smooth' });
-          }}
-          onFilterDigitalCreative={() => {
-            setSelectedCategory('Creative');
-            if (feedRef.current) feedRef.current.scrollIntoView({ behavior: 'smooth' });
-          }}
-          onFilterNearMe={handleNearMeClick}
-          onExploreAll={handleClearAllFilters}
-        />
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 -mt-4 relative z-20 space-y-6">
 
         {/* 2. FLOATING SEARCH & FILTERS BAR */}
         <div className="bg-white rounded-2xl p-3.5 sm:p-4 shadow-md border border-slate-200/80 space-y-3 relative z-40">
@@ -550,7 +546,7 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({
         </div>
 
         {/* 4. POPULAR SERVICE CATEGORIES */}
-        <div className="space-y-3">
+        <div ref={categoriesRef} className="scroll-mt-24 space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-base sm:text-lg font-bold text-slate-900 font-heading">
               Popular Service Categories
@@ -765,7 +761,7 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({
         )}
 
         {/* 7. MAIN SERVICES FEED */}
-        <div ref={feedRef} className="space-y-4 pt-4 border-t border-slate-200">
+        <div ref={feedRef} className="scroll-mt-24 space-y-4 border-t border-slate-200 pt-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div>
               <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 font-heading">
