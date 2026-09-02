@@ -24,6 +24,7 @@ import { AuthService } from '../services/authService';
 import { ReportService } from '../services/reportService';
 import { supabase } from '../lib/supabase';
 import { RENTOURA_SUPPORT_WHATSAPP_URL } from '../config/contact';
+import { SearchService } from '../services/searchService';
 
 export interface ReportListingTarget {
   id: string;
@@ -597,7 +598,7 @@ export const ReportListingPage: React.FC<ReportListingPageProps> = ({
             <div className="p-4 sm:p-5 rounded-3xl bg-white border border-slate-100 shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div className="flex items-center gap-3.5 w-full sm:w-auto">
                 <img
-                  src={target.imageUrl}
+                  src={target.imageUrl || SearchService.NEUTRAL_PLACEHOLDER}
                   alt={target.title}
                   className="w-20 h-20 sm:w-24 sm:h-20 rounded-2xl object-cover shrink-0 border border-slate-100 shadow-xs"
                 />

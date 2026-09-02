@@ -2,6 +2,7 @@ import React from 'react';
 import { ChevronRight, Eye, MessageSquare, PlusCircle, Clock, CheckCircle2, AlertCircle, AlertTriangle } from 'lucide-react';
 import { UserListingItem } from '../../types/profileTypes';
 import { AppRoute } from '../../types';
+import { SearchService } from '../../services/searchService';
 
 interface UserRecentActivityProps {
   listings: UserListingItem[];
@@ -84,7 +85,7 @@ export const UserRecentActivity: React.FC<UserRecentActivityProps> = ({
             {/* Image Thumbnail */}
             <div className="w-16 h-16 rounded-xl overflow-hidden bg-slate-100 flex-shrink-0 relative">
               <img
-                src={item.imageUrl}
+                src={item.imageUrl || SearchService.NEUTRAL_PLACEHOLDER}
                 alt={item.title}
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
                 referrerPolicy="no-referrer"

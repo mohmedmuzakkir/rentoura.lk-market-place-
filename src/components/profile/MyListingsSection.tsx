@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { UserListingItem, UserListingStatus } from '../../types/profileTypes';
 import { AppRoute } from '../../types';
+import { SearchService } from '../../services/searchService';
 
 interface MyListingsSectionProps {
   listings: UserListingItem[];
@@ -202,7 +203,7 @@ export const MyListingsSection: React.FC<MyListingsSectionProps> = ({
                   className="relative w-24 h-24 sm:w-28 sm:h-28 rounded-xl overflow-hidden bg-slate-100 shrink-0 cursor-pointer group"
                 >
                   <img
-                    src={item.imageUrl}
+                    src={item.imageUrl || SearchService.NEUTRAL_PLACEHOLDER}
                     alt={item.title}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     referrerPolicy="no-referrer"

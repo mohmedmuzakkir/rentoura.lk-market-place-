@@ -38,6 +38,7 @@ import { StaffAccount, AuditLogItem, AdminKpiMetrics, PlatformAnnouncement } fro
 import { UserListingItem } from '../types/profileTypes';
 import { ListingReport } from '../services/reportService';
 import { AdminService } from '../services/adminService';
+import { SearchService } from '../services/searchService';
 import { AdminModerationService, AdminDashboardMetrics } from '../services/adminModerationService';
 import { ListingModerationModal } from '../components/admin/ListingModerationModal';
 import { AdminUsersView } from '../components/admin/AdminUsersView';
@@ -1099,7 +1100,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
                           >
                             <div className="flex items-center gap-3 overflow-hidden min-w-0">
                               <img
-                                src={item.imageUrl}
+                                src={item.imageUrl || SearchService.NEUTRAL_PLACEHOLDER}
                                 alt={item.title}
                                 className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl object-cover shrink-0 border border-slate-200"
                               />

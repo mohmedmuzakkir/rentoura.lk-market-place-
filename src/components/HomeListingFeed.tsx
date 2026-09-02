@@ -1,6 +1,7 @@
 import React from 'react';
 import { Heart, MapPin, Building2, Briefcase, Wrench, ChevronDown, Inbox } from 'lucide-react';
 import { AppRoute } from '../types';
+import { SearchService } from '../services/searchService';
 
 export interface FeedListingItem {
   id: string;
@@ -168,7 +169,7 @@ export const HomeListingFeed: React.FC<HomeListingFeedProps> = ({
                 {/* Image Container */}
                 <div className="relative h-[130px] sm:h-[150px] lg:h-[170px] w-full overflow-hidden bg-slate-100">
                   <img
-                    src={item.imageUrl}
+                    src={item.imageUrl || SearchService.NEUTRAL_PLACEHOLDER}
                     alt={item.title}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     loading="lazy"

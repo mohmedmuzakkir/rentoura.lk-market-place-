@@ -336,11 +336,17 @@ export const AdminStaffView: React.FC<AdminStaffViewProps> = ({ currentStaff, on
                   <tr key={member.id} className="hover:bg-slate-50/80 transition-colors">
                     <td className="py-3.5 px-4">
                       <div className="flex items-center gap-3">
-                        <img
-                          src={member.avatarUrl}
-                          alt={member.fullName}
-                          className="w-10 h-10 rounded-2xl object-cover ring-2 ring-[#1464F4]"
-                        />
+                        {member.avatarUrl ? (
+                          <img
+                            src={member.avatarUrl}
+                            alt={member.fullName}
+                            className="w-10 h-10 rounded-2xl object-cover ring-2 ring-[#1464F4]"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-[#1464F4] to-cyan-500 text-white font-black text-sm flex items-center justify-center ring-2 ring-[#1464F4]">
+                            {member.fullName ? member.fullName.charAt(0).toUpperCase() : 'S'}
+                          </div>
+                        )}
                         <div>
                           <div className="font-bold text-slate-900 flex items-center gap-1.5">
                             <span>{member.fullName}</span>

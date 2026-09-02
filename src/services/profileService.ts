@@ -1,5 +1,6 @@
 import { UserProfile, UserListingItem, UserReviewItem, UserReportItem, UserListingStatus } from '../types/profileTypes';
 import { supabase } from '../lib/supabase';
+import { SearchService } from './searchService';
 
 const PROFILE_STORAGE_KEY = 'rentoura_user_profile';
 
@@ -69,7 +70,7 @@ export class ProfileService {
 
       for (const row of rows) {
         // Fetch cover image from listing_media
-        let imageUrl = '';
+        let imageUrl = SearchService.NEUTRAL_PLACEHOLDER;
         let mediaCount = 1;
 
         try {

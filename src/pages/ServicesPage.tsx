@@ -31,6 +31,7 @@ import { AuthService } from '../services/authService';
 import { SERVICES_CATEGORIES } from '../data/categories/servicesData';
 import { ProtectedActionRequest } from '../services/protectedActionService';
 import { buildOwnerWhatsAppUrl } from '../utils/contactLinks';
+import { SearchService } from '../services/searchService';
 
 interface ServicesPageProps {
   onNavigate: (route: AppRoute) => void;
@@ -622,7 +623,7 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({
                     {/* Cover Photo */}
                     <div className="relative h-44 w-full bg-slate-100 overflow-hidden">
                       <img
-                        src={srv.imageUrl}
+                        src={srv.imageUrl || SearchService.NEUTRAL_PLACEHOLDER}
                         alt={srv.title}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                       />
@@ -734,7 +735,7 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <img
-                      src={near.imageUrl}
+                      src={near.imageUrl || SearchService.NEUTRAL_PLACEHOLDER}
                       alt={near.title}
                       className="w-12 h-12 rounded-xl object-cover shrink-0"
                     />
@@ -837,7 +838,7 @@ export const ServicesPage: React.FC<ServicesPageProps> = ({
                     {/* Cover Photo */}
                     <div className="relative h-48 w-full bg-slate-100 overflow-hidden">
                       <img
-                        src={srv.imageUrl}
+                        src={srv.imageUrl || SearchService.NEUTRAL_PLACEHOLDER}
                         alt={srv.title}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                       />

@@ -173,7 +173,7 @@ export const MarketplaceHeroCarousel: React.FC<MarketplaceHeroCarouselProps> = (
                   aria-label={`${index + 1} of ${slideCount}`}
                   aria-hidden={!isActive}
                 >
-                  {slide.imageFit === 'contain' && (
+                  {slide.imageFit === 'contain' && Boolean(slide.image) && (
                     <img
                       src={slide.image}
                       alt=""
@@ -185,18 +185,20 @@ export const MarketplaceHeroCarousel: React.FC<MarketplaceHeroCarouselProps> = (
                       style={{ objectPosition: slide.imagePosition ?? 'center' }}
                     />
                   )}
-                  <img
-                    src={slide.image}
-                    alt={isActive ? slide.alt : ''}
-                    width={slide.width}
-                    height={slide.height}
-                    loading={index === 0 ? 'eager' : 'lazy'}
-                    fetchPriority={index === 0 ? 'high' : 'auto'}
-                    decoding="async"
-                    draggable={false}
-                    className={`absolute inset-0 h-full w-full ${imageFitClass}`}
-                    style={{ objectPosition: slide.imagePosition ?? 'center' }}
-                  />
+                  {Boolean(slide.image) && (
+                    <img
+                      src={slide.image}
+                      alt={isActive ? slide.alt : ''}
+                      width={slide.width}
+                      height={slide.height}
+                      loading={index === 0 ? 'eager' : 'lazy'}
+                      fetchPriority={index === 0 ? 'high' : 'auto'}
+                      decoding="async"
+                      draggable={false}
+                      className={`absolute inset-0 h-full w-full ${imageFitClass}`}
+                      style={{ objectPosition: slide.imagePosition ?? 'center' }}
+                    />
+                  )}
                 </div>
               );
             })}

@@ -23,6 +23,7 @@ import {
 import { UserListingItem } from '../../types/profileTypes';
 import { StaffAccount } from '../../types/adminTypes';
 import { AdminService } from '../../services/adminService';
+import { SearchService } from '../../services/searchService';
 
 interface ListingModerationModalProps {
   listing: UserListingItem;
@@ -277,7 +278,7 @@ export const ListingModerationModal: React.FC<ListingModerationModalProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="sm:col-span-1 rounded-2xl overflow-hidden border border-slate-200 bg-slate-100 aspect-video sm:aspect-square relative group">
                   <img
-                    src={listing.imageUrl}
+                    src={listing.imageUrl || SearchService.NEUTRAL_PLACEHOLDER}
                     alt={listing.title}
                     className="w-full h-full object-cover"
                   />

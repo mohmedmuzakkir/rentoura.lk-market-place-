@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ChevronLeft, ChevronRight, Maximize2, X, Image as ImageIcon } from 'lucide-react';
+import { SearchService } from '../../services/searchService';
 
 interface MediaGalleryProps {
   images: string[];
@@ -15,7 +16,9 @@ export const MediaGallery: React.FC<MediaGalleryProps> = ({
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
 
-  if (!images || images.length === 0) {
+  const cleanImages = (images || []).filter(img => typeof img === 'string' && img.trim() !== '');
+
+  if (cleanImages.length === 0) {
     return (
       <div className="relative w-full aspect-16/10 bg-slate-900 flex flex-col items-center justify-center text-slate-400 gap-2 p-4 select-none rounded-3xl">
         <div className="w-12 h-12 rounded-2xl bg-slate-800 flex items-center justify-center text-slate-500 mb-1">
@@ -35,7 +38,7 @@ export const MediaGallery: React.FC<MediaGalleryProps> = ({
     );
   }
 
-  const validImages = images;
+  const validImages = cleanImages;
 
   const handlePrev = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -185,7 +188,7 @@ export const MediaGallery: React.FC<MediaGalleryProps> = ({
                   idx === currentIndex ? 'border-[#1464F4] scale-105' : 'border-transparent opacity-50 hover:opacity-90'
                 }`}
               >
-                <img src={img} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                <img src={img || SearchService.NEUTRAL_PLACEHOLDER} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
               </button>
             ))}
           </div>

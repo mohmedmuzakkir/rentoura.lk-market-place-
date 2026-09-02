@@ -29,6 +29,7 @@ import { GlobalLocationModal } from '../components/common/GlobalLocationModal';
 import { RentalCategoryModal } from '../components/RentalCategoryModal';
 import { RentalService, RentalCategoryRecord } from '../services/rentalService';
 import { SavedListingService } from '../services/savedListingService';
+import { SearchService } from '../services/searchService';
 
 interface RentalsPageProps {
   onNavigate: (route: AppRoute) => void;
@@ -494,7 +495,7 @@ export const RentalsPage: React.FC<RentalsPageProps> = ({
                   >
                     <div className="relative h-36 w-full bg-slate-100 overflow-hidden">
                       <img
-                        src={rental.imageUrl}
+                        src={rental.imageUrl || SearchService.NEUTRAL_PLACEHOLDER}
                         alt={rental.title}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                       />
@@ -567,7 +568,7 @@ export const RentalsPage: React.FC<RentalsPageProps> = ({
                   >
                     <div className="relative h-28 w-full bg-slate-100 overflow-hidden">
                       <img
-                        src={item.imageUrl}
+                        src={item.imageUrl || SearchService.NEUTRAL_PLACEHOLDER}
                         alt={item.title}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                       />
@@ -649,7 +650,7 @@ export const RentalsPage: React.FC<RentalsPageProps> = ({
                     >
                       <div className="relative h-44 w-full bg-slate-100 overflow-hidden">
                         <img
-                          src={rental.imageUrl}
+                          src={rental.imageUrl || SearchService.NEUTRAL_PLACEHOLDER}
                           alt={rental.title}
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                         />

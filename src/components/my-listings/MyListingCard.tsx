@@ -21,6 +21,7 @@ import {
   Briefcase
 } from 'lucide-react';
 import { UserListingItem, UserListingStatus } from '../../types/profileTypes';
+import { SearchService } from '../../services/searchService';
 
 interface MyListingCardProps {
   listing: UserListingItem;
@@ -139,7 +140,7 @@ export const MyListingCard: React.FC<MyListingCardProps> = ({
             </div>
           ) : (
             <img
-              src={listing.imageUrl}
+              src={listing.imageUrl || SearchService.NEUTRAL_PLACEHOLDER}
               alt={listing.title}
               referrerPolicy="no-referrer"
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"

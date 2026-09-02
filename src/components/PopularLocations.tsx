@@ -1,6 +1,7 @@
 import React from 'react';
 import { MapPin, ChevronRight } from 'lucide-react';
 import { LocationItem, AppRoute } from '../types';
+import { NEUTRAL_LOCATION_IMAGE } from '../data/locationImages';
 
 interface PopularLocationsProps {
   locations: (LocationItem & { searchCount?: number })[];
@@ -48,7 +49,7 @@ export const PopularLocations: React.FC<PopularLocationsProps> = ({
           >
             {/* Background Photo */}
             <img
-              src={loc.imageUrl}
+              src={loc.imageUrl || NEUTRAL_LOCATION_IMAGE}
               alt={loc.name}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
               loading="lazy"

@@ -16,6 +16,7 @@ import {
   Star
 } from 'lucide-react';
 import { ServiceListingDetail } from '../../types/listingDetailsTypes';
+import { SearchService } from '../../services/searchService';
 
 interface ServiceContentSectionsProps {
   service: ServiceListingDetail;
@@ -391,7 +392,7 @@ export const ServiceContentSections: React.FC<ServiceContentSectionsProps> = ({
                   className="aspect-[4/3] rounded-xl overflow-hidden cursor-pointer hover:opacity-90 transition-opacity"
                 >
                   <img
-                    src={img}
+                    src={img || SearchService.NEUTRAL_PLACEHOLDER}
                     alt={`Portfolio work ${idx + 1}`}
                     className="w-full h-full object-cover"
                     referrerPolicy="no-referrer"

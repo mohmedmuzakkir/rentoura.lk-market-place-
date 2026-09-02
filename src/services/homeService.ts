@@ -4,6 +4,7 @@ import { FeaturedListingItem, LocationItem } from '../types';
 import { FeedListingItem } from '../components/HomeListingFeed';
 import { LocationService } from './locationService';
 import { getLocationImage } from '../data/locationImages';
+import { SearchService } from './searchService';
 
 export interface MarketplaceStats {
   totalActiveListings: number;
@@ -18,7 +19,7 @@ export class HomeService {
    * Does NOT use getPublicUrl fallback as bucket is private. Returns empty string if missing or error.
    */
   public static async resolveSignedMediaUrl(storagePath: string | null | undefined): Promise<string> {
-    if (!storagePath) return '';
+    if (!storagePath) return SearchService.NEUTRAL_PLACEHOLDER;
     if (storagePath.startsWith('http://') || storagePath.startsWith('https://')) {
       return storagePath;
     }
@@ -34,7 +35,7 @@ export class HomeService {
     } catch (e) {
       console.warn('Error signing listing image URL:', e);
     }
-    return '';
+    return SearchService.NEUTRAL_PLACEHOLDER;
   }
 
   /**
@@ -60,7 +61,7 @@ export class HomeService {
         title: row.title || 'RENTOURA.LK',
         subtitle: row.subtitle || '',
         description: row.description || '',
-        imageUrl: row.image_url || '',
+        imageUrl: row.image_url || SearchService.NEUTRAL_PLACEHOLDER,
         mobileImageUrl: row.mobile_image_url || undefined,
         module: (row.module || 'platform') as any,
         ctaLabel: row.cta_text || 'Explore Marketplace',
@@ -169,7 +170,7 @@ export class HomeService {
           const normMod = rawMod === 'rental' ? 'RENTAL' : (rawMod === 'job' ? 'JOB' : 'SERVICE');
           const badgeColor = normMod === 'RENTAL' ? '#1464F4' : (normMod === 'JOB' ? '#08A34F' : '#FF650A');
           
-          let coverImg = '';
+          let coverImg = SearchService.NEUTRAL_PLACEHOLDER;
           if (row.listing_media && row.listing_media.length > 0) {
             const sorted = [...row.listing_media].sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0));
             if (sorted[0]?.storage_path) {
@@ -309,7 +310,7 @@ export class HomeService {
             periodOrType = row.module_data?.pricing_type || 'Per Service';
           }
 
-          let coverUrl = '';
+          let coverUrl = SearchService.NEUTRAL_PLACEHOLDER;
           if (row.listing_media && row.listing_media.length > 0) {
             const sortedMedia = [...row.listing_media].sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0));
             if (sortedMedia[0]?.storage_path) {

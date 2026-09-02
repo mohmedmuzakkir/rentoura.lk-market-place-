@@ -1,6 +1,7 @@
 import React from 'react';
 import { Heart, ChevronRight, Sparkles } from 'lucide-react';
 import { FeaturedListingItem, AppRoute } from '../types';
+import { SearchService } from '../services/searchService';
 
 interface FeaturedListingsProps {
   listings: FeaturedListingItem[];
@@ -59,7 +60,7 @@ export const FeaturedListings: React.FC<FeaturedListingsProps> = ({
             >
               {/* Listing Image */}
               <img
-                src={item.imageUrl}
+                src={item.imageUrl || SearchService.NEUTRAL_PLACEHOLDER}
                 alt={item.title}
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                 loading="lazy"
