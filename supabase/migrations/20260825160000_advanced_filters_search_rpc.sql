@@ -1,6 +1,9 @@
 -- Migration: 20260825160000_advanced_filters_search_rpc.sql
 -- Description: Extends search_marketplace RPC function to support module-specific filter predicates (rental period, job type, work mode, pricing type, emergency service, delivery available)
 
+-- Drop old signature to avoid ambiguous overloading
+DROP FUNCTION IF EXISTS public.search_marketplace(text, text, text, text, text, text, text, numeric, numeric, text, integer, integer);
+
 CREATE OR REPLACE FUNCTION public.search_marketplace(
   p_query text DEFAULT NULL,
   p_module text DEFAULT NULL,
@@ -216,4 +219,4 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.search_marketplace TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.search_marketplace(text, text, text, text, text, text, text, numeric, numeric, text, text, text, text, boolean, boolean, text, integer, integer) TO anon, authenticated, service_role;

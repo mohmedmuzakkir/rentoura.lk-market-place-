@@ -1,6 +1,16 @@
 import { supabase } from '../lib/supabase';
 
-export interface JobApplicationInput { jobId:string;jobTitle:string;companyName:string;applicantName:string;applicantPhone:string;applicantEmail:string;coverNote?:string }
+export interface JobApplicationInput { 
+  jobId:string;
+  jobTitle:string;
+  companyName:string;
+  applicantName:string;
+  applicantPhone:string;
+  applicantEmail:string;
+  coverNote?:string;
+  resumeFile?: File | null;
+  portfolioLink?: string;
+}
 export interface ApplicationStatusResult { applied:boolean;status?:string;isOwner?:boolean;error?:string }
 
 export class JobApplicationService {
@@ -20,7 +30,34 @@ export class JobApplicationService {
       const{data:{user}}=await supabase.auth.getUser(); if(!user)return{success:false,error:'Please sign in to submit your job application.'};
       const{data:job,error:jobError}=await supabase.from('listings').select('owner_id').eq('id',input.jobId).maybeSingle();
       if(jobError)return{success:false,error:jobError.message}; if(job?.owner_id===user.id)return{success:false,error:'You cannot apply to your own job listing.'};
-      const{error}=await supabase.from('job_applications').insert({job_listing_id:input.jobId,applicant_id:user.id,applicant_name:input.applicantName,contact_phone:input.applicantPhone,contact_email:input.applicantEmail,cover_note:input.coverNote||null,status:'submitted'});
+      
+      let resumeUrl: string | null = null;
+      let finalCoverNote = input.coverNote || '';
+
+      // Upload resume if provided
+      if (input.resumeFile) {
+        const resumeExt = input.resumeFile.name.split('.').pop();
+        const resumePath = `${user.id}/applications/${input.jobId}-resume-${Date.now()}.${resumeExt}`;
+        const { data: uploadData, error: uploadError } = await supabase.storage.from('job-applications').upload(resumePath, input.resumeFile, { upsert: true });
+        if (uploadError) return { success: false, error: 'Failed to upload Resume: ' + uploadError.message };
+        resumeUrl = uploadData.path;
+      }
+
+      // Add portfolio link to cover note if provided
+      if (input.portfolioLink) {
+        finalCoverNote += `\n\n[Portfolio Link]: ${input.portfolioLink}`;
+      }
+
+      const{error}=await supabase.from('job_applications').insert({
+        job_listing_id:input.jobId,
+        applicant_id:user.id,
+        applicant_name:input.applicantName,
+        contact_phone:input.applicantPhone,
+        contact_email:input.applicantEmail,
+        cover_note:finalCoverNote.trim() || null,
+        resume_url:resumeUrl,
+        status:'submitted'
+      });
       if(error)return{success:false,error:error.code==='23505'?'You have already applied for this position.':error.message}; return{success:true};
     }catch(error){return{success:false,error:error instanceof Error?error.message:'Failed to submit application.'}}
   }

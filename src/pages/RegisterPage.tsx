@@ -291,7 +291,8 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
       } else {
         setSuccessMsg(`Account created successfully! Welcome to Rentoura, ${res.profile?.fullName || trimmedName}.`);
         setTimeout(() => {
-          onNavigate(returnUrl || '/');
+          // Redirect to dashboard (my-listings) after successful registration
+          onNavigate('/my-listings');
         }, 1000);
       }
     } catch (err: any) {

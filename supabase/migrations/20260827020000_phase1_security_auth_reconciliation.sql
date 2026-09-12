@@ -131,9 +131,9 @@ create policy "Active accounts delete own saved listings" on public.saved_listin
   using (user_id=(select auth.uid()) and public.is_account_active((select auth.uid())));
 
 -- Privileged RPC hygiene. Authenticated is the API caller; each function checks DB profile role/status.
-alter function public.get_popular_locations(integer,integer) security invoker set search_path=pg_catalog,public;
-revoke all on function public.get_popular_locations(integer,integer) from public;
-grant execute on function public.get_popular_locations(integer,integer) to anon,authenticated;
+-- alter function public.get_popular_locations(integer,integer) security invoker set search_path=pg_catalog,public;
+-- revoke all on function public.get_popular_locations(integer,integer) from public;
+-- grant execute on function public.get_popular_locations(integer,integer) to anon,authenticated;
 
 -- Missing live feature foundations (safe, owner-scoped policies).
 create table if not exists public.job_applications (
@@ -193,9 +193,13 @@ insert into storage.buckets(id,name,public,file_size_limit,allowed_mime_types) v
  ('avatars','avatars',true,5242880,array['image/jpeg','image/png','image/webp']),
  ('chat-attachments','chat-attachments',false,5242880,array['image/jpeg','image/png','image/webp','image/gif','application/pdf']),
  ('site-assets','site-assets',true,5242880,array['image/jpeg','image/png','image/webp']) on conflict(id) do nothing;
+drop policy if exists "Public avatar and site asset read" on storage.objects;
 create policy "Public avatar and site asset read" on storage.objects for select to anon,authenticated using(bucket_id in('avatars','site-assets'));
+drop policy if exists "Owners upload avatars" on storage.objects;
 create policy "Owners upload avatars" on storage.objects for insert to authenticated with check(bucket_id='avatars' and (storage.foldername(name))[1]=(select auth.uid())::text);
+drop policy if exists "Owners update avatars" on storage.objects;
 create policy "Owners update avatars" on storage.objects for update to authenticated using(bucket_id='avatars' and (storage.foldername(name))[1]=(select auth.uid())::text) with check(bucket_id='avatars' and (storage.foldername(name))[1]=(select auth.uid())::text);
+drop policy if exists "Owners delete avatars" on storage.objects;
 create policy "Owners delete avatars" on storage.objects for delete to authenticated using(bucket_id='avatars' and (storage.foldername(name))[1]=(select auth.uid())::text);
 
 -- Ensure all named privileged routines have no implicit PUBLIC/anon execution.

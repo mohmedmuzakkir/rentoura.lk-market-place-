@@ -8,11 +8,11 @@ BEGIN;
 
 -- 1. TEMPORARY CANONICAL TAXONOMY STAGING TABLE
 CREATE TEMP TABLE temp_canonical_categories (
-  module text NOT NULL CHECK (module IN ('rental', 'job', 'service')),
+  module listing_module NOT NULL,
   level integer NOT NULL,
   name text NOT NULL,
   slug text NOT NULL,
-  parent_module text CHECK (parent_module IN ('rental', 'job', 'service')),
+  parent_module listing_module,
   parent_slug text,
   parent_level integer,
   sort_order integer NOT NULL DEFAULT 0,

@@ -20,6 +20,7 @@ import { NotificationEmptyState } from '../components/notifications/Notification
 import { NotificationPreferencesModal } from '../components/notifications/NotificationPreferencesModal';
 import { ReportResolutionModal } from '../components/notifications/ReportResolutionModal';
 import { SystemTermsModal } from '../components/notifications/SystemTermsModal';
+import { SystemAnnouncementModal } from '../components/notifications/SystemAnnouncementModal';
 import { AppNotification, NotificationCategory, NotificationPreferences } from '../types/notificationTypes';
 import { NotificationService } from '../services/notificationService';
 import { AppRoute } from '../types';
@@ -60,6 +61,7 @@ export const NotificationsPage: React.FC<NotificationsPageProps> = ({
   const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [isTermsModalOpen, setIsTermsModalOpen] = useState(false);
+  const [selectedAnnouncement, setSelectedAnnouncement] = useState<AppNotification | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
@@ -127,7 +129,11 @@ export const NotificationsPage: React.FC<NotificationsPageProps> = ({
     }
 
     if (notification.type === 'SYSTEM_UPDATE') {
-      setIsTermsModalOpen(true);
+      if (notification.id.startsWith('anc-')) {
+        setSelectedAnnouncement(notification);
+      } else {
+        setIsTermsModalOpen(true);
+      }
       return;
     }
 
@@ -415,6 +421,12 @@ export const NotificationsPage: React.FC<NotificationsPageProps> = ({
       <SystemTermsModal
         isOpen={isTermsModalOpen}
         onClose={() => setIsTermsModalOpen(false)}
+      />
+
+      <SystemAnnouncementModal
+        isOpen={selectedAnnouncement !== null}
+        onClose={() => setSelectedAnnouncement(null)}
+        notification={selectedAnnouncement}
       />
     </div>
   );

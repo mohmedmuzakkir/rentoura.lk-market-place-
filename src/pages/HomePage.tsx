@@ -10,6 +10,7 @@ import { TrustBanner } from '../components/TrustBanner';
 import { AppRoute, FilterState, FeaturedListingItem, LocationItem } from '../types';
 import { HomeService, MarketplaceStats } from '../services/homeService';
 import { SavedListingService } from '../services/savedListingService';
+import { AuthService } from '../services/authService';
 
 interface HomePageProps {
   filterState: FilterState;
@@ -95,7 +96,8 @@ export const HomePage: React.FC<HomePageProps> = ({
     }
 
     try {
-      const res = await HomeService.getLatestListingsFeed(page, 16, tab);
+      const currentUserId = AuthService.getCurrentUser()?.id;
+      const res = await HomeService.getLatestListingsFeed(page, 16, tab, currentUserId);
       if (isMore) {
         setFeedItems(prev => [...prev, ...res.items]);
       } else {

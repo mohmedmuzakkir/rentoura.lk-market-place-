@@ -66,40 +66,43 @@ export class ProfileService {
         return [];
       }
 
+      // 1. Fetch all media in one query
+      const listingIds = rows.map(r => r.id);
+      const { data: allMedia } = await supabase
+        .from('listing_media')
+        .select('listing_id, storage_path, position, is_cover')
+        .in('listing_id', listingIds)
+        .order('is_cover', { ascending: false })
+        .order('position', { ascending: true });
+
+      // Group media by listing_id
+      const mediaByListingId = new Map<string, typeof allMedia>();
+      if (allMedia) {
+        for (const m of allMedia) {
+          const list = mediaByListingId.get(m.listing_id) || [];
+          list.push(m);
+          mediaByListingId.set(m.listing_id, list);
+        }
+      }
+
       const listings: UserListingItem[] = [];
 
       for (const row of rows) {
-        // Fetch cover image from listing_media
         let imageUrl = SearchService.NEUTRAL_PLACEHOLDER;
         let mediaCount = 1;
-
-        try {
-          const { data: mediaRows, count } = await supabase
-            .from('listing_media')
-            .select('storage_path, position, is_cover', { count: 'exact' })
-            .eq('listing_id', row.id)
-            .order('is_cover', { ascending: false })
-            .order('position', { ascending: true });
-
-          if (count !== null && count !== undefined && count > 0) {
-            mediaCount = count;
-          }
-
-          if (mediaRows && mediaRows.length > 0 && mediaRows[0].storage_path) {
-            const path = mediaRows[0].storage_path;
+        
+        const listingMedia = mediaByListingId.get(row.id) || [];
+        if (listingMedia.length > 0) {
+          mediaCount = listingMedia.length;
+          const path = listingMedia[0].storage_path;
+          if (path) {
             if (path.startsWith('http://') || path.startsWith('https://')) {
               imageUrl = path;
             } else {
-              const { data: signedData } = await supabase.storage
-                .from('listing-images')
-                .createSignedUrl(path, 3600);
-              if (signedData?.signedUrl) {
-                imageUrl = signedData.signedUrl;
-              }
+              // We'll leave it as path temporarily and sign concurrently below
+              imageUrl = path;
             }
           }
-        } catch (e) {
-          console.warn(`Error resolving media for listing ${row.id}:`, e);
         }
 
         // Module normalization
@@ -171,6 +174,8 @@ export class ProfileService {
           }
         }
 
+        const fv = row.module_data?.form_values || {};
+
         listings.push({
           id: row.id,
           ownerId: row.owner_id,
@@ -189,15 +194,44 @@ export class ProfileService {
           imagesCount: mediaCount,
           tags,
           description,
-          companyName: row.company_name || undefined,
-          providerName: row.provider_name || undefined,
+          companyName: row.company_name || fv.companyName || undefined,
+          providerName: row.provider_name || fv.providerName || undefined,
           statusNote: statusNote || undefined,
           rejectionReason: rejectionReason || undefined,
           changesRequestedNote: changesRequestedNote || undefined,
+          bedrooms: row.module_data?.bedrooms || fv.bedrooms || undefined,
+          bathrooms: row.module_data?.bathrooms || fv.bathrooms || undefined,
+          furnished: row.module_data?.furnished || fv.furnished || undefined,
+          area: row.module_data?.area || fv.area || undefined,
+          vehicleType: row.module_data?.vehicle_type || fv.vehicleType || undefined,
+          jobType: row.module_data?.job_type || fv.jobType || fv.employmentType || undefined,
+          workMode: row.module_data?.work_mode || fv.workMode || undefined,
+          experienceLevel: row.module_data?.experience_level || fv.experienceLevel || undefined,
           createdAt: row.created_at,
           updatedAt: row.updated_at
         });
       }
+
+      // 2. Fetch signed URLs concurrently for all items that need it
+      const urlPromises = listings.map(async (listing) => {
+        if (listing.imageUrl && listing.imageUrl !== SearchService.NEUTRAL_PLACEHOLDER && !listing.imageUrl.startsWith('http')) {
+          try {
+            const { data: signedData } = await supabase.storage
+              .from('listing-images')
+              .createSignedUrl(listing.imageUrl, 3600);
+            if (signedData?.signedUrl) {
+              listing.imageUrl = signedData.signedUrl;
+            } else {
+              listing.imageUrl = SearchService.NEUTRAL_PLACEHOLDER;
+            }
+          } catch (e) {
+            console.warn(`Error resolving media for listing ${listing.id}:`, e);
+            listing.imageUrl = SearchService.NEUTRAL_PLACEHOLDER;
+          }
+        }
+      });
+
+      await Promise.all(urlPromises);
 
       return listings;
     } catch (e: any) {
@@ -218,7 +252,8 @@ export class ProfileService {
     try {
       // Map status for DB
       let dbStatus: string = updated.status;
-      if (updated.status === 'pending') dbStatus = 'submitted';
+      // Do NOT map to 'submitted', it's not a valid listing_status in the DB ENUM.
+      // if (updated.status === 'pending') dbStatus = 'submitted';
 
       // Numeric price extraction
       let numericPrice: number | null = null;
@@ -230,15 +265,54 @@ export class ProfileService {
         }
       }
 
+      let newModuleData: any = undefined;
+      
+      const hasModuleUpdates = updated.tags !== undefined || 
+        updated.bedrooms !== undefined || 
+        updated.bathrooms !== undefined || 
+        updated.furnished !== undefined || 
+        updated.area !== undefined || 
+        updated.vehicleType !== undefined || 
+        updated.jobType !== undefined || 
+        updated.workMode !== undefined || 
+        updated.experienceLevel !== undefined;
+
+      if (hasModuleUpdates) {
+        const { data: existingRow } = await supabase
+          .from('listings')
+          .select('module_data')
+          .eq('id', updated.id)
+          .maybeSingle();
+        
+        newModuleData = {
+          ...(existingRow?.module_data || {})
+        };
+        
+        if (updated.tags !== undefined) newModuleData.tags = updated.tags;
+        if (updated.bedrooms !== undefined) newModuleData.bedrooms = updated.bedrooms;
+        if (updated.bathrooms !== undefined) newModuleData.bathrooms = updated.bathrooms;
+        if (updated.furnished !== undefined) newModuleData.furnished = updated.furnished;
+        if (updated.area !== undefined) newModuleData.area = updated.area;
+        if (updated.vehicleType !== undefined) newModuleData.vehicle_type = updated.vehicleType;
+        if (updated.jobType !== undefined) newModuleData.job_type = updated.jobType;
+        if (updated.workMode !== undefined) newModuleData.work_mode = updated.workMode;
+        if (updated.experienceLevel !== undefined) newModuleData.experience_level = updated.experienceLevel;
+      }
+
       const updatePayload: Record<string, any> = {
         title: updated.title,
         price: numericPrice,
         pricing_period: updated.pricePeriod || null,
         exact_address: updated.location,
+        description: updated.description || null,
         status: dbStatus,
         status_note: updated.statusNote || null,
         updated_at: new Date().toISOString()
       };
+
+      if (newModuleData) {
+        updatePayload.module_data = newModuleData;
+      }
 
       const { error } = await supabase
         .from('listings')
@@ -271,8 +345,8 @@ export class ProfileService {
 
     try {
       let dbStatus = newStatus as string;
-      if (newStatus === 'active') dbStatus = 'published';
-      if (newStatus === 'pending') dbStatus = 'submitted';
+      // if (newStatus === 'active') dbStatus = 'published';
+      // if (newStatus === 'pending') dbStatus = 'submitted';
 
       const updatePayload: Record<string, any> = {
         status: dbStatus,

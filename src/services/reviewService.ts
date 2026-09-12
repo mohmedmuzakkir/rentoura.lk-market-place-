@@ -87,7 +87,7 @@ export class ReviewService {
             module,
             owner_id
           ),
-          profiles:author_id (
+          profiles!author_id (
             id,
             full_name,
             avatar_url
@@ -442,7 +442,7 @@ export class ReviewService {
             module,
             owner_id
           ),
-          profiles:author_id (
+          profiles!author_id (
             id,
             full_name,
             avatar_url
@@ -508,7 +508,7 @@ export class ReviewService {
             module,
             owner_id
           ),
-          profiles:author_id (
+          profiles!author_id (
             id,
             full_name,
             avatar_url
@@ -616,7 +616,7 @@ export class ReviewService {
             module,
             owner_id
           ),
-          profiles:author_id (
+          profiles!author_id (
             id,
             full_name,
             avatar_url

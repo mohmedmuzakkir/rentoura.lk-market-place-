@@ -23,6 +23,8 @@ export const JobApplicationModal: React.FC<JobApplicationModalProps> = ({
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [coverNote, setCoverNote] = useState('');
+  const [resumeFile, setResumeFile] = useState<File | null>(null);
+  const [portfolioLink, setPortfolioLink] = useState('');
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCheckingStatus, setIsCheckingStatus] = useState(true);
@@ -66,6 +68,16 @@ export const JobApplicationModal: React.FC<JobApplicationModalProps> = ({
       return;
     }
 
+    if (job.requiredAttachments?.cv && !resumeFile) {
+      setErrorMsg('Please upload your CV / Resume.');
+      return;
+    }
+
+    if (job.requiredAttachments?.portfolio && !portfolioLink.trim()) {
+      setErrorMsg('Please provide a link to your Work Portfolio.');
+      return;
+    }
+
     setIsSubmitting(true);
     setErrorMsg(null);
 
@@ -76,7 +88,9 @@ export const JobApplicationModal: React.FC<JobApplicationModalProps> = ({
       applicantName: name.trim(),
       applicantPhone: phone.trim(),
       applicantEmail: email.trim(),
-      coverNote: coverNote.trim()
+      coverNote: coverNote.trim(),
+      resumeFile,
+      portfolioLink: portfolioLink.trim()
     });
 
     setIsSubmitting(false);
@@ -253,6 +267,43 @@ export const JobApplicationModal: React.FC<JobApplicationModalProps> = ({
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-emerald-500 focus:bg-white transition-all resize-none"
                 />
               </div>
+
+              {/* Required Attachments (Dynamic based on Job metadata) */}
+              {(job.requiredAttachments?.cv || job.requiredAttachments?.portfolio) && (
+                <div className="space-y-3 pt-2 border-t border-slate-100">
+                  {job.requiredAttachments?.cv && (
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                        <FileText className="w-3.5 h-3.5 text-slate-400" />
+                        CV / Resume <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="file"
+                        accept=".pdf,.doc,.docx"
+                        onChange={e => setResumeFile(e.target.files?.[0] || null)}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold file:mr-4 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-[#08A34F]/10 file:text-[#08A34F] hover:file:bg-[#08A34F]/20 cursor-pointer"
+                      />
+                    </div>
+                  )}
+
+                  {job.requiredAttachments?.portfolio && (
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                        <Briefcase className="w-3.5 h-3.5 text-slate-400" />
+                        Work Portfolio Link <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="url"
+                        required
+                        placeholder="https://your-portfolio.com, Behance, GitHub..."
+                        value={portfolioLink}
+                        onChange={e => setPortfolioLink(e.target.value)}
+                        className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-emerald-500 focus:bg-white transition-all"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Action Buttons */}
               <div className="pt-2 flex items-center gap-2">

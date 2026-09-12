@@ -24,10 +24,57 @@ export class AdminModerationService {
   }
   static async getListingForReview(id:string):Promise<DbRow>{const{data,error}=await supabase.rpc('admin_listing_for_review',{p_listing_id:id});if(error)throw new Error(error.message);return(data||{})as DbRow}
   static async moderateListing(id:string,action:ListingModerationAction,reason?:string):Promise<void>{if(action!=='approve'&&!reason?.trim())throw new Error('A clear, actionable reason is required.');const{error}=await supabase.rpc('moderate_listing',{p_listing_id:id,p_action:action,p_reason:reason?.trim()||null});if(error){if(error.code==='40001'||error.message.toLowerCase().includes('already handled'))throw new Error('This listing was already handled by another staff member. Refresh the queue.');throw new Error(error.message)}}
+  static async deleteListing(id:string):Promise<void>{
+    const { data, error } = await supabase.from('listings').delete().eq('id', id).select();
+    if(error) throw new Error(error.message);
+    if(!data || data.length === 0) throw new Error('Failed to delete listing. You may not have permission, or it no longer exists.');
+  }
   static async getStaffModerationAnalytics(filters:{from?:string;to?:string;module?:string}={}):Promise<StaffModerationMetric[]>{const{data,error}=await supabase.rpc('admin_staff_moderation_analytics',{p_from:filters.from||null,p_to:filters.to||null,p_module:filters.module||null});if(error)throw new Error(error.message);return((data||[])as DbRow[]).map(row=>({actorId:String(row.actor_id),actorName:String(row.actor_name),actorRole:String(row.actor_role),eventDate:String(row.event_date),reviewed:Number(row.reviewed||0),approved:Number(row.approved||0),rejected:Number(row.rejected||0),changesRequested:Number(row.changes_requested||0)}))}
   static async getModerationAudit(filters:{from?:string;to?:string;module?:string;limit?:number}={}):Promise<ModerationAuditEvent[]>{const{data,error}=await supabase.rpc('admin_moderation_audit',{p_from:filters.from||null,p_to:filters.to||null,p_module:filters.module||null,p_limit:filters.limit||100});if(error)throw new Error(error.message);return((data||[])as DbRow[]).map(row=>{const metadata=(row.metadata||{})as DbRow;return{id:String(row.id),actorId:row.actor_id?String(row.actor_id):null,actorName:String(row.actor_name),actorRole:String(row.actor_role),action:String(row.action),listingId:String(row.target_id),listingTitle:String(row.target_title||'Listing'),reason:row.details?String(row.details):null,module:metadata.module?String(metadata.module):null,createdAt:String(row.created_at)}})}
   static async getDashboardMetrics(module?:string):Promise<AdminDashboardMetrics>{const{data,error}=await supabase.rpc('admin_dashboard_metrics',{p_module:module||null});if(error)throw new Error(error.message);const row=(data||{})as DbRow;return{totalListings:Number(row.total_listings||0),activeListings:Number(row.active_listings||0),pendingListings:Number(row.pending_listings||0),rejectedListings:Number(row.rejected_listings||0),reportedListings:Number(row.reported_listings||0),totalUsers:Number(row.total_users||0),rentalsCount:Number(row.rentals_count||0),jobsCount:Number(row.jobs_count||0),servicesCount:Number(row.services_count||0),newListings7d:Number(row.new_listings_7d||0),previousListings7d:Number(row.previous_listings_7d||0),newUsers7d:Number(row.new_users_7d||0),previousUsers7d:Number(row.previous_users_7d||0)}}
-  static async getGlobalListings(filters:{status?:string;module?:string;search?:string;page?:number;pageSize?:number}={}):Promise<PageResult<AdminQueueListing>>{const page=filters.page||1,pageSize=filters.pageSize||25;let query=supabase.from('listings').select('id,owner_id,module,category_id,province_id,title,short_summary,description,price,pricing_period,status,submitted_at,created_at,updated_at,categories:category_id(name),locations:province_id(name),profiles:owner_id(full_name,email)',{count:'exact'}).order('created_at',{ascending:false}).range((page-1)*pageSize,page*pageSize-1);if(filters.status&&filters.status!=='all')query=query.eq('status',filters.status);if(filters.module&&filters.module!=='all')query=query.eq('module',filters.module);const search=clean(filters.search||'');if(search)query=query.ilike('title',`%${search}%`);const{data,error,count}=await query;if(error)return{rows:[],total:0,counts:{},error:error.message};return{total:count||0,counts:{},rows:((data||[])as unknown as DbRow[]).map(row=>{const category=row.categories as DbRow|null,location=row.locations as DbRow|null,profile=row.profiles as DbRow|null;return{id:String(row.id),ownerId:String(row.owner_id),ownerName:String(profile?.full_name||profile?.email||'Owner'),module:String(row.module),categoryId:row.category_id?String(row.category_id):null,categoryName:String(category?.name||'Uncategorized'),provinceId:row.province_id?String(row.province_id):null,provinceName:String(location?.name||'Sri Lanka'),title:String(row.title),summary:String(row.short_summary||''),description:String(row.description||''),price:row.price===null?null:Number(row.price),pricingPeriod:String(row.pricing_period||''),status:String(row.status),submittedAt:String(row.submitted_at||row.created_at),createdAt:String(row.created_at),updatedAt:String(row.updated_at),reported:false,coverPath:null}})} }
+  static async getGlobalListings(filters:{status?:string;module?:string;search?:string;page?:number;pageSize?:number}={}):Promise<PageResult<AdminQueueListing>>{
+    const page=filters.page||1,pageSize=filters.pageSize||25;
+    let query=supabase.from('listings').select('id,owner_id,module,category_id,province_id,title,short_summary,description,price,pricing_period,status,submitted_at,created_at,updated_at,categories:category_id(name),locations:province_id(name)',{count:'exact'}).order('created_at',{ascending:false}).range((page-1)*pageSize,page*pageSize-1);
+    if(filters.status&&filters.status!=='all')query=query.eq('status',filters.status);
+    if(filters.module&&filters.module!=='all')query=query.eq('module',filters.module);
+    const search=clean(filters.search||'');
+    if(search)query=query.ilike('title',`%${search}%`);
+    const{data,error,count}=await query;
+    if(error)return{rows:[],total:0,counts:{},error:error.message};
+    const rawData = (data||[]) as DbRow[];
+    const ownerIds = [...new Set(rawData.map(r => r.owner_id as string).filter(Boolean))];
+    const { data: profilesData } = await supabase.from('profiles').select('id,full_name,email').in('id', ownerIds);
+    const profilesMap = new Map((profilesData||[]).map(p => [p.id, p]));
+    return{
+      total:count||0,
+      counts:{},
+      rows:rawData.map(row=>{
+        const category=row.categories as DbRow|null,location=row.locations as DbRow|null;
+        const profile=profilesMap.get(row.owner_id as string);
+        return{
+          id:String(row.id),
+          ownerId:String(row.owner_id),
+          ownerName:String(profile?.full_name||profile?.email||'Owner'),
+          module:String(row.module),
+          categoryId:row.category_id?String(row.category_id):null,
+          categoryName:String(category?.name||'Uncategorized'),
+          provinceId:row.province_id?String(row.province_id):null,
+          provinceName:String(location?.name||'Sri Lanka'),
+          title:String(row.title),
+          summary:String(row.short_summary||''),
+          description:String(row.description||''),
+          price:row.price===null?null:Number(row.price),
+          pricingPeriod:String(row.pricing_period||''),
+          status:String(row.status),
+          submittedAt:String(row.submitted_at||row.created_at),
+          createdAt:String(row.created_at),
+          updatedAt:String(row.updated_at),
+          reported:false,
+          coverPath:null
+        }
+      })
+    };
+  }
   static async reports(filters:{search?:string;status?:string;targetType?:string;module?:string;reason?:string;assignee?:string;dateFrom?:string;dateTo?:string;page:number;pageSize:number}):Promise<PageResult<AdminReport>> {
     let query=supabase.from('reports').select('*',{count:'exact'}).order('created_at',{ascending:false}).range((filters.page-1)*filters.pageSize,filters.page*filters.pageSize-1);
     if(filters.status&&filters.status!=='all')query=query.eq('status',filters.status);
@@ -55,7 +102,7 @@ export class AdminModerationService {
   }
   static async moderateReport(id:string,action:string,values:{note?:string;assignee?:string;outcome?:string;userMessage?:string;linkedAction?:string}={}):Promise<void>{const{error}=await supabase.rpc('admin_moderate_report',{p_report_id:id,p_action:action,p_note:values.note||null,p_assignee:values.assignee||null,p_outcome:values.outcome||null,p_user_message:values.userMessage||null,p_linked_action:values.linkedAction||null});if(error)throw new Error(error.message)}
   static async reviews(filters:{search?:string;status?:string;module?:string;rating?:string;page:number;pageSize:number}):Promise<PageResult<AdminReview>>{
-    let query=supabase.from('reviews').select('*,listings!inner(title,module),profiles!reviews_author_id_fkey(full_name)',{count:'exact'}).order('created_at',{ascending:false}).range((filters.page-1)*filters.pageSize,filters.page*filters.pageSize-1);
+    let query=supabase.from('reviews').select('*,listings!inner(title,module),profiles!author_id(full_name)',{count:'exact'}).order('created_at',{ascending:false}).range((filters.page-1)*filters.pageSize,filters.page*filters.pageSize-1);
     if(filters.status&&filters.status!=='all')query=query.eq('status',filters.status);if(filters.module&&filters.module!=='all')query=query.eq('listings.module',filters.module);if(filters.rating&&filters.rating!=='all')query=query.eq('rating',Number(filters.rating));const search=clean(filters.search||'');if(search)query=query.ilike('body',`%${search}%`);
     const{data,error,count}=await query;if(error)return{rows:[],total:0,counts:{},error:error.message};const{data:statuses}=await supabase.from('reviews').select('status');return{total:count||0,counts:tally((statuses||[])as{status:string}[]),rows:((data||[])as unknown as(DbRow&{listings:{title:string;module:string};profiles:{full_name:string}})[]).map(row=>({id:row.id as string,listingId:row.listing_id as string,authorId:row.author_id as string,authorName:row.profiles?.full_name||'Reviewer',listingTitle:row.listings?.title||'Deleted listing',module:row.listings?.module||'general',rating:Number(row.rating),body:row.body as string,status:row.status as ReviewStatus,moderationReason:row.moderation_reason as string|null,createdAt:row.created_at as string}))}
   }

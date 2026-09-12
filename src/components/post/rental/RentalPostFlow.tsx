@@ -22,11 +22,13 @@ import { ArrowLeft, ArrowRight, Save, Trash2, Layers, MapPin, DollarSign, Slider
 interface RentalPostFlowProps {
   onNavigate: (route: AppRoute) => void;
   onListingCreated?: (listing: UserListingItem) => void;
+  editListingId?: string;
 }
 
 export const RentalPostFlow: React.FC<RentalPostFlowProps> = ({
   onNavigate,
-  onListingCreated
+  onListingCreated,
+  editListingId
 }) => {
   const accentColor = '#1464F4';
 
@@ -34,6 +36,10 @@ export const RentalPostFlow: React.FC<RentalPostFlowProps> = ({
   const [draft, setDraft] = useState<ListingDraft>(() => {
     const existing = PostDraftService.getDraft('rentals');
     if (existing) {
+      if (!editListingId && existing.id) {
+        PostDraftService.deleteDraft('rentals');
+        return PostDraftService.createInitialDraft('rentals');
+      }
       return {
         ...existing,
         pricing: existing.pricing || {
@@ -58,6 +64,7 @@ export const RentalPostFlow: React.FC<RentalPostFlowProps> = ({
     return PostDraftService.createInitialDraft('rentals');
   });
 
+  const [isLoadingEdit, setIsLoadingEdit] = useState<boolean>(!!editListingId);
   const [currentStep, setCurrentStep] = useState<number>(draft.currentStep || 1);
   const [stepErrors, setStepErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -85,6 +92,31 @@ export const RentalPostFlow: React.FC<RentalPostFlowProps> = ({
     PostDraftService.saveDraft(updatedDraft);
     setLastSavedText('Draft saved');
   }, [draft, currentStep]);
+
+  // Fetch listing for edit mode
+  useEffect(() => {
+    if (!editListingId) {
+      setIsLoadingEdit(false);
+      return;
+    }
+    const loadListing = async () => {
+      setIsLoadingEdit(true);
+      try {
+        const fetchedDraft = await ListingSubmissionService.fetchListingForEdit(editListingId, 'rentals');
+        if (fetchedDraft) {
+          setDraft(fetchedDraft);
+          setCurrentStep(fetchedDraft.currentStep || 1);
+        } else {
+          setStepErrors(prev => ({ ...prev, fetch: 'Failed to load listing for editing.' }));
+        }
+      } catch (err: any) {
+        setStepErrors(prev => ({ ...prev, fetch: err.message || 'An error occurred while loading.' }));
+      } finally {
+        setIsLoadingEdit(false);
+      }
+    };
+    loadListing();
+  }, [editListingId]);
 
   // Step definitions
   const rentalSteps: StepItem[] = [
@@ -181,9 +213,15 @@ export const RentalPostFlow: React.FC<RentalPostFlowProps> = ({
   };
 
   const handleJumpToStep = (stepNumber: number) => {
-    setCurrentStep(stepNumber);
-    setStepErrors({});
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (stepNumber < currentStep) {
+      setCurrentStep(stepNumber);
+      setStepErrors({});
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else if ((stepNumber === currentStep + 1 || !!editListingId) && validateStep(currentStep)) {
+      setCurrentStep(stepNumber);
+      setStepErrors({});
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   };
 
   const handleClearDraft = () => {
@@ -221,6 +259,7 @@ export const RentalPostFlow: React.FC<RentalPostFlowProps> = ({
       setIsSubmitting(false);
 
       if (result.success && result.listing) {
+        PostDraftService.deleteDraft('rentals');
         if (onListingCreated) {
           onListingCreated(result.listing);
         }
@@ -234,10 +273,20 @@ export const RentalPostFlow: React.FC<RentalPostFlowProps> = ({
     }
   };
 
+  if (isLoadingEdit) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 pb-28">
+        <div className="w-12 h-12 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-4"></div>
+        <h2 className="text-xl font-bold text-slate-800">Loading your listing...</h2>
+        <p className="text-slate-500 mt-2">Getting things ready for you to edit.</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 pb-28">
+    <div className="min-h-screen bg-slate-50 flex flex-col pb-28 relative">
       {/* Top Fixed Header */}
-      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200/90 shadow-xs">
+      <header className="sticky top-0 z-40 bg-white border-b border-slate-200/80 px-4 py-3 shadow-sm">
         <div className="max-w-xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <button
@@ -282,6 +331,7 @@ export const RentalPostFlow: React.FC<RentalPostFlowProps> = ({
           steps={rentalSteps}
           onSelectStep={handleJumpToStep}
           accentColor={accentColor}
+          isEditMode={!!editListingId}
         />
       </header>
 
@@ -461,13 +511,13 @@ export const RentalPostFlow: React.FC<RentalPostFlowProps> = ({
         </div>
       </main>
 
-      {/* Bottom Floating Step Action Controls */}
-      <footer className="fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-slate-200/90 py-3 px-4 shadow-lg backdrop-blur-md bg-white/95">
-        <div className="max-w-xl mx-auto flex items-center justify-between gap-3">
+      {/* Bottom Step Action Controls */}
+      <div className="max-w-xl mx-auto px-4 mt-6 mb-12">
+        <div className="flex items-center justify-between gap-3">
           <button
             type="button"
             onClick={handleBack}
-            className="py-3 px-4 rounded-xl border border-slate-200 hover:bg-slate-100 text-xs font-bold text-slate-700 transition-all flex items-center gap-1.5 tap-bounce"
+            className="py-3 px-4 rounded-xl border border-slate-200 hover:bg-slate-100 text-xs font-bold text-slate-700 transition-all flex items-center gap-1.5 tap-bounce bg-white"
           >
             <ArrowLeft className="w-4 h-4" />
             <span>{currentStep === 1 ? 'Cancel' : 'Back'}</span>
@@ -503,7 +553,7 @@ export const RentalPostFlow: React.FC<RentalPostFlowProps> = ({
             </button>
           )}
         </div>
-      </footer>
+      </div>
 
       {/* Success Modal */}
       {submittedListing && (

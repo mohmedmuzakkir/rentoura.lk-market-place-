@@ -21,11 +21,13 @@ import { ArrowLeft, ArrowRight, Save, Trash2, Briefcase, Building2, MapPin, Awar
 interface JobPostFlowProps {
   onNavigate: (route: AppRoute) => void;
   onListingCreated?: (listing: UserListingItem) => void;
+  editListingId?: string;
 }
 
 export const JobPostFlow: React.FC<JobPostFlowProps> = ({
   onNavigate,
-  onListingCreated
+  onListingCreated,
+  editListingId
 }) => {
   const accentColor = '#08A34F'; // Vibrant emerald green theme for jobs
 
@@ -33,10 +35,15 @@ export const JobPostFlow: React.FC<JobPostFlowProps> = ({
   const [draft, setDraft] = useState<ListingDraft>(() => {
     const existing = PostDraftService.getDraft('jobs');
     if (existing) {
-      return {
-        ...existing,
-        module: 'jobs'
-      };
+      if (!editListingId && existing.id) {
+        PostDraftService.deleteDraft('jobs');
+        // fall through to create initial
+      } else {
+        return {
+          ...existing,
+          module: 'jobs'
+        };
+      }
     }
     const initial = PostDraftService.createInitialDraft('jobs');
     return {
@@ -89,6 +96,7 @@ export const JobPostFlow: React.FC<JobPostFlowProps> = ({
     };
   });
 
+  const [isLoadingEdit, setIsLoadingEdit] = useState<boolean>(!!editListingId);
   const [currentStep, setCurrentStep] = useState<number>(draft.currentStep || 1);
   const [stepErrors, setStepErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -114,6 +122,31 @@ export const JobPostFlow: React.FC<JobPostFlowProps> = ({
     PostDraftService.saveDraft(updatedDraft);
     setLastSavedText('Draft saved');
   }, [draft, currentStep]);
+
+  // Fetch listing for edit mode
+  useEffect(() => {
+    if (!editListingId) {
+      setIsLoadingEdit(false);
+      return;
+    }
+    const loadListing = async () => {
+      setIsLoadingEdit(true);
+      try {
+        const fetchedDraft = await ListingSubmissionService.fetchListingForEdit(editListingId, 'jobs');
+        if (fetchedDraft) {
+          setDraft(fetchedDraft);
+          setCurrentStep(fetchedDraft.currentStep || 1);
+        } else {
+          setStepErrors(prev => ({ ...prev, fetch: 'Failed to load listing for editing.' }));
+        }
+      } catch (err: any) {
+        setStepErrors(prev => ({ ...prev, fetch: err.message || 'An error occurred while loading.' }));
+      } finally {
+        setIsLoadingEdit(false);
+      }
+    };
+    loadListing();
+  }, [editListingId]);
 
   // Step definitions
   const jobSteps: StepItem[] = [
@@ -241,7 +274,7 @@ export const JobPostFlow: React.FC<JobPostFlowProps> = ({
       setCurrentStep(stepNum);
       setStepErrors({});
       window.scrollTo({ top: 0, behavior: 'smooth' });
-    } else if (stepNum === currentStep + 1 && validateStep(currentStep)) {
+    } else if ((stepNum === currentStep + 1 || !!editListingId) && validateStep(currentStep)) {
       setCurrentStep(stepNum);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
@@ -291,7 +324,8 @@ export const JobPostFlow: React.FC<JobPostFlowProps> = ({
       const result = await ListingSubmissionService.submitListing(draft);
       setIsSubmitting(false);
 
-      if (result.success) {
+      if (result.success && result.listing) {
+        PostDraftService.deleteDraft('jobs');
         setSubmittedListing(result.listing);
         if (onListingCreated) {
           onListingCreated(result.listing);
@@ -305,10 +339,19 @@ export const JobPostFlow: React.FC<JobPostFlowProps> = ({
     }
   };
 
+  if (isLoadingEdit) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 pb-28">
+        <div className="w-12 h-12 border-4 border-emerald-200 border-t-emerald-600 rounded-full animate-spin mb-4"></div>
+        <h2 className="text-xl font-bold text-slate-800">Loading your listing...</h2>
+        <p className="text-slate-500 mt-2">Getting things ready for you to edit.</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-slate-50/60 pb-28">
-      {/* Top Fixed Progress Bar & Header */}
-      <div className="sticky top-0 z-30 bg-white border-b border-slate-200/80 shadow-xs">
+    <div className="min-h-screen bg-slate-50 flex flex-col pb-28 relative">
+      <header className="sticky top-0 z-40 bg-white border-b border-slate-200/80 px-4 py-3 shadow-sm">
         <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button
@@ -347,10 +390,11 @@ export const JobPostFlow: React.FC<JobPostFlowProps> = ({
         <PostStepIndicator
           steps={jobSteps}
           currentStep={currentStep}
-          onStepClick={handleStepClick}
+          onSelectStep={handleStepClick}
           accentColor={accentColor}
+          isEditMode={!!editListingId}
         />
-      </div>
+      </header>
 
       {/* Main Step Body */}
       <div className="max-w-3xl mx-auto px-4 pt-6">
@@ -430,8 +474,8 @@ export const JobPostFlow: React.FC<JobPostFlowProps> = ({
 
       {/* Sticky Bottom Navigation Bar */}
       {currentStep < 7 && (
-        <div className="fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-md border-t border-slate-200/80 p-3 shadow-lg">
-          <div className="max-w-3xl mx-auto flex items-center justify-between gap-3">
+        <div className="max-w-3xl mx-auto px-4 mt-6 mb-12">
+          <div className="flex items-center justify-between gap-3">
             {Object.keys(stepErrors).length > 0 && (
               <p role="alert" className="max-w-xs text-[11px] font-semibold text-rose-700">{Object.values(stepErrors)[0]}</p>
             )}

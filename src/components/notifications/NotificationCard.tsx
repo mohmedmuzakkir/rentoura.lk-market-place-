@@ -135,16 +135,25 @@ export const NotificationCard: React.FC<NotificationCardProps> = ({
         {/* Center: Content */}
         <div className="flex-1 min-w-0 pr-1">
           <div className="flex items-baseline justify-between gap-2">
-            <h2 className="text-[13.5px] font-bold text-slate-900 leading-snug truncate group-hover:text-[#1464F4] transition-colors">
-              {notification.title}
+            <h2 className="text-[13.5px] font-bold text-slate-900 leading-snug truncate group-hover:text-[#1464F4] transition-colors flex items-center gap-1">
+              {['LISTING_REJECTED', 'LISTING_CHANGES_REQUESTED', 'LISTING_APPROVED'].includes(notification.type) ? (
+                <>
+                  RENTOURA Management <ShieldCheck className="w-3.5 h-3.5 text-[#1464F4]" />
+                </>
+              ) : (
+                notification.title
+              )}
             </h2>
             <span className="text-[10.5px] text-slate-400 font-medium shrink-0">
               {notification.createdAt}
             </span>
           </div>
 
-          <p className="text-[12px] text-slate-600 font-normal leading-relaxed mt-0.5 line-clamp-2">
-            {notification.body}
+          <p className="text-[12px] text-slate-600 font-normal leading-relaxed mt-0.5 line-clamp-2 flex flex-col">
+            {['LISTING_REJECTED', 'LISTING_CHANGES_REQUESTED', 'LISTING_APPROVED'].includes(notification.type) && (
+              <span className="font-semibold text-slate-800 mb-0.5">{notification.title}</span>
+            )}
+            <span>{notification.body}</span>
           </p>
 
           {/* Optional Action / Status Details row */}

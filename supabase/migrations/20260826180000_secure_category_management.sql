@@ -4,16 +4,16 @@ revoke insert, update, delete on public.categories from anon, authenticated;
 create or replace function public.admin_manage_category(p_action text,p_category_id uuid default null,p_values jsonb default '{}'::jsonb)
 returns jsonb language plpgsql security definer set search_path=pg_catalog,public as $$
 declare v_actor public.profiles%rowtype; v_cat public.categories%rowtype; v_parent public.categories%rowtype;
- v_module text; v_level int; v_name text; v_slug text; v_parent_id uuid; v_status text; v_id uuid; v_refs bigint; v_children bigint;
+ v_module public.listing_module; v_level int; v_name text; v_slug text; v_parent_id uuid; v_status text; v_id uuid; v_refs bigint; v_children bigint;
 begin
  select * into v_actor from public.profiles where id=auth.uid();
  if not found or v_actor.account_status<>'active' or v_actor.role not in ('admin','super_admin') then raise exception using errcode='42501',message='Admin authorization required'; end if;
  if p_action not in ('create','update','set_status','delete') then raise exception using errcode='22023',message='Invalid category action'; end if;
 
  if p_action='create' then
-  v_module:=p_values->>'module'; v_level:=(p_values->>'level')::int; v_name:=nullif(btrim(p_values->>'name'),'');
+  v_module:=(p_values->>'module')::public.listing_module; v_level:=(p_values->>'level')::int; v_name:=nullif(btrim(p_values->>'name'),'');
   v_slug:=lower(nullif(btrim(p_values->>'slug'),'')); v_parent_id:=nullif(p_values->>'parent_id','')::uuid; v_status:=coalesce(p_values->>'status','active');
-  if v_module not in ('rental','job','service') or v_level not in (1,2,3) or v_name is null or v_slug is null or v_status not in ('active','inactive') then raise exception using errcode='22023',message='Invalid category values'; end if;
+  if v_module::text not in ('rental','job','service') or v_level not in (1,2,3) or v_name is null or v_slug is null or v_status not in ('active','inactive') then raise exception using errcode='22023',message='Invalid category values'; end if;
   if v_slug !~ '^[a-z0-9]+(?:-[a-z0-9]+)*$' then raise exception using errcode='22023',message='Slug must contain lowercase letters, numbers, and single hyphens only'; end if;
   if v_level=1 and v_parent_id is not null then raise exception using errcode='22023',message='Main categories cannot have a parent'; end if;
   if v_level>1 then select * into v_parent from public.categories where id=v_parent_id; if not found then raise exception using errcode='22023',message='Parent category not found'; end if; if v_parent.module<>v_module then raise exception using errcode='22023',message='Cross-module parents are not allowed'; end if; if v_parent.level<>v_level-1 then raise exception using errcode='22023',message='Parent must be exactly one level above'; end if; end if;

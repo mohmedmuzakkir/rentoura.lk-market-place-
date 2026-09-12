@@ -432,13 +432,18 @@ export default function App() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  const navigateDirect = (route: AppRoute) => {
+  const navigateDirect = (fullRoute: string) => {
+    const [path] = fullRoute.split('?');
+    const route = path as AppRoute;
+    
     if (currentRoute !== route && !['/rental-detail', '/job-detail', '/service-detail'].includes(currentRoute) && !currentRoute.startsWith('/rentals/') && !currentRoute.startsWith('/jobs/') && !currentRoute.startsWith('/services/')) {
       setPreviousRoute(currentRoute);
     }
     setCurrentRoute(route);
-    if (window.location.pathname !== route) {
-      window.history.pushState({}, '', route);
+    
+    const currentUrl = window.location.pathname + window.location.search;
+    if (currentUrl !== fullRoute) {
+      window.history.pushState({}, '', fullRoute);
     }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -468,15 +473,18 @@ export default function App() {
     void pending.execute();
   };
 
-  const handleNavigate = (route: AppRoute) => {
+  const handleNavigate = (fullRoute: string) => {
+    const [basePath] = fullRoute.split('?');
+    const route = basePath as AppRoute;
+    
     if (route === '/my-listings' && currentRoute !== '/my-listings') {
       setMyListingsInitialModule('all');
     }
     if (route === '/post' || route === '/post/rental' || route === '/post/job' || route === '/post/service') {
-      requestProtectedAction({ type: 'post', returnRoute: route, execute: () => navigateDirect(route) });
+      requestProtectedAction({ type: 'post', returnRoute: fullRoute as AppRoute, execute: () => navigateDirect(fullRoute) });
       return;
     }
-    navigateDirect(route);
+    navigateDirect(fullRoute);
   };
 
   const handleOpenMyServices = () => {
@@ -621,7 +629,9 @@ export default function App() {
     let targetOwnerId = listingInfo.ownerId;
     if (!targetOwnerId) {
       const detail = await ListingDetailService.getListingDetail(listingInfo.id, listingInfo.module);
-      if ((detail as any)?.owner?.id) {
+      if (detail && 'ownerId' in detail && typeof detail.ownerId === 'string') {
+        targetOwnerId = detail.ownerId;
+      } else if ((detail as any)?.owner?.id) {
         targetOwnerId = (detail as any).owner.id;
       }
     }
@@ -1058,45 +1068,54 @@ export default function App() {
             userListings={userListings}
           />
         );
-      case '/post/rental':
+      case '/post/rental': {
+        const editId = new URLSearchParams(window.location.search).get('edit') || undefined;
         if (!userProfile) {
           return <LoginPage onNavigate={handleNavigate} returnUrl="/post/rental" />;
         }
         return (
           <PostFlowContainer
             module="rentals"
+            editListingId={editId}
             onNavigate={handleNavigate}
             onListingCreated={() => {
               void ProfileService.fetchUserListings(userProfile.id).then(setUserListings);
             }}
           />
         );
-      case '/post/job':
+      }
+      case '/post/job': {
+        const editId = new URLSearchParams(window.location.search).get('edit') || undefined;
         if (!userProfile) {
           return <LoginPage onNavigate={handleNavigate} returnUrl="/post/job" />;
         }
         return (
           <PostFlowContainer
             module="jobs"
+            editListingId={editId}
             onNavigate={handleNavigate}
             onListingCreated={() => {
               void ProfileService.fetchUserListings(userProfile.id).then(setUserListings);
             }}
           />
         );
-      case '/post/service':
+      }
+      case '/post/service': {
+        const editId = new URLSearchParams(window.location.search).get('edit') || undefined;
         if (!userProfile) {
           return <LoginPage onNavigate={handleNavigate} returnUrl="/post/service" />;
         }
         return (
           <PostFlowContainer
             module="services"
+            editListingId={editId}
             onNavigate={handleNavigate}
             onListingCreated={() => {
               void ProfileService.fetchUserListings(userProfile.id).then(setUserListings);
             }}
           />
         );
+      }
       case '/messages':
         return (
           <MessagesPage
@@ -1158,6 +1177,7 @@ export default function App() {
             onNavigate={handleNavigate}
             onOpenListingDetail={handleOpenListingDetail}
             onDeleteListing={handleDeleteUserListing}
+            onUpdateListing={handleUpdateUserListing}
             onLogout={handleLogout}
           />
         );

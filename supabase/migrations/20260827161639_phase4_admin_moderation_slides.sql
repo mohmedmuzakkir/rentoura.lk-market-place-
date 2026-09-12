@@ -130,13 +130,13 @@ begin
  select * into v_actor from public.profiles where id=auth.uid();
  if not found or v_actor.account_status<>'active' or v_actor.role not in ('moderator','admin','super_admin') then raise exception using errcode='42501',message='Staff authorization required'; end if;
  select jsonb_build_object(
-  'total_listings',count(*) filter(where p_module is null or l.module=p_module),
-  'active_listings',count(*) filter(where l.status='active' and (p_module is null or l.module=p_module)),
-  'pending_listings',count(*) filter(where l.status='pending' and (p_module is null or l.module=p_module)),
-  'rejected_listings',count(*) filter(where l.status='rejected' and (p_module is null or l.module=p_module)),
+  'total_listings',count(*) filter(where p_module is null or l.module=p_module::public.listing_module),
+  'active_listings',count(*) filter(where l.status='active' and (p_module is null or l.module=p_module::public.listing_module)),
+  'pending_listings',count(*) filter(where l.status='pending' and (p_module is null or l.module=p_module::public.listing_module)),
+  'rejected_listings',count(*) filter(where l.status='rejected' and (p_module is null or l.module=p_module::public.listing_module)),
   'rentals_count',count(*) filter(where l.module='rental'),'jobs_count',count(*) filter(where l.module='job'),'services_count',count(*) filter(where l.module='service'),
-  'new_listings_7d',count(*) filter(where l.created_at>=now()-interval '7 days' and (p_module is null or l.module=p_module)),
-  'previous_listings_7d',count(*) filter(where l.created_at>=now()-interval '14 days' and l.created_at<now()-interval '7 days' and (p_module is null or l.module=p_module))) into v_result from public.listings l;
+  'new_listings_7d',count(*) filter(where l.created_at>=now()-interval '7 days' and (p_module is null or l.module=p_module::public.listing_module)),
+  'previous_listings_7d',count(*) filter(where l.created_at>=now()-interval '14 days' and l.created_at<now()-interval '7 days' and (p_module is null or l.module=p_module::public.listing_module))) into v_result from public.listings l;
  return v_result||jsonb_build_object(
   'total_users',(select count(*) from public.profiles),
   'new_users_7d',(select count(*) from public.profiles where created_at>=now()-interval '7 days'),

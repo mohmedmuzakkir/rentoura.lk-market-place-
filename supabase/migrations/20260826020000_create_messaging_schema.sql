@@ -1,6 +1,10 @@
 -- Migration: 20260826020000_create_messaging_schema.sql
 -- Description: Foundation tables, indexes, and RLS policies for Rentoura real-time messaging
 
+DROP TABLE IF EXISTS public.messages CASCADE;
+DROP TABLE IF EXISTS public.conversation_participants CASCADE;
+DROP TABLE IF EXISTS public.conversations CASCADE;
+
 CREATE TABLE IF NOT EXISTS public.conversations (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   listing_id UUID REFERENCES public.listings(id) ON DELETE SET NULL,

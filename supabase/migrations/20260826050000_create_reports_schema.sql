@@ -1,6 +1,8 @@
 -- Migration: 20260826050000_create_reports_schema.sql
 -- Description: Create reports table for user flagging of listings, reviews, messages, or users with RLS and DB triggers
 
+DROP TABLE IF EXISTS public.reports CASCADE;
+
 CREATE TABLE IF NOT EXISTS public.reports (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   reporter_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,

@@ -90,7 +90,7 @@ export class MessagingService {
         if (conv.listing_id) {
           const { data: listingRow } = await supabase
             .from('listings')
-            .select('id, title, module, price_amount, status')
+            .select('id, title, module, price, status')
             .eq('id', conv.listing_id)
             .maybeSingle();
 
@@ -124,7 +124,7 @@ export class MessagingService {
             listing = {
               id: listingRow.id,
               title: listingRow.status === 'active' ? listingRow.title : `${listingRow.title} (Unavailable)`,
-              price: listingRow.price_amount ? `LKR ${Number(listingRow.price_amount).toLocaleString()}` : 'Contact for Price',
+              price: listingRow.price ? `LKR ${Number(listingRow.price).toLocaleString()}` : 'Contact for Price',
               imageUrl: coverUrl,
               badge: moduleType === 'jobs' ? 'JOB' : (moduleType === 'services' ? 'SERVICE' : 'RENTAL'),
               badgeColor,
@@ -402,6 +402,49 @@ export class MessagingService {
     return () => {
       supabase.removeChannel(channel);
     };
+  }
+
+  /**
+   * Realtime subscription listener for typing indicator in a conversation
+   */
+  static subscribeToTyping(
+    conversationId: string,
+    currentUserId: string,
+    onTypingStatusChange: (isTyping: boolean) => void
+  ) {
+    const channel = supabase.channel(`typing_${conversationId}`);
+    
+    channel
+      .on('broadcast', { event: 'typing' }, (payload) => {
+        if (payload.payload?.userId !== currentUserId) {
+          onTypingStatusChange(!!payload.payload?.isTyping);
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }
+
+  /**
+   * Broadcast typing status for a conversation
+   */
+  static async broadcastTyping(conversationId: string, isTyping: boolean) {
+    try {
+      const { data: authData } = await supabase.auth.getUser();
+      const currentUserId = authData?.user?.id;
+      if (!currentUserId) return;
+
+      const channel = supabase.channel(`typing_${conversationId}`);
+      await channel.send({
+        type: 'broadcast',
+        event: 'typing',
+        payload: { userId: currentUserId, isTyping }
+      });
+    } catch (err) {
+      // Ignore broadcast errors
+    }
   }
 
   /**

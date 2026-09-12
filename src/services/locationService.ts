@@ -21,6 +21,8 @@ export interface LocationRecord {
   sort_order: number;
   created_at?: string;
   updated_at?: string;
+  is_featured_popular?: boolean;
+  image_url?: string | null;
 }
 
 export interface LocationValueModel {
@@ -58,6 +60,8 @@ export interface CanonicalLocation {
   name_ta?: string;
   status: LocationStatus;
   sortOrder: number;
+  isFeaturedPopular?: boolean;
+  imageUrl?: string | null;
   createdAt: string;
   updatedAt: string;
   districtsCount?: number;
@@ -88,6 +92,8 @@ export interface AddLocationPayload {
   latitude?: number;
   longitude?: number;
   status?: LocationStatus;
+  is_featured_popular?: boolean;
+  image_url?: string | null;
 }
 
 // Coordinates for Map representation
@@ -199,6 +205,8 @@ export class LocationService {
       name_ta: rec.name_ta || undefined,
       status: rec.status === 'inactive' ? 'inactive' : 'active',
       sortOrder: rec.sort_order || 0,
+      isFeaturedPopular: rec.is_featured_popular || false,
+      imageUrl: rec.image_url || undefined,
       createdAt: rec.created_at || new Date().toISOString(),
       updatedAt: rec.updated_at || new Date().toISOString(),
       districtsCount,
@@ -507,8 +515,25 @@ export class LocationService {
     if (error) return { success: false, message: error.message };
     this.invalidateCache(); await this.loadLocationsFromDB(true); return { success: true, message: 'Location saved successfully' };
   }
+
+  /**
+   * Upload location image to location-images bucket
+   */
+  static async uploadLocationImage(file: File, locationId: string): Promise<{ success: boolean; url?: string; message?: string }> {
+    try {
+      const ext = file.name.split('.').pop();
+      const path = `${locationId}-${Date.now()}.${ext}`;
+      const { data, error } = await supabase.storage.from('location-images').upload(path, file, { upsert: true });
+      if (error) throw error;
+      
+      const { data: publicData } = supabase.storage.from('location-images').getPublicUrl(path);
+      return { success: true, url: publicData.publicUrl };
+    } catch (e: any) {
+      return { success: false, message: e.message };
+    }
+  }
   static async addLocation(payload: AddLocationPayload): Promise<{ success: boolean; location?: CanonicalLocation; message: string }> {
-    const result = await this.mutate('create', null, { type: payload.type, name: payload.name.trim(), code: this.slugify(payload.code || payload.name), parent_id: payload.parentId || null, postal_code: payload.postalCode || null, name_si: payload.name_si || null, name_ta: payload.name_ta || null, latitude: payload.latitude ?? null, longitude: payload.longitude ?? null, status: payload.status || 'active', reason: 'Location created' });
+    const result = await this.mutate('create', null, { type: payload.type, name: payload.name.trim(), code: this.slugify(payload.code || payload.name), parent_id: payload.parentId || null, postal_code: payload.postalCode || null, name_si: payload.name_si || null, name_ta: payload.name_ta || null, latitude: payload.latitude ?? null, longitude: payload.longitude ?? null, status: payload.status || 'active', is_featured_popular: payload.is_featured_popular || false, image_url: payload.image_url || null, reason: 'Location created' });
     return result;
   }
 
@@ -524,6 +549,8 @@ export class LocationService {
     if (payload.parentId !== undefined) values.parent_id = payload.parentId || null; if (payload.postalCode !== undefined) values.postal_code = payload.postalCode || null;
     if (payload.name_si !== undefined) values.name_si = payload.name_si || null; if (payload.name_ta !== undefined) values.name_ta = payload.name_ta || null;
     if (payload.latitude !== undefined) values.latitude = payload.latitude; if (payload.longitude !== undefined) values.longitude = payload.longitude; if (payload.status !== undefined) values.status = payload.status;
+    if (payload.is_featured_popular !== undefined) values.is_featured_popular = payload.is_featured_popular;
+    if (payload.image_url !== undefined) values.image_url = payload.image_url;
     return this.mutate('update', id, values);
   }
 

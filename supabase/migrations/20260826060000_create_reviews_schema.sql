@@ -1,6 +1,8 @@
 -- Migration: Create reviews schema for RENTOURA.LK
 -- File: supabase/migrations/20260826060000_create_reviews_schema.sql
 
+DROP TABLE IF EXISTS public.reviews CASCADE;
+
 CREATE TABLE IF NOT EXISTS public.reviews (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   listing_id UUID NOT NULL REFERENCES public.listings(id) ON DELETE CASCADE,
@@ -46,7 +48,7 @@ CREATE POLICY "Users can delete own review" ON public.reviews
 
 DROP POLICY IF EXISTS "Listing owners can update reply on reviews" ON public.reviews;
 CREATE POLICY "Listing owners can update reply on reviews" ON public.reviews
-  FOR UPDATE USING (EXISTS (SELECT 1 FROM public.listings l WHERE l.id = reviews.listing_id AND l.user_id = auth.uid()));
+  FOR UPDATE USING (EXISTS (SELECT 1 FROM public.listings l WHERE l.id = reviews.listing_id AND l.owner_id = auth.uid()));
 
 -- Grants
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.reviews TO anon, authenticated, service_role;

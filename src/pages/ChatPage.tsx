@@ -1,18 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  ArrowLeft, 
-  Search, 
-  Bell, 
-  MoreVertical, 
-  Phone, 
-  ShieldCheck, 
-  MapPin, 
-  ChevronRight, 
-  Plus, 
-  Smile, 
-  Mic, 
-  Send, 
-  CheckCheck, 
+import {
+  ArrowLeft,
+  Search,
+  Bell,
+  MoreVertical,
+  Phone,
+  ShieldCheck,
+  MapPin,
+  ChevronRight,
+  Plus,
+  Smile,
+  Mic,
+  Send,
+  CheckCheck,
   ExternalLink,
   ShieldAlert,
   Info,
@@ -65,18 +65,30 @@ export const ChatPage: React.FC<ChatPageProps> = ({
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isTyping, setIsTyping] = useState(false);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Real-time subscription to message updates
+  // Real-time subscription to message updates and typing indicator
   useEffect(() => {
     if (conversation?.id) {
-      const unsub = MessagingService.subscribeToMessages(conversation.id, () => {
+      const unsubMessages = MessagingService.subscribeToMessages(conversation.id, () => {
         onRefreshMessages?.();
       });
+
+      const unsubTyping = MessagingService.subscribeToTyping(
+        conversation.id,
+        userProfile?.id || '',
+        (typingStatus) => {
+          setIsTyping(typingStatus);
+        }
+      );
+
       return () => {
-        unsub();
+        unsubMessages();
+        unsubTyping();
       };
     }
-  }, [conversation?.id, onRefreshMessages]);
+  }, [conversation?.id, onRefreshMessages, userProfile?.id]);
 
   // Auto scroll to bottom of messages
   const scrollToBottom = () => {
@@ -85,7 +97,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({
 
   useEffect(() => {
     scrollToBottom();
-  }, [conversation.messages]);
+  }, [conversation.messages, isTyping]);
 
   const handleSend = () => {
     if (!inputText.trim()) return;
@@ -104,16 +116,16 @@ export const ChatPage: React.FC<ChatPageProps> = ({
           const lat = pos.coords.latitude.toFixed(4);
           const lng = pos.coords.longitude.toFixed(4);
           onSendMessage(
-            conversation.id, 
-            `📍 Shared Location: https://maps.google.com/?q=${lat},${lng}`, 
+            conversation.id,
+            `📍Location: https://maps.google.com/?q=${lat},${lng}`,
             'location'
           );
         },
         () => {
           if (conversation.listing.location && conversation.listing.location !== 'Sri Lanka') {
             onSendMessage(
-              conversation.id, 
-              `📍 Location regarding listing: ${conversation.listing.location}`, 
+              conversation.id,
+              `📍 Location regarding listing: ${conversation.listing.location}`,
               'location'
             );
           } else {
@@ -126,8 +138,8 @@ export const ChatPage: React.FC<ChatPageProps> = ({
       );
     } else if (conversation.listing.location) {
       onSendMessage(
-        conversation.id, 
-        `📍 Location regarding listing: ${conversation.listing.location}`, 
+        conversation.id,
+        `📍 Location regarding listing: ${conversation.listing.location}`,
         'location'
       );
     }
@@ -140,8 +152,8 @@ export const ChatPage: React.FC<ChatPageProps> = ({
       return;
     }
     onSendMessage(
-      conversation.id, 
-      `📞 Contact Number: ${phoneToShare}`, 
+      conversation.id,
+      `📞 Contact Number: ${phoneToShare}`,
       'contact'
     );
     setShowShareContactModal(false);
@@ -332,17 +344,17 @@ export const ChatPage: React.FC<ChatPageProps> = ({
                 <img
                   src={conversation.listing.imageUrl}
                   alt={conversation.listing.title}
-                  className="w-13 h-13 rounded-lg object-cover shrink-0 border border-white/20"
+                  className="w-12 h-12 rounded-lg object-cover shrink-0 border border-white/20"
                 />
               ) : (
-                <div className="w-13 h-13 rounded-lg bg-white/10 flex items-center justify-center shrink-0 text-white font-bold text-xs">
+                <div className="w-12 h-12 rounded-lg bg-white/10 flex items-center justify-center shrink-0 text-white font-bold text-xs">
                   {conversation.listing.badge}
                 </div>
               )}
 
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5">
-                  <span 
+                  <span
                     className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase text-white tracking-wide"
                     style={{ backgroundColor: conversation.listing.badgeColor || '#1464F4' }}
                   >
@@ -371,11 +383,10 @@ export const ChatPage: React.FC<ChatPageProps> = ({
           <div className="flex items-center gap-2 pt-1 border-t border-white/10 text-xs font-bold">
             <button
               onClick={() => setActiveTab('chat')}
-              className={`pb-1 px-1 transition-all ${
-                activeTab === 'chat'
+              className={`pb-1 px-1 transition-all ${activeTab === 'chat'
                   ? 'text-white border-b-2 border-[#00D2FF]'
                   : 'text-white/60 hover:text-white'
-              }`}
+                }`}
             >
               Chat
             </button>
@@ -447,11 +458,10 @@ export const ChatPage: React.FC<ChatPageProps> = ({
                   )}
 
                   <div
-                    className={`max-w-[82%] sm:max-w-[70%] rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed shadow-2xs ${
-                      isMe
+                    className={`max-w-[82%] sm:max-w-[70%] rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed shadow-2xs ${isMe
                         ? 'bg-[#EBF2FE] border border-[#1464F4]/20 text-slate-900 rounded-br-xs'
                         : 'bg-slate-100/90 border border-slate-200/70 text-slate-900 rounded-bl-xs'
-                    }`}
+                      }`}
                   >
                     {isImageMsg ? (
                       <div className="mt-0.5 space-y-1">
@@ -464,12 +474,11 @@ export const ChatPage: React.FC<ChatPageProps> = ({
                         <span className="text-[10px] text-slate-500 block italic">Click image to view full resolution</span>
                       </div>
                     ) : (
-                      <p className="whitespace-pre-wrap font-medium">{msg.text}</p>
+                      <p className="whitespace-pre-wrap break-words font-medium overflow-hidden">{msg.text}</p>
                     )}
                     <div
-                      className={`flex items-center gap-1 text-[9.5px] mt-1 ${
-                        isMe ? 'justify-end text-[#1464F4]/80' : 'text-slate-400'
-                      }`}
+                      className={`flex items-center gap-1 text-[9.5px] mt-1 ${isMe ? 'justify-end text-[#1464F4]/80' : 'text-slate-400'
+                        }`}
                     >
                       <span>{msg.time}</span>
                       {isMe && <CheckCheck className="w-3.5 h-3.5 text-[#1464F4]" />}
@@ -478,6 +487,31 @@ export const ChatPage: React.FC<ChatPageProps> = ({
                 </div>
               );
             })}
+            
+            {/* Typing Indicator */}
+            {isTyping && (
+              <div className="flex items-end gap-2 justify-start mt-2">
+                <div className="shrink-0 mb-1">
+                  {conversation.participant.avatarUrl ? (
+                    <img
+                      src={conversation.participant.avatarUrl}
+                      alt={conversation.participant.name}
+                      className="w-7 h-7 rounded-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-7 h-7 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-[10px]">
+                      {conversation.participant.avatarInitials || conversation.participant.name.charAt(0)}
+                    </div>
+                  )}
+                </div>
+                <div className="bg-slate-100/90 border border-slate-200/70 rounded-2xl rounded-bl-xs px-3.5 py-2 flex items-center gap-1.5 h-8">
+                  <div className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <div className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <div className="w-1.5 h-1.5 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+                </div>
+              </div>
+            )}
+
             <div ref={messagesEndRef} />
           </div>
 
@@ -568,18 +602,33 @@ export const ChatPage: React.FC<ChatPageProps> = ({
 
           {/* Text Input */}
           <div className="flex-1 relative flex items-center">
-            <input
-              type="text"
+            <textarea
               value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
+              onChange={(e) => {
+                setInputText(e.target.value);
+                
+                // Typing broadcast logic
+                MessagingService.broadcastTyping(conversation.id, true);
+                if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+                typingTimeoutRef.current = setTimeout(() => {
+                  MessagingService.broadcastTyping(conversation.id, false);
+                }, 2000);
+              }}
               onKeyDown={handleKeyDown}
+              onInput={(e) => {
+                const target = e.target as HTMLTextAreaElement;
+                target.style.height = 'auto';
+                target.style.height = `${Math.min(target.scrollHeight, 120)}px`;
+              }}
               placeholder={isUploadingImage ? "Uploading image..." : "Type a message..."}
               disabled={isUploadingImage}
-              className="w-full pl-3.5 pr-10 py-2.5 bg-slate-100 rounded-xl text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#1464F4]/30 border border-slate-200 disabled:opacity-60"
+              rows={1}
+              className="w-full pl-3.5 pr-10 py-2.5 bg-slate-100 rounded-xl text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#1464F4]/30 border border-slate-200 disabled:opacity-60 resize-none no-scrollbar leading-relaxed"
+              style={{ minHeight: '42px', maxHeight: '120px' }}
             />
             <button
               onClick={() => setInputText(prev => prev + ' 😊')}
-              className="absolute right-2.5 text-slate-400 hover:text-slate-600 p-1"
+              className="absolute right-2.5 bottom-2.5 text-slate-400 hover:text-slate-600 p-1"
               aria-label="Add emoji"
             >
               <Smile className="w-4 h-4" />

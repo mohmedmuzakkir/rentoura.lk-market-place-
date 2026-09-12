@@ -22,6 +22,7 @@ interface ProfileOverviewPageProps {
   onNavigate: (route: AppRoute) => void;
   onOpenListingDetail?: (listingId: string, module: 'rentals' | 'jobs' | 'services') => void;
   onDeleteListing?: (listingId: string) => void;
+  onUpdateListing?: (listing: UserListingItem) => void;
   onLogout?: () => void;
 }
 
@@ -36,6 +37,7 @@ export const ProfileOverviewPage: React.FC<ProfileOverviewPageProps> = ({
   onNavigate,
   onOpenListingDetail,
   onDeleteListing,
+  onUpdateListing,
   onLogout
 }) => {
   const [activeModal, setActiveModal] = useState<string | null>(null);

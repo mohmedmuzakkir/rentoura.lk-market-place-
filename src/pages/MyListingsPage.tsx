@@ -11,7 +11,6 @@ import { MyListingCard } from '../components/my-listings/MyListingCard';
 import { DeleteListingDialog } from '../components/my-listings/DeleteListingDialog';
 import { ListingStatusModal } from '../components/my-listings/ListingStatusModal';
 import { ListingFilterModal, MyListingsFilterOptions } from '../components/my-listings/ListingFilterModal';
-import { QuickEditListingModal } from '../components/my-listings/QuickEditListingModal';
 import { EmptyMyListingsState } from '../components/my-listings/EmptyMyListingsState';
 
 interface MyListingsPageProps {
@@ -48,7 +47,6 @@ export const MyListingsPage: React.FC<MyListingsPageProps> = ({
   // Modal States
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
   const [statusModalListing, setStatusModalListing] = useState<UserListingItem | null>(null);
-  const [editModalListing, setEditModalListing] = useState<UserListingItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
   const [boostListing, setBoostListing] = useState<UserListingItem | null>(null);
 
@@ -152,13 +150,8 @@ export const MyListingsPage: React.FC<MyListingsPageProps> = ({
     }
   };
 
-  const handleSaveListingEdits = (updated: UserListingItem) => {
-    onUpdateListing(updated);
-    if (updated.status === 'pending') {
-      showToast('Listing resubmitted for review');
-    } else {
-      showToast('Listing updated successfully');
-    }
+  const handleEditListing = (listing: UserListingItem) => {
+    onNavigate(`/post/${listing.module === 'rentals' ? 'rental' : listing.module === 'jobs' ? 'job' : 'service'}?edit=${listing.id}`);
   };
 
   const handleClearAllFilters = () => {
@@ -232,7 +225,7 @@ export const MyListingsPage: React.FC<MyListingsPageProps> = ({
                 key={listing.id}
                 listing={listing}
                 onView={(id, mod) => onOpenListingDetail(id, mod)}
-                onEdit={(item) => setEditModalListing(item)}
+                onEdit={(item) => handleEditListing(item)}
                 onDelete={(id, title) => setDeleteTarget({ id, title })}
                 onViewStatusModal={(item) => setStatusModalListing(item)}
                 onTogglePause={handleTogglePause}
@@ -286,7 +279,7 @@ export const MyListingsPage: React.FC<MyListingsPageProps> = ({
         onClose={() => setStatusModalListing(null)}
         onEditAndResubmit={(item) => {
           setStatusModalListing(null);
-          setEditModalListing(item);
+          handleEditListing(item);
         }}
       />
 
@@ -305,14 +298,6 @@ export const MyListingsPage: React.FC<MyListingsPageProps> = ({
           setLocationFilter(newFilters.location);
         }}
         onReset={handleClearAllFilters}
-      />
-
-      {/* Quick Edit Listing Modal */}
-      <QuickEditListingModal
-        isOpen={!!editModalListing}
-        listing={editModalListing}
-        onClose={() => setEditModalListing(null)}
-        onSave={handleSaveListingEdits}
       />
 
       {/* Boost Informational Modal */}

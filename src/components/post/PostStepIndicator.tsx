@@ -14,6 +14,7 @@ interface PostStepIndicatorProps {
   steps?: StepItem[];
   onSelectStep?: (step: number) => void;
   accentColor?: string;
+  isEditMode?: boolean;
 }
 
 export const PostStepIndicator: React.FC<PostStepIndicatorProps> = ({
@@ -21,7 +22,8 @@ export const PostStepIndicator: React.FC<PostStepIndicatorProps> = ({
   totalSteps,
   steps: customSteps,
   onSelectStep,
-  accentColor = '#1464F4'
+  accentColor = '#1464F4',
+  isEditMode = false
 }) => {
   // Default 7-step sequence for rentals or custom
   const defaultRentalSteps: StepItem[] = [
@@ -76,7 +78,7 @@ export const PostStepIndicator: React.FC<PostStepIndicatorProps> = ({
       <div className="max-w-xl mx-auto px-2 pb-2.5 overflow-x-auto scrollbar-none">
         <div className="flex items-center justify-between min-w-[320px] sm:min-w-0 px-2 pt-1 gap-1">
           {steps.map((step) => {
-            const isCompleted = step.number < currentStep;
+            const isCompleted = step.number < currentStep || (isEditMode && step.number !== currentStep);
             const isCurrent = step.number === currentStep;
             const Icon = step.icon || Layers;
 
@@ -85,14 +87,14 @@ export const PostStepIndicator: React.FC<PostStepIndicatorProps> = ({
                 key={step.number}
                 type="button"
                 onClick={() => {
-                  if (isCompleted && onSelectStep) {
+                  if ((isCompleted || isEditMode) && onSelectStep) {
                     onSelectStep(step.number);
                   }
                 }}
                 disabled={!isCompleted && !isCurrent}
                 title={`Step ${step.number}: ${step.label}`}
                 className={`flex-1 flex flex-col items-center group relative transition-all ${
-                  isCompleted ? 'cursor-pointer' : 'cursor-default'
+                  isCompleted || isCurrent ? 'cursor-pointer' : 'cursor-default'
                 }`}
               >
                 <div

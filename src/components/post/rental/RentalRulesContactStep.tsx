@@ -39,7 +39,7 @@ export const RentalRulesContactStep: React.FC<RentalRulesContactStepProps> = ({
     onChangeContact({
       ...contactPreferences,
       phone: val,
-      whatsappNumber: contactPreferences.showWhatsApp ? (contactPreferences.whatsappNumber || val) : contactPreferences.whatsappNumber
+      whatsappNumber: contactPreferences.showWhatsApp ? val : contactPreferences.whatsappNumber
     });
   };
 
@@ -125,7 +125,14 @@ export const RentalRulesContactStep: React.FC<RentalRulesContactStepProps> = ({
             <input
               type="checkbox"
               checked={contactPreferences.showWhatsApp}
-              onChange={(e) => onChangeContact({ ...contactPreferences, showWhatsApp: e.target.checked })}
+              onChange={(e) => {
+                const isChecked = e.target.checked;
+                onChangeContact({ 
+                  ...contactPreferences, 
+                  showWhatsApp: isChecked,
+                  whatsappNumber: isChecked ? (contactPreferences.whatsappNumber || contactPreferences.phone) : contactPreferences.whatsappNumber
+                });
+              }}
               className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300"
             />
           </label>

@@ -52,11 +52,15 @@ export const JobApplicationStep: React.FC<JobApplicationStepProps> = ({
     });
   };
 
-  const updateContactPrefs = (partialPrefs: Partial<typeof contactPrefs>) => {
+  const updateContactPrefs = (updates: Partial<typeof contactPrefs>) => {
+    const finalUpdates = { ...updates };
+    if (updates.phone !== undefined) {
+      finalUpdates.whatsappNumber = updates.phone;
+    }
     onChange({
       contactPreferences: {
         ...contactPrefs,
-        ...partialPrefs
+        ...finalUpdates
       }
     });
   };

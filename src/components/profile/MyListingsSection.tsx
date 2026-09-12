@@ -246,7 +246,7 @@ export const MyListingsSection: React.FC<MyListingsSectionProps> = ({
                             <button
                               onClick={() => {
                                 setOpenMenuId(null);
-                                onNavigate('/post');
+                                onNavigate(`/post/${item.module === 'rentals' ? 'rental' : item.module === 'jobs' ? 'job' : 'service'}?edit=${item.id}`);
                               }}
                               className="w-full px-3 py-1.5 text-left text-xs font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2"
                             >

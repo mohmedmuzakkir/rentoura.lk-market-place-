@@ -15,6 +15,7 @@ ON CONFLICT (id) DO UPDATE SET
   allowed_mime_types = ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf'];
 
 -- Security policies for chat-attachments bucket
+DROP POLICY IF EXISTS "Authenticated users can upload chat attachments" ON storage.objects;
 CREATE POLICY "Authenticated users can upload chat attachments"
   ON storage.objects FOR INSERT
   TO authenticated
@@ -23,6 +24,7 @@ CREATE POLICY "Authenticated users can upload chat attachments"
     auth.uid() IS NOT NULL
   );
 
+DROP POLICY IF EXISTS "Participants can view chat attachments" ON storage.objects;
 CREATE POLICY "Participants can view chat attachments"
   ON storage.objects FOR SELECT
   TO authenticated

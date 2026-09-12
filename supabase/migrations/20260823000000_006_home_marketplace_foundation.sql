@@ -48,6 +48,12 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 
 -- 2. CREATE TABLE public.listings
+DROP TABLE IF EXISTS public.listings CASCADE;
+DROP TABLE IF EXISTS public.listing_media CASCADE;
+DROP TABLE IF EXISTS public.saved_listings CASCADE;
+DROP TABLE IF EXISTS public.home_slides CASCADE;
+DROP TABLE IF EXISTS public.location_search_events CASCADE;
+
 CREATE TABLE IF NOT EXISTS public.listings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   owner_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,

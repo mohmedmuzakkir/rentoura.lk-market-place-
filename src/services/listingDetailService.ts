@@ -7,6 +7,9 @@ import {
 } from '../types/listingDetailsTypes';
 import { ProfileService } from './profileService';
 
+const detailCache = new Map<string, { timestamp: number; data: AnyListingDetail }>();
+const CACHE_TTL_MS = 1000 * 60 * 5; // 5 minutes cache
+
 export class ListingDetailService {
   /**
    * Fetches full listing detail by UUID from Supabase.
@@ -14,119 +17,118 @@ export class ListingDetailService {
    */
   static async getListingDetail(
     id: string, 
-    moduleHint?: 'rentals' | 'jobs' | 'services'
+    moduleHint?: 'rentals' | 'jobs' | 'services',
+    forceRefresh: boolean = false
   ): Promise<AnyListingDetail | null> {
     if (!id || typeof id !== 'string') {
       return null;
     }
 
-    // Query Supabase listings. Anonymous callers are explicitly limited to active rows;
-    // authenticated owner/staff visibility remains governed by RLS.
+    if (!forceRefresh) {
+      const cached = detailCache.get(id);
+      if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+        return cached.data;
+      }
+    }
+
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      let listingQuery = supabase
-        .from('listings')
-        .select('*')
-        .eq('id', id);
-      if (!user) listingQuery = listingQuery.eq('status', 'active');
-      const { data: listingRow, error: listingErr } = await listingQuery.maybeSingle();
+      // 1. Fetch user, listing row, and media in parallel for maximum speed!
+      const [userRes, listingRes, mediaRes] = await Promise.all([
+        supabase.auth.getUser(),
+        supabase.from('listings').select('*').eq('id', id).maybeSingle(),
+        supabase.from('listing_media')
+          .select('id, storage_path, position, is_cover, media_type')
+          .eq('listing_id', id)
+          .order('is_cover', { ascending: false })
+          .order('position', { ascending: true })
+      ]);
+
+      const user = userRes.data?.user;
+      const listingRow = listingRes.data;
+      const listingErr = listingRes.error;
+      const mediaRows = mediaRes.data;
 
       if (listingErr || !listingRow) {
         console.warn(`Listing ${id} not found in Supabase:`, listingErr?.message);
         return null;
       }
 
-      // 3. Query listing_media with correct column 'position' and 'is_cover'
-      const { data: mediaRows, error: mediaErr } = await supabase
-        .from('listing_media')
-        .select('id, storage_path, position, is_cover, media_type')
-        .eq('listing_id', id)
-        .order('is_cover', { ascending: false })
-        .order('position', { ascending: true });
+      // RLS handles visibility (active only for public, all for owners/staff)
 
-      if (mediaErr) {
-        console.warn(`[ListingDetailService] Error fetching media for ${id}:`, mediaErr.message);
+      // 3. Parallelize subsequent queries to dramatically improve load times
+      const locIds = [listingRow.city_id, listingRow.district_id, listingRow.province_id].filter(Boolean);
+
+      const [locRes, catRes, profRes] = await Promise.all([
+        locIds.length > 0 
+          ? supabase.from('locations').select('id, name').in('id', locIds)
+          : Promise.resolve({ data: [] }),
+        listingRow.category_id 
+          ? supabase.from('categories').select('id, name, parent_id').eq('id', listingRow.category_id).maybeSingle()
+          : Promise.resolve({ data: null }),
+        listingRow.owner_id 
+          ? supabase.from('profiles').select('id, full_name, phone_normalized, avatar_url, created_at').eq('id', listingRow.owner_id).maybeSingle()
+          : Promise.resolve({ data: null })
+      ]);
+
+      if (mediaRes.error) {
+        console.warn(`[ListingDetailService] Error fetching media for ${id}:`, mediaRes.error.message);
       }
 
-      // Format image URLs using signed URLs for private 'listing-images' bucket
+      // Format image URLs concurrently
       const images: string[] = [];
       if (mediaRows && mediaRows.length > 0) {
-        for (const m of mediaRows) {
-          if (!m.storage_path) continue;
+        const urlPromises = mediaRows.map(async (m) => {
+          if (!m.storage_path) return null;
           if (m.storage_path.startsWith('http://') || m.storage_path.startsWith('https://')) {
-            images.push(m.storage_path);
-          } else {
-            const { data: signedData } = await supabase
-              .storage
-              .from('listing-images')
-              .createSignedUrl(m.storage_path, 3600);
-
-            if (signedData?.signedUrl) {
-              images.push(signedData.signedUrl);
-            }
+            return m.storage_path;
           }
-        }
+          const { data: signedData } = await supabase
+            .storage
+            .from('listing-images')
+            .createSignedUrl(m.storage_path, 3600);
+          return signedData?.signedUrl || null;
+        });
+        const resolvedUrls = await Promise.all(urlPromises);
+        resolvedUrls.forEach(url => {
+          if (url) images.push(url);
+        });
       }
 
-      // 4. Query Location details
+      // 4. Map Location details
       let locationCity = '';
       let locationDistrict = '';
       let locationProvince = '';
 
-      if (listingRow.city_id) {
-        const { data: locRow } = await supabase
-          .from('locations')
-          .select('name')
-          .eq('id', listingRow.city_id)
-          .maybeSingle();
-        if (locRow?.name) locationCity = locRow.name;
+      if (locRes.data) {
+        locRes.data.forEach(loc => {
+          if (loc.id === listingRow.city_id) locationCity = loc.name;
+          if (loc.id === listingRow.district_id) locationDistrict = loc.name;
+          if (loc.id === listingRow.province_id) locationProvince = loc.name;
+        });
       }
 
-      if (listingRow.district_id) {
-        const { data: distRow } = await supabase
-          .from('locations')
-          .select('name')
-          .eq('id', listingRow.district_id)
-          .maybeSingle();
-        if (distRow?.name) locationDistrict = distRow.name;
-      }
-
-      if (listingRow.province_id) {
-        const { data: provRow } = await supabase
-          .from('locations')
-          .select('name')
-          .eq('id', listingRow.province_id)
-          .maybeSingle();
-        if (provRow?.name) locationProvince = provRow.name;
-      }
-
-      // 5. Query Category details
+      // 5. Map Category details
       let categoryName = 'Rentals';
       let categoryPath = 'Rentals';
-      if (listingRow.category_id) {
-        const { data: catRow } = await supabase
-          .from('categories')
-          .select('id, name, parent_id')
-          .eq('id', listingRow.category_id)
-          .maybeSingle();
-
-        if (catRow?.name) {
-          categoryName = catRow.name;
-          categoryPath = catRow.name;
-          if (catRow.parent_id) {
-            const { data: parentCat } = await supabase
-              .from('categories')
-              .select('name')
-              .eq('id', catRow.parent_id)
-              .maybeSingle();
-            if (parentCat?.name) {
-              categoryPath = `${parentCat.name} > ${catRow.name}`;
-            }
+      const catRow = catRes.data;
+      
+      if (catRow?.name) {
+        categoryName = catRow.name;
+        categoryPath = catRow.name;
+        if (catRow.parent_id) {
+          const { data: parentCat } = await supabase
+            .from('categories')
+            .select('name')
+            .eq('id', catRow.parent_id)
+            .maybeSingle();
+          if (parentCat?.name) {
+            categoryPath = `${parentCat.name} > ${catRow.name}`;
           }
         }
       }
 
-      // 6. Query Owner Profile (truthful, only real fields)
+      // 6. Map Owner Profile
+      const profRow = profRes.data;
       let ownerInfo: {
         id: string;
         name: string;
@@ -135,29 +137,24 @@ export class ListingDetailService {
         memberSince?: string;
       } = {
         id: listingRow.owner_id || '',
-        name: 'Listing Owner'
+        name: profRow?.full_name || 'RENTOURA Member'
       };
 
-      if (listingRow.owner_id) {
-        const { data: profRow } = await supabase
-          .from('profiles')
-          .select('id, full_name, phone_normalized, avatar_url, created_at')
-          .eq('id', listingRow.owner_id)
-          .maybeSingle();
-
-        if (profRow) {
-          ownerInfo = {
-            id: profRow.id,
-            name: profRow.full_name || 'RENTOURA Member',
-            phone: profRow.phone_normalized || undefined,
-            photoUrl: profRow.avatar_url || undefined,
-            memberSince: profRow.created_at ? new Date(profRow.created_at).getFullYear().toString() : undefined
-          };
-        }
+      if (profRow) {
+        ownerInfo.phone = profRow.phone_normalized || undefined;
+        ownerInfo.photoUrl = profRow.avatar_url || undefined;
+        ownerInfo.memberSince = profRow.created_at ? new Date(profRow.created_at).getFullYear().toString() : undefined;
       }
 
       // 7. Parse module_data & attributes
-      const modData = (listingRow.module_data && typeof listingRow.module_data === 'object') ? listingRow.module_data : {};
+      let modData = (listingRow.module_data && typeof listingRow.module_data === 'object') ? 
+        { ...listingRow.module_data } : {};
+      
+      // Flatten form_values if it exists so properties like bedrooms, bathrooms are found
+      if (modData.form_values && typeof modData.form_values === 'object') {
+        modData = { ...modData.form_values, ...modData };
+      }
+
       const rawMod = (listingRow.module || moduleHint || 'rental').toLowerCase();
       const moduleType = rawMod.startsWith('job') ? 'jobs' : (rawMod.startsWith('serv') ? 'services' : 'rentals');
 
@@ -228,6 +225,11 @@ export class ListingDetailService {
             whatsapp: Boolean(realWhatsapp),
             phone: Boolean(realPhone),
             email: modData.contact_email || undefined
+          },
+          requiredAttachments: {
+            cv: Boolean(modData.form_values?.reqCv),
+            coverLetter: Boolean(modData.form_values?.reqCoverLetter),
+            portfolio: Boolean(modData.form_values?.reqPortfolio)
           },
           companyReviews: undefined,
           description: listingRow.description || '',
@@ -370,6 +372,7 @@ export class ListingDetailService {
         } as unknown as RentalListingDetail;
       }
 
+      detailCache.set(id, { timestamp: Date.now(), data: detailResult });
       return detailResult;
 
     } catch (e) {
@@ -379,6 +382,10 @@ export class ListingDetailService {
   }
 
   static clearCache(id?: string) {
-    void id;
+    if (id) {
+      detailCache.delete(id);
+    } else {
+      detailCache.clear();
+    }
   }
 }

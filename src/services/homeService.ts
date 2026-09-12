@@ -230,7 +230,8 @@ export class HomeService {
   static async getLatestListingsFeed(
     page: number = 1,
     limit: number = 16,
-    activeModule: string = 'all'
+    activeModule: string = 'all',
+    userId?: string
   ): Promise<{ items: FeedListingItem[]; totalCount: number; hasMore: boolean }> {
     try {
       let query = supabase
@@ -255,6 +256,10 @@ export class HomeService {
       if (activeModule !== 'all') {
         const targetModule = activeModule === 'rentals' ? 'rental' : (activeModule === 'jobs' ? 'job' : 'service');
         query = query.eq('module', targetModule);
+      }
+
+      if (userId) {
+        query = query.neq('owner_id', userId);
       }
 
       const fromIndex = (page - 1) * limit;
@@ -355,7 +360,16 @@ export class HomeService {
       const allCanonicals = await LocationService.getAllLocationsAsync(false);
       const topLocationsMap = new Map<string, { location: any; searchCount: number; listingCount: number }>();
 
-      // 1. Try calling get_popular_locations RPC
+      // 1. First, pull featured popular locations from the canonical dataset
+      allCanonicals.filter(c => c.isFeaturedPopular).forEach(match => {
+        topLocationsMap.set(match.id, {
+          location: match,
+          searchCount: 99999, // Artificially boost featured locations
+          listingCount: 0
+        });
+      });
+
+      // 2. Try calling get_popular_locations RPC
       const { data: rpcData, error: rpcErr } = await supabase.rpc('get_popular_locations');
 
       if (!rpcErr && Array.isArray(rpcData) && rpcData.length > 0) {
@@ -363,17 +377,23 @@ export class HomeService {
           const locUuid = item.id || item.location_id;
           const match = allCanonicals.find(c => c.id === locUuid || c.code === item.code);
           if (match) {
-            topLocationsMap.set(match.id, {
-              location: match,
-              searchCount: Number(item.search_count || item.total_searches || 0),
-              listingCount: Number(item.listing_count || item.active_listings || 0)
-            });
+            const existing = topLocationsMap.get(match.id);
+            if (existing) {
+              existing.searchCount += Number(item.search_count || item.total_searches || 0);
+              existing.listingCount += Number(item.listing_count || item.active_listings || 0);
+            } else {
+              topLocationsMap.set(match.id, {
+                location: match,
+                searchCount: Number(item.search_count || item.total_searches || 0),
+                listingCount: Number(item.listing_count || item.active_listings || 0)
+              });
+            }
           }
         });
       }
 
-      // If map has less than 5 locations, populate from active listings distribution
-      if (topLocationsMap.size < 5) {
+      // If map has less than 8 locations, populate from active listings distribution
+      if (topLocationsMap.size < 8) {
         const { data: listingLocs } = await supabase
           .from('listings')
           .select('city_id, district_id, province_id')
@@ -400,9 +420,9 @@ export class HomeService {
         }
       }
 
-      // If still fewer than 5, pick top active provinces/districts from canonical dataset
-      if (topLocationsMap.size < 5) {
-        const topProvinces = allCanonicals.filter(c => c.type === 'province').slice(0, 5);
+      // If still fewer than 8, pick top active provinces/districts from canonical dataset
+      if (topLocationsMap.size < 8) {
+        const topProvinces = allCanonicals.filter(c => c.type === 'province').slice(0, 8);
         topProvinces.forEach(p => {
           if (!topLocationsMap.has(p.id)) {
             topLocationsMap.set(p.id, {
@@ -418,7 +438,7 @@ export class HomeService {
         id: item.location.id,
         name: item.location.name,
         province: item.location.provinceName || item.location.parentName || 'Sri Lanka',
-        imageUrl: getLocationImage(item.location.name, item.location.provinceName || item.location.parentName),
+        imageUrl: item.location.imageUrl || getLocationImage(item.location.name, item.location.provinceName || item.location.parentName),
         listingsCount: `${item.listingCount} Ads`,
         searchCount: item.searchCount,
         listingCount: item.listingCount

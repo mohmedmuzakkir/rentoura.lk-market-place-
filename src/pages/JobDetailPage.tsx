@@ -192,7 +192,7 @@ export const JobDetailPage: React.FC<JobDetailPageProps> = ({
       </main>
 
       {/* Sticky Bottom Action Bar */}
-      <div className="fixed bottom-14 left-0 right-0 z-30 max-w-2xl mx-auto">
+      <div className="w-full max-w-2xl mx-auto mt-6 mb-20 px-4">
         <StickyActionBar
           module="jobs"
           phone={detail.contact?.phone}

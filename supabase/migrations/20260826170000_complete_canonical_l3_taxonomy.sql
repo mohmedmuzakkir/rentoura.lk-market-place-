@@ -1,7 +1,7 @@
 -- Generated from approved RENTOURA.LK taxonomy source data.
-create temp table category_main_sync(module text,name text,slug text,sort_order int,icon_key text,description text) on commit drop;
-create temp table category_sub_sync(module text,parent_slug text,name text,slug text,sort_order int,icon_key text,description text) on commit drop;
-create temp table category_l3_sync(module text,parent_slug text,name text,slug text,sort_order int,icon_key text,description text) on commit drop;
+create temp table category_main_sync(module listing_module,name text,slug text,sort_order int,icon_key text,description text) on commit drop;
+create temp table category_sub_sync(module listing_module,parent_slug text,name text,slug text,sort_order int,icon_key text,description text) on commit drop;
+create temp table category_l3_sync(module listing_module,parent_slug text,name text,slug text,sort_order int,icon_key text,description text) on commit drop;
 insert into category_main_sync values
 ('rental','Property Rentals','property-rentals',0,'🏠','Houses, apartments, commercial properties and land for rent'),
 ('rental','Rooms & Accommodation','rooms-accommodation',1,'🛏️','Rooms, boarding, student hostels & shared stays'),

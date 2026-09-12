@@ -143,6 +143,11 @@ export interface JobListingDetail {
     phone?: boolean;
     email?: string;
   };
+  requiredAttachments?: {
+    cv?: boolean;
+    coverLetter?: boolean;
+    portfolio?: boolean;
+  };
   companyReviews?: {
     rating: number;
     count: number;

@@ -1,5 +1,5 @@
 import { UserListingItem } from '../types/profileTypes';
-import { ListingDraft, normalizeNumericPrice } from '../types/postFormTypes';
+import { ListingDraft, normalizeNumericPrice, PostModule, LocationDataState, PendingUploadImage } from '../types/postFormTypes';
 import { MAX_LISTING_IMAGES, validateListingImage } from '../utils/pendingUploadImages';
 import { applyRentouraWatermark } from '../utils/imageWatermark';
 import { PostDraftService } from './postDraftService';
@@ -10,18 +10,128 @@ type SubmissionResult = { success: boolean; listing: UserListingItem; error?: st
 const failed = (error: string): SubmissionResult => ({ success: false, listing: {} as UserListingItem, error });
 
 export class ListingSubmissionService {
-  static async submitListing(draft: ListingDraft): Promise<SubmissionResult> {
+  static async fetchListingForEdit(listingId: string, module: PostModule): Promise<ListingDraft | null> {
+    try {
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError || !authData.user) return null;
+      const ownerId = authData.user.id;
+
+      const { data: listing, error } = await supabase
+        .from('listings')
+        .select(`
+          *,
+          category:category_id (name, slug),
+          subcategory:subcategory_id (name, slug),
+          third_level:third_level_category_id (name, slug),
+          listing_media (id, storage_path, media_type, position, is_cover)
+        `)
+        .eq('id', listingId)
+        .eq('owner_id', ownerId)
+        .single();
+
+      if (error || !listing) return null;
+
+      if (
+        (module === 'rentals' && listing.module !== 'rental') ||
+        (module === 'jobs' && listing.module !== 'job') ||
+        (module === 'services' && listing.module !== 'service')
+      ) return null;
+
+      const mediaFiles = await Promise.all((listing.listing_media || []).map(async (m: any) => {
+        const { data } = await supabase.storage.from('listing-images').createSignedUrl(m.storage_path, 3600);
+        return {
+          id: m.id,
+          file: null as any,
+          previewUrl: data?.signedUrl || supabase.storage.from('listing-images').getPublicUrl(m.storage_path).data.publicUrl,
+          name: m.storage_path.split('/').pop() || 'image.webp',
+          size: 0,
+          mimeType: 'image/webp',
+          isCover: m.is_cover,
+          position: m.position,
+          storagePath: m.storage_path
+        };
+      }));
+
+      const md = listing.module_data || {};
+      const fv = md.form_values || {};
+      const contactPrefs = md.contact_preferences || {
+        showPhone: true, phone: '', showWhatsApp: false, whatsappNumber: '', allowDirectChat: false
+      };
+
+      const location: LocationDataState = {
+        provinceId: listing.province_id,
+        districtId: listing.district_id,
+        cityId: listing.city_id,
+        areaId: listing.area_id,
+        address: listing.exact_address,
+        latitude: listing.latitude,
+        longitude: listing.longitude
+      };
+
+      const draft: ListingDraft = {
+        id: listing.id,
+        ownerId: listing.owner_id,
+        module: module,
+        categoryId: listing.category_id,
+        categoryName: listing.category?.name || '',
+        subcategoryId: listing.subcategory_id || '',
+        subcategoryName: listing.subcategory?.name || '',
+        thirdLevelId: listing.third_level_category_id || undefined,
+        thirdLevelName: listing.third_level?.name || undefined,
+        categoryPath: [listing.category?.name, listing.subcategory?.name, listing.third_level?.name].filter(Boolean).join(' / '),
+        currentStep: 1,
+        formValues: {
+          ...md,
+          ...fv,
+          title: listing.title,
+          description: listing.description,
+          price: listing.price,
+          companyName: md.company_name || md.companyName || fv.companyName,
+          providerName: md.provider_name || md.providerName || fv.providerName,
+          jobType: md.job_type || md.employment_type || md.jobType || fv.jobType || fv.employmentType,
+          workMode: md.work_mode || md.workMode || fv.workMode,
+          experienceLevel: md.experience_level || md.experienceLevel || fv.experienceLevel,
+          vehicleType: md.vehicle_type || md.vehicleType || fv.vehicleType,
+          propertyType: md.property_type || md.propertyType || fv.propertyType,
+          minSalary: md.salary_min || md.minSalary || fv.minSalary,
+          maxSalary: md.salary_max || md.maxSalary || fv.maxSalary,
+          fixedSalary: md.salary_fixed || md.fixedSalary || fv.fixedSalary
+        },
+        location,
+        images: mediaFiles,
+        contactPreferences: contactPrefs,
+        rules: md.rules ? md.rules : undefined,
+        pricing: md.pricing ? md.pricing : undefined,
+        lastSavedAt: Date.now()
+      };
+
+      if (md.rates && !draft.pricing) {
+        const ratePeriod = Object.keys(md.rates)[0] as any;
+        draft.pricing = { rate: md.rates[ratePeriod] || 0, ratePeriod, depositRequired: false, minRentalDuration: '1 day', bookingType: 'inquire', availableImmediately: true };
+      }
+
+      return draft;
+    } catch (err) {
+      console.error('Error fetching listing for edit:', err);
+      return null;
+    }
+  }
+
+  static async submitListing(draft: ListingDraft, editListingId?: string): Promise<SubmissionResult> {
     const uploadedPaths: string[] = [];
-    let listingId: string | null = null;
+    const targetId = editListingId || (draft.id.startsWith('draft-') ? null : draft.id);
+    let listingId: string | null = targetId || null;
     try {
       const title = String(draft.formValues.title || '').trim();
       if (!title) return failed('Listing title is required.');
       if (!draft.categoryId) return failed('A final category is required.');
       if (draft.images.length > MAX_LISTING_IMAGES) return failed('A listing can have no more than 5 images.');
       for (const image of draft.images) {
-        if (!image.file) return failed('Every selected image must be reselected before posting.');
-        const imageError = validateListingImage(image.file);
-        if (imageError) return failed(imageError);
+        if (!image.file && !(image as any).storagePath) return failed('Every selected image must be reselected before posting.');
+        if (image.file) {
+          const imageError = validateListingImage(image.file);
+          if (imageError) return failed(imageError);
+        }
       }
 
       const { data: authData, error: authError } = await supabase.auth.getUser();
@@ -59,7 +169,7 @@ export class ListingSubmissionService {
         form_values: cleanFormValues,
       };
 
-      const { data: listing, error: listingError } = await supabase.from('listings').insert({
+      const dbPayload = {
         owner_id: ownerId, module: moduleType, category_id: draft.categoryId,
         subcategory_id: draft.subcategoryId || null, third_level_category_id: draft.thirdLevelId || null,
         title, short_summary: description.slice(0, 150), description,
@@ -68,14 +178,46 @@ export class ListingSubmissionService {
         exact_address: draft.location.address || null, latitude: draft.location.latitude ?? null,
         longitude: draft.location.longitude ?? null, price: priceAmount || null, pricing_period: pricePeriod,
         currency: 'LKR', status: 'pending', is_featured: false, module_data: moduleData,
-        submitted_at: new Date().toISOString(),
-      }).select('id, created_at, updated_at').single();
-      if (listingError || !listing) return failed(listingError?.message || 'The listing could not be created.');
+        updated_at: new Date().toISOString(),
+      };
+
+      let listing: any = null;
+      let listingError: any = null;
+
+      if (targetId) {
+        const { data: updateData, error: updateError } = await supabase.from('listings').update(dbPayload)
+          .eq('id', targetId).eq('owner_id', ownerId).select('id, created_at, updated_at').single();
+        listing = updateData;
+        listingError = updateError;
+      } else {
+        const { data: insertData, error: insertError } = await supabase.from('listings').insert({
+          ...dbPayload,
+          submitted_at: new Date().toISOString(),
+        }).select('id, created_at, updated_at').single();
+        listing = insertData;
+        listingError = insertError;
+      }
+
+      if (listingError || !listing) return failed(listingError?.message || 'The listing could not be saved.');
       listingId = listing.id;
 
       const orderedImages = [...draft.images].sort((a, b) => a.position - b.position);
+      
+      if (targetId) {
+        const keepIds = orderedImages.map(img => img.id).filter(Boolean);
+        if (keepIds.length > 0) {
+           await supabase.from('listing_media').delete().eq('listing_id', listingId).not('id', 'in', `(${keepIds.join(',')})`);
+        } else {
+           await supabase.from('listing_media').delete().eq('listing_id', listingId);
+        }
+      }
+
       for (let index = 0; index < orderedImages.length; index += 1) {
         const source = orderedImages[index];
+        if (!source.file && (source as any).storagePath) {
+           await supabase.from('listing_media').update({ position: index, is_cover: source.isCover || index === 0 }).eq('id', source.id);
+           continue;
+        }
         const processed = await applyRentouraWatermark(source.file);
         const storagePath = `${ownerId}/${listingId}/${crypto.randomUUID()}.webp`;
         const { data: stored, error: uploadError } = await supabase.storage.from('listing-images').upload(
@@ -106,7 +248,7 @@ export class ListingSubmissionService {
 
       const result: UserListingItem = {
         id: listingId, ownerId, module: draft.module, title, status: 'pending',
-        statusNote: 'Submitted and queued for moderation review.', imageUrl: '',
+        statusNote: targetId ? 'Updates submitted and queued for moderation review.' : 'Submitted and queued for moderation review.', imageUrl: '',
         location: [draft.location.cityName, draft.location.districtName].filter(Boolean).join(', ') || 'Sri Lanka',
         price: priceFormatted, pricePeriod, category: draft.categoryName,
         subcategory: draft.subcategoryName || draft.categoryName, postedDate: 'Just now',
@@ -114,7 +256,7 @@ export class ListingSubmissionService {
         tags: [draft.categoryName, draft.subcategoryName, draft.location.provinceName].filter(Boolean) as string[],
         description, createdAt: listing.created_at, updatedAt: listing.updated_at,
       };
-      PostDraftService.deleteDraft(draft.module, ownerId);
+      if (!editListingId) PostDraftService.deleteDraft(draft.module, ownerId);
       return { success: true, listing: result };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Listing submission failed.';
@@ -122,7 +264,7 @@ export class ListingSubmissionService {
         const { error: cleanupError } = await supabase.storage.from('listing-images').remove(uploadedPaths);
         if (cleanupError) console.error('Storage cleanup failed:', cleanupError.message);
       }
-      if (listingId) {
+      if (listingId && !editListingId) {
         const { error: cleanupError } = await supabase.from('listings').delete().eq('id', listingId);
         if (cleanupError) console.error('Listing cleanup failed:', cleanupError.message);
       }

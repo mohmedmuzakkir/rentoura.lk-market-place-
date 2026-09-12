@@ -17,35 +17,83 @@ export const NotificationService = {
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
+      const { data: announcementsData } = await supabase
+        .from('announcements')
+        .select('*')
+        .eq('is_active', true)
+        .order('created_at', { ascending: false });
+
       if (error) {
         console.warn('[NotificationService] Failed to query notifications table:', error.message);
         return [];
       }
 
-      if (!data) return [];
+      const rawData = data || [];
 
-      return data.map((row: any) => {
+      // Fix duplicate notifications (from RPC + DB Trigger) and bad action_urls
+      const deduplicated = rawData.filter((row: any, index: number, self: any[]) => {
+        if (['LISTING_APPROVED', 'LISTING_REJECTED', 'LISTING_CHANGES_REQUESTED', 'LISTING_PENDING'].includes(row.type)) {
+          return index === self.findIndex((n) => n.type === row.type && n.entity_id === row.entity_id);
+        }
+        return true;
+      });
+
+      const parsedNotifications = deduplicated.map((row: any) => {
         const createdDate = new Date(row.created_at);
         const timeAgo = this.formatTimeAgo(createdDate);
+
+        // Map bad action URLs from DB Trigger to the correct tab in My Listings
+        let finalActionUrl = row.action_url;
+        if (row.type === 'LISTING_REJECTED' || row.type === 'LISTING_CHANGES_REQUESTED') {
+          finalActionUrl = '/my-listings';
+        }
 
         return {
           id: row.id,
           userId: row.user_id,
-          type: row.type || 'SYSTEM_UPDATE',
+          type: (row.type || 'SYSTEM_UPDATE') as AppNotification['type'],
           category: (row.category || 'system') as NotificationCategory,
           title: row.title || 'Notification',
           body: row.body || '',
+          read: row.read_at !== null && row.read_at !== undefined || row.is_read || false,
           createdAt: timeAgo,
           timestamp: createdDate.getTime(),
-          read: row.read_at !== null && row.read_at !== undefined,
           priority: row.priority || 'normal',
           entityType: row.entity_type,
           entityId: row.entity_id,
-          actionUrl: row.action_url,
+          actionUrl: finalActionUrl,
           thumbnailUrl: row.thumbnail_url,
           dedupeKey: row.dedupe_key
         };
       });
+
+      // Merge announcements
+      const readAncIds = JSON.parse(localStorage.getItem(`read_anc_${user.id}`) || '[]');
+      const deletedAncIds = JSON.parse(localStorage.getItem(`deleted_anc_${user.id}`) || '[]');
+      
+      const announcementNotifications = (announcementsData || [])
+        .filter((anc: any) => !deletedAncIds.includes(`anc-${anc.id}`))
+        .map((anc: any) => {
+          const createdDate = new Date(anc.created_at);
+        return {
+          id: `anc-${anc.id}`,
+          userId: user.id,
+          type: 'SYSTEM_UPDATE' as AppNotification['type'],
+          category: 'system' as NotificationCategory,
+          title: `📢 ${anc.title}`,
+          body: anc.message,
+          read: readAncIds.includes(`anc-${anc.id}`),
+          createdAt: this.formatTimeAgo(createdDate),
+          timestamp: createdDate.getTime(),
+          priority: (anc.priority === 'urgent' ? 'high' : 'normal') as AppNotification['priority'],
+          entityType: 'system',
+          entityId: anc.id,
+          actionUrl: undefined,
+          dedupeKey: `anc-${anc.id}`
+        } as AppNotification;
+      });
+
+      return [...parsedNotifications, ...announcementNotifications].sort((a, b) => b.timestamp - a.timestamp);
     } catch (err) {
       console.warn('[NotificationService] Exception during notification fetch:', err);
       return [];
@@ -86,6 +134,17 @@ export const NotificationService = {
           onUpdate();
         }
       )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'announcements'
+        },
+        () => {
+          onUpdate();
+        }
+      )
       .subscribe();
 
     return () => {
@@ -100,6 +159,16 @@ export const NotificationService = {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return false;
+
+      // Handle announcements
+      if (id && typeof id === 'string' && id.startsWith('anc-')) {
+        const readAncIds = JSON.parse(localStorage.getItem(`read_anc_${user.id}`) || '[]');
+        if (!readAncIds.includes(id)) {
+          readAncIds.push(id);
+          localStorage.setItem(`read_anc_${user.id}`, JSON.stringify(readAncIds));
+        }
+        return true;
+      }
 
       const { error } = await supabase
         .from('notifications')
@@ -122,6 +191,13 @@ export const NotificationService = {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return false;
 
+      // Mark all announcements as read in localStorage
+      const { data: announcementsData } = await supabase.from('announcements').select('id').eq('is_active', true);
+      if (announcementsData) {
+        const ancIds = announcementsData.map(a => `anc-${a.id}`);
+        localStorage.setItem(`read_anc_${user.id}`, JSON.stringify(ancIds));
+      }
+
       const { error } = await supabase
         .from('notifications')
         .update({ read_at: new Date().toISOString() })
@@ -143,6 +219,20 @@ export const NotificationService = {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return false;
 
+      // Handle announcements
+      if (id && typeof id === 'string' && id.startsWith('anc-')) {
+        // Strip 'anc-' if it's the dedupeKey, wait, our ID is actually the announcement ID from DB which doesn't have 'anc-'
+        // Wait! In map we set: id: anc.id. The DB id is a UUID usually!
+        // But in adminService.createAnnouncement we do: id: `anc-${Date.now()}`. Ah, the DB uses UUID for id!
+        // Let's just track the exact string ID passed to delete.
+        const deletedAncIds = JSON.parse(localStorage.getItem(`deleted_anc_${user.id}`) || '[]');
+        if (!deletedAncIds.includes(id)) {
+          deletedAncIds.push(id);
+          localStorage.setItem(`deleted_anc_${user.id}`, JSON.stringify(deletedAncIds));
+        }
+        return true;
+      }
+
       const { error } = await supabase
         .from('notifications')
         .delete()
@@ -163,6 +253,15 @@ export const NotificationService = {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return false;
+
+      // Handle clearing read announcements
+      const readAncIds = JSON.parse(localStorage.getItem(`read_anc_${user.id}`) || '[]');
+      if (readAncIds.length > 0) {
+        const deletedAncIds = JSON.parse(localStorage.getItem(`deleted_anc_${user.id}`) || '[]');
+        const newDeleted = Array.from(new Set([...deletedAncIds, ...readAncIds]));
+        localStorage.setItem(`deleted_anc_${user.id}`, JSON.stringify(newDeleted));
+        localStorage.setItem(`read_anc_${user.id}`, '[]'); // Clear read since they are now deleted
+      }
 
       const { error } = await supabase
         .from('notifications')

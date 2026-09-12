@@ -68,6 +68,15 @@ export interface UserListingItem {
   isNegotiable?: boolean;
   contactPhone?: string;
   whatsapp?: string;
+  // Module-specific fields
+  bedrooms?: string;
+  bathrooms?: string;
+  furnished?: string;
+  area?: string;
+  vehicleType?: string;
+  jobType?: string;
+  workMode?: string;
+  experienceLevel?: string;
 }
 
 export interface UserReviewItem {

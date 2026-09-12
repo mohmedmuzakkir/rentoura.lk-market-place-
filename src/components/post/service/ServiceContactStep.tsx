@@ -105,7 +105,11 @@ export const ServiceContactStep: React.FC<ServiceContactStepProps> = ({
                 type="checkbox"
                 checked={contact.whatsappNumber === contact.phone}
                 onChange={e => {
-                  if (e.target.checked) updateContact({ whatsappNumber: contact.phone });
+                  if (e.target.checked) {
+                    updateContact({ whatsappNumber: contact.phone, showWhatsApp: !!contact.phone });
+                  } else {
+                    updateContact({ whatsappNumber: '', showWhatsApp: false });
+                  }
                 }}
                 className="rounded text-amber-500 focus:ring-amber-500"
               />
@@ -116,7 +120,10 @@ export const ServiceContactStep: React.FC<ServiceContactStepProps> = ({
           <input
             type="text"
             value={contact.whatsappNumber || ''}
-            onChange={e => updateContact({ whatsappNumber: e.target.value })}
+            onChange={e => {
+              const val = e.target.value;
+              updateContact({ whatsappNumber: val, showWhatsApp: !!val.trim() });
+            }}
             placeholder="077 123 4567"
             className="w-full px-3.5 py-2.5 text-xs font-bold bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all"
           />

@@ -1,41 +1,708 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ChevronDown, ChevronRight, Download, Edit3, ExternalLink, Eye, EyeOff, MapPin, Plus, Search, Trash2, X } from 'lucide-react';
-import { StaffAccount } from '../../types/adminTypes';
-import { AddLocationPayload, CanonicalLocation, LocationService, LocationType } from '../../services/locationService';
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  ChevronDown,
+  ChevronRight,
+  Download,
+  Edit3,
+  ExternalLink,
+  Eye,
+  EyeOff,
+  MapPin,
+  Plus,
+  Search,
+  Trash2,
+  X,
+} from "lucide-react";
+import { StaffAccount } from "../../types/adminTypes";
+import {
+  AddLocationPayload,
+  CanonicalLocation,
+  LocationService,
+  LocationType,
+} from "../../services/locationService";
 
-interface Props { staff: StaffAccount; onRefresh?: () => void; }
+interface Props {
+  staff: StaffAccount;
+  onRefresh?: () => void;
+}
 type Draft = AddLocationPayload & { id?: string };
-const TYPES: { id: LocationType; label: string; expected: number }[] = [{ id: 'province', label: 'Provinces', expected: 9 }, { id: 'district', label: 'Districts', expected: 25 }, { id: 'city', label: 'Cities / Towns', expected: 96 }, { id: 'area', label: 'Areas / Villages', expected: 327 }];
+const TYPES: { id: LocationType; label: string; expected: number }[] = [
+  { id: "province", label: "Provinces", expected: 9 },
+  { id: "district", label: "Districts", expected: 25 },
+  { id: "city", label: "Cities / Towns", expected: 96 },
+  { id: "area", label: "Areas / Villages", expected: 327 },
+];
 
 export const AdminLocationView: React.FC<Props> = ({ staff, onRefresh }) => {
-  const [locations, setLocations] = useState<CanonicalLocation[]>([]); const [loading, setLoading] = useState(true); const [busy, setBusy] = useState(false);
-  const [error, setError] = useState(''); const [notice, setNotice] = useState(''); const [query, setQuery] = useState(''); const [type, setType] = useState<'all' | LocationType>('all');
-  const [showInactive, setShowInactive] = useState(true); const [expanded, setExpanded] = useState<Set<string>>(new Set()); const [draft, setDraft] = useState<Draft | null>(null); const [selected, setSelected] = useState<CanonicalLocation | null>(null);
-  const canManage = staff.role === 'ADMIN' || staff.role === 'SUPER_ADMIN';
-  const load = useCallback(async () => { setLoading(true); setError(''); try { const rows = await LocationService.getAllLocationsAsync(true); setLocations(rows); if (!rows.length) setError('No locations were returned by the database.'); } catch (e) { setLocations([]); setError(e instanceof Error ? e.message : 'Locations could not be loaded.'); } finally { setLoading(false); } }, []);
-  useEffect(() => { LocationService.invalidateCache(); void load(); }, [load]);
-  const byId = useMemo(() => new Map(locations.map((x) => [x.id, x])), [locations]);
-  const children = useMemo(() => { const map = new Map<string, CanonicalLocation[]>(); locations.forEach((x) => { if (!x.parentId) return; const list = map.get(x.parentId) ?? []; list.push(x); map.set(x.parentId, list); }); map.forEach((list) => list.sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name))); return map; }, [locations]);
-  const visible = useMemo(() => { const q = query.trim().toLowerCase(); const ids = new Set(locations.filter((x) => (type === 'all' || x.type === type) && (showInactive || x.status === 'active') && (!q || `${x.name} ${x.code ?? ''} ${x.postalCode ?? ''} ${x.name_si ?? ''} ${x.name_ta ?? ''} ${LocationService.formatLocationPath({ provinceName: x.provinceName, districtName: x.districtName, cityName: x.cityName, areaName: x.type === 'area' ? x.name : undefined })}`.toLowerCase().includes(q))).map((x) => x.id)); if (q || type !== 'all') ids.forEach((id) => { let p = byId.get(id)?.parentId; while (p) { ids.add(p); p = byId.get(p)?.parentId; } }); return ids; }, [locations, type, showInactive, query, byId]);
-  const roots = locations.filter((x) => x.type === 'province' && visible.has(x.id)).sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
-  const path = (x: CanonicalLocation) => [x.provinceName, x.districtName, x.cityName, x.type === 'area' ? x.name : undefined].filter((value, index, array) => value && array.indexOf(value) === index).join(' › ');
-  const parentType = (locationType: LocationType): LocationType | null => locationType === 'district' ? 'province' : locationType === 'city' ? 'district' : locationType === 'area' ? 'city' : null;
-  const parentOptions = draft ? locations.filter((x) => x.type === parentType(draft.type)) : [];
-  const openCreate = (parent?: CanonicalLocation) => { const childType: LocationType = !parent ? 'province' : parent.type === 'province' ? 'district' : parent.type === 'district' ? 'city' : 'area'; setDraft({ name: '', type: childType, parentId: parent?.id, code: '', postalCode: '', name_si: '', name_ta: '', status: 'active' }); };
-  const openEdit = (x: CanonicalLocation) => setDraft({ id: x.id, name: x.name, type: x.type, parentId: x.parentId, code: x.code, postalCode: x.postalCode, name_si: x.name_si, name_ta: x.name_ta, latitude: x.latitude, longitude: x.longitude, status: x.status });
-  const run = async (fn: () => Promise<{ success: boolean; message: string }>, success: string) => { setBusy(true); setError(''); setNotice(''); const result = await fn(); if (result.success) { await load(); setNotice(success); onRefresh?.(); } else setError(result.message); setBusy(false); return result.success; };
-  const save = async () => { if (!draft?.name.trim() || !draft.code?.trim()) { setError('Name and deterministic code are required.'); return; } if (draft.type !== 'province' && !draft.parentId) { setError('Choose a parent exactly one hierarchy level above.'); return; } const success = await run(() => draft.id ? LocationService.updateLocation(draft.id, draft) : LocationService.addLocation(draft), draft.id ? 'Location updated.' : 'Location created.'); if (success) setDraft(null); };
-  const toggle = (x: CanonicalLocation) => void run(() => LocationService.toggleStatus(x.id), `Location ${x.status === 'active' ? 'inactivated' : 'activated'}.`);
-  const remove = (x: CanonicalLocation) => { if (window.confirm(`Delete “${x.name}”? Referenced locations and locations with children can only be inactivated.`)) void run(() => LocationService.deleteLocation(x.id), 'Unreferenced location deleted.'); };
-  const exportCsv = () => { const blob = new Blob([LocationService.exportLocationsCSV()], { type: 'text/csv;charset=utf-8' }); const url = URL.createObjectURL(blob); const anchor = document.createElement('a'); anchor.href = url; anchor.download = `rentoura-locations-${new Date().toISOString().slice(0, 10)}.csv`; anchor.click(); URL.revokeObjectURL(url); setNotice('Live location CSV exported.'); };
-  const toggleExpand = (id: string) => setExpanded((current) => { const next = new Set(current); next.has(id) ? next.delete(id) : next.add(id); return next; });
-  const row = (x: CanonicalLocation, depth = 0): React.ReactNode => { if (!visible.has(x.id)) return null; const nested = (children.get(x.id) ?? []).filter((child) => visible.has(child.id)); const open = expanded.has(x.id) || Boolean(query) || type !== 'all'; return <div key={x.id}><div className={`grid grid-cols-[minmax(0,1fr)_auto] gap-2 border-b border-slate-100 px-3 py-3 ${x.status === 'inactive' ? 'opacity-60' : ''}`} style={{ paddingLeft: `${12 + depth * 20}px` }}><button onClick={() => setSelected(x)} className="flex min-w-0 items-center gap-2 text-left"><span onClick={(e) => { e.stopPropagation(); toggleExpand(x.id); }} className={`grid h-7 w-7 shrink-0 place-items-center ${nested.length ? '' : 'opacity-20'}`}>{open ? <ChevronDown size={17}/> : <ChevronRight size={17}/>}</span><span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-blue-50 text-[#1464F4]"><MapPin size={18}/></span><span className="min-w-0"><span className="block truncate text-sm font-bold text-[#041C43]">{x.name}</span><span className="block truncate text-xs text-slate-500">{x.type} · {x.code || 'no code'}{x.postalCode ? ` · ${x.postalCode}` : ''}</span></span></button><div className="flex items-center gap-1">{x.type !== 'area' && canManage && <button onClick={() => openCreate(x)} className="rounded-lg p-2 text-[#1464F4]" title="Add child"><Plus size={16}/></button>}{canManage && <><button onClick={() => openEdit(x)} className="rounded-lg p-2 text-slate-500" title="Edit"><Edit3 size={16}/></button><button onClick={() => toggle(x)} className="rounded-lg p-2 text-slate-500" title={x.status === 'active' ? 'Inactivate' : 'Activate'}>{x.status === 'active' ? <EyeOff size={16}/> : <Eye size={16}/>}</button><button onClick={() => remove(x)} className="rounded-lg p-2 text-red-500" title="Delete"><Trash2 size={16}/></button></>}</div></div>{open && nested.map((child) => row(child, depth + 1))}</div>; };
-  return <section className="space-y-5 pb-24"><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h1 className="flex items-center gap-2 text-2xl font-black text-[#041C43]"><MapPin className="text-[#1464F4]"/>Locations</h1><p className="mt-1 text-sm text-slate-500">Canonical database hierarchy used by profiles, listings and search.</p></div><div className="flex gap-2"><button onClick={exportCsv} className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold"><Download className="mr-2 inline" size={17}/>Export CSV</button>{canManage && <button onClick={() => openCreate()} className="rounded-xl bg-[#1464F4] px-4 py-3 text-sm font-bold text-white"><Plus className="mr-2 inline" size={17}/>Add province</button>}</div></div>
-    {!canManage && <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">Moderators have read-only location access. Admin or Super Admin is required for changes.</div>}
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{TYPES.map((item) => { const count = locations.filter((x) => x.type === item.id && x.status === 'active').length; return <button key={item.id} onClick={() => setType(type === item.id ? 'all' : item.id)} className={`rounded-2xl border bg-white p-4 text-left ${type === item.id ? 'ring-2 ring-[#1464F4]' : 'border-slate-200'}`}><p className="text-xs font-bold uppercase text-slate-500">{item.label}</p><p className="mt-1 text-2xl font-black text-[#041C43]">{count}</p><p className={`text-xs ${count === item.expected ? 'text-emerald-600' : 'text-amber-600'}`}>Canonical {item.expected}</p></button>; })}</div>
-    <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-3 sm:flex-row"><label className="relative flex-1"><Search className="absolute left-3 top-3 text-slate-400" size={18}/><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search name, path, code or postal code" className="w-full rounded-xl border border-slate-200 py-2.5 pl-10 pr-3 text-sm"/></label><label className="flex items-center gap-2 px-2 text-sm font-semibold text-slate-600"><input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)}/>Show inactive</label></div>
-    {error && <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}{notice && <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{notice}</div>}
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]"><div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white"><div className="min-w-[560px]">{loading ? <p className="p-8 text-center text-sm text-slate-500">Loading live locations…</p> : roots.length ? roots.map((root) => row(root)) : <p className="p-8 text-center text-sm text-slate-500">No locations match these filters.</p>}</div></div><aside className="rounded-2xl border border-slate-200 bg-white p-5">{selected ? <><h2 className="text-lg font-black text-[#041C43]">{selected.name}</h2><p className="mt-1 text-xs text-slate-500">{path(selected)}</p><dl className="mt-5 space-y-3 text-sm"><div><dt className="font-bold text-slate-500">Status</dt><dd>{selected.status}</dd></div><div><dt className="font-bold text-slate-500">Coordinates</dt><dd>{selected.latitude != null && selected.longitude != null ? `${selected.latitude}, ${selected.longitude}` : 'Not recorded'}</dd></div><div><dt className="font-bold text-slate-500">Localized names</dt><dd>{selected.name_si || '—'} / {selected.name_ta || '—'}</dd></div></dl>{selected.latitude != null && selected.longitude != null && <a target="_blank" rel="noreferrer" href={`https://www.openstreetmap.org/?mlat=${selected.latitude}&mlon=${selected.longitude}#map=14/${selected.latitude}/${selected.longitude}`} className="mt-5 inline-flex items-center gap-2 rounded-xl bg-blue-50 px-4 py-3 text-sm font-bold text-[#1464F4]">Open map <ExternalLink size={15}/></a>}</> : <p className="text-sm text-slate-500">Select a location to inspect its path and recorded coordinates.</p>}</aside></div>
-    {draft && <div className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-950/50 sm:items-center sm:p-4"><div className="max-h-[92vh] w-full overflow-y-auto rounded-t-3xl bg-white p-5 sm:max-w-2xl sm:rounded-3xl"><div className="flex items-center justify-between"><h2 className="text-xl font-black text-[#041C43]">{draft.id ? 'Edit location' : `Add ${draft.type}`}</h2><button onClick={() => setDraft(null)} className="p-2"><X/></button></div><div className="mt-5 grid gap-4 sm:grid-cols-2"><label className="text-sm font-bold">Type<select disabled={Boolean(draft.id)} value={draft.type} onChange={(e) => setDraft({ ...draft, type: e.target.value as LocationType, parentId: undefined })} className="mt-1 w-full rounded-xl border p-3">{TYPES.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>{draft.type !== 'province' && <label className="text-sm font-bold">Parent<select value={draft.parentId || ''} onChange={(e) => setDraft({ ...draft, parentId: e.target.value })} className="mt-1 w-full rounded-xl border p-3"><option value="">Choose parent</option>{parentOptions.map((x) => <option key={x.id} value={x.id}>{path(x) || x.name}</option>)}</select></label>}<label className="text-sm font-bold">English name<input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value, code: draft.id ? draft.code : e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') })} className="mt-1 w-full rounded-xl border p-3"/></label><label className="text-sm font-bold">Unique code<input value={draft.code || ''} onChange={(e) => setDraft({ ...draft, code: e.target.value })} className="mt-1 w-full rounded-xl border p-3"/></label><label className="text-sm font-bold">Sinhala name<input value={draft.name_si || ''} onChange={(e) => setDraft({ ...draft, name_si: e.target.value })} className="mt-1 w-full rounded-xl border p-3"/></label><label className="text-sm font-bold">Tamil name<input value={draft.name_ta || ''} onChange={(e) => setDraft({ ...draft, name_ta: e.target.value })} className="mt-1 w-full rounded-xl border p-3"/></label><label className="text-sm font-bold">Postal code<input value={draft.postalCode || ''} onChange={(e) => setDraft({ ...draft, postalCode: e.target.value })} className="mt-1 w-full rounded-xl border p-3"/></label><label className="text-sm font-bold">Status<select value={draft.status} onChange={(e) => setDraft({ ...draft, status: e.target.value as Draft['status'] })} className="mt-1 w-full rounded-xl border p-3"><option value="active">Active</option><option value="inactive">Inactive</option></select></label><label className="text-sm font-bold">Latitude<input type="number" min="-90" max="90" step="any" value={draft.latitude ?? ''} onChange={(e) => setDraft({ ...draft, latitude: e.target.value === '' ? undefined : Number(e.target.value) })} className="mt-1 w-full rounded-xl border p-3"/></label><label className="text-sm font-bold">Longitude<input type="number" min="-180" max="180" step="any" value={draft.longitude ?? ''} onChange={(e) => setDraft({ ...draft, longitude: e.target.value === '' ? undefined : Number(e.target.value) })} className="mt-1 w-full rounded-xl border p-3"/></label></div><p className="mt-3 text-xs text-slate-500">Coordinates are optional but must be supplied as a valid pair. Canonical hierarchy IDs are derived from the selected parent.</p><div className="mt-6 flex gap-3"><button onClick={() => setDraft(null)} className="flex-1 rounded-xl border p-3 font-bold">Cancel</button><button disabled={busy} onClick={() => void save()} className="flex-1 rounded-xl bg-[#1464F4] p-3 font-bold text-white disabled:opacity-50">{busy ? 'Saving…' : 'Save'}</button></div></div></div>}
-  </section>;
+  const [locations, setLocations] = useState<CanonicalLocation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [query, setQuery] = useState("");
+  const [type, setType] = useState<"all" | LocationType>("all");
+  const [showInactive, setShowInactive] = useState(true);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [draft, setDraft] = useState<Draft | null>(null);
+  const [selected, setSelected] = useState<CanonicalLocation | null>(null);
+  const canManage = staff.role === "ADMIN" || staff.role === "SUPER_ADMIN";
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const rows = await LocationService.getAllLocationsAsync(true);
+      setLocations(rows);
+      if (!rows.length) setError("No locations were returned by the database.");
+    } catch (e) {
+      setLocations([]);
+      setError(
+        e instanceof Error ? e.message : "Locations could not be loaded.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  useEffect(() => {
+    LocationService.invalidateCache();
+    void load();
+  }, [load]);
+  const byId = useMemo(
+    () => new Map(locations.map((x) => [x.id, x])),
+    [locations],
+  );
+  const children = useMemo(() => {
+    const map = new Map<string, CanonicalLocation[]>();
+    locations.forEach((x) => {
+      if (!x.parentId) return;
+      const list = map.get(x.parentId) ?? [];
+      list.push(x);
+      map.set(x.parentId, list);
+    });
+    map.forEach((list) =>
+      list.sort(
+        (a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name),
+      ),
+    );
+    return map;
+  }, [locations]);
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const ids = new Set(
+      locations
+        .filter(
+          (x) =>
+            (type === "all" || x.type === type) &&
+            (showInactive || x.status === "active") &&
+            (!q ||
+              `${x.name} ${x.code ?? ""} ${x.postalCode ?? ""} ${x.name_si ?? ""} ${x.name_ta ?? ""} ${LocationService.formatLocationPath({ provinceName: x.provinceName, districtName: x.districtName, cityName: x.cityName, areaName: x.type === "area" ? x.name : undefined })}`
+                .toLowerCase()
+                .includes(q)),
+        )
+        .map((x) => x.id),
+    );
+    if (q || type !== "all")
+      ids.forEach((id) => {
+        let p = byId.get(id)?.parentId;
+        while (p) {
+          ids.add(p);
+          p = byId.get(p)?.parentId;
+        }
+      });
+    return ids;
+  }, [locations, type, showInactive, query, byId]);
+  const roots = locations
+    .filter((x) => x.type === "province" && visible.has(x.id))
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
+  const path = (x: CanonicalLocation) =>
+    [
+      x.provinceName,
+      x.districtName,
+      x.cityName,
+      x.type === "area" ? x.name : undefined,
+    ]
+      .filter((value, index, array) => value && array.indexOf(value) === index)
+      .join(" › ");
+  const parentType = (locationType: LocationType): LocationType | null =>
+    locationType === "district"
+      ? "province"
+      : locationType === "city"
+        ? "district"
+        : locationType === "area"
+          ? "city"
+          : null;
+  const parentOptions = draft
+    ? locations.filter((x) => x.type === parentType(draft.type))
+    : [];
+  const openCreate = (parent?: CanonicalLocation) => {
+    const childType: LocationType = !parent
+      ? "province"
+      : parent.type === "province"
+        ? "district"
+        : parent.type === "district"
+          ? "city"
+          : "area";
+    setDraft({
+      name: "",
+      type: childType,
+      parentId: parent?.id,
+      code: "",
+      postalCode: "",
+      name_si: "",
+      name_ta: "",
+      status: "active",
+      is_featured_popular: false,
+      image_url: null,
+    });
+  };
+  const openEdit = (x: CanonicalLocation) =>
+    setDraft({
+      id: x.id,
+      name: x.name,
+      type: x.type,
+      parentId: x.parentId,
+      code: x.code,
+      postalCode: x.postalCode,
+      name_si: x.name_si,
+      name_ta: x.name_ta,
+      latitude: x.latitude,
+      longitude: x.longitude,
+      status: x.status,
+      is_featured_popular: x.isFeaturedPopular,
+      image_url: x.imageUrl,
+    });
+  const run = async (
+    fn: () => Promise<{ success: boolean; message: string }>,
+    success: string,
+  ) => {
+    setBusy(true);
+    setError("");
+    setNotice("");
+    const result = await fn();
+    if (result.success) {
+      await load();
+      setNotice(success);
+      onRefresh?.();
+    } else setError(result.message);
+    setBusy(false);
+    return result.success;
+  };
+  
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setBusy(true);
+    setError("");
+    const locId = draft?.id || 'draft';
+    const res = await LocationService.uploadLocationImage(file, locId);
+    if (res.success && res.url) {
+      setDraft((prev) => (prev ? { ...prev, image_url: res.url } : null));
+    } else {
+      setError(res.message || 'Image upload failed');
+    }
+    setBusy(false);
+  };
+  const save = async () => {
+    if (!draft?.name.trim() || !draft.code?.trim()) {
+      setError("Name and deterministic code are required.");
+      return;
+    }
+    if (draft.type !== "province" && !draft.parentId) {
+      setError("Choose a parent exactly one hierarchy level above.");
+      return;
+    }
+    const success = await run(
+      () =>
+        draft.id
+          ? LocationService.updateLocation(draft.id, draft)
+          : LocationService.addLocation(draft),
+      draft.id ? "Location updated." : "Location created.",
+    );
+    if (success) setDraft(null);
+  };
+  const toggle = (x: CanonicalLocation) =>
+    void run(
+      () => LocationService.toggleStatus(x.id),
+      `Location ${x.status === "active" ? "inactivated" : "activated"}.`,
+    );
+  const remove = (x: CanonicalLocation) => {
+    if (
+      window.confirm(
+        `Delete “${x.name}”? Referenced locations and locations with children can only be inactivated.`,
+      )
+    )
+      void run(
+        () => LocationService.deleteLocation(x.id),
+        "Unreferenced location deleted.",
+      );
+  };
+  const exportCsv = () => {
+    const blob = new Blob([LocationService.exportLocationsCSV()], {
+      type: "text/csv;charset=utf-8",
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `rentoura-locations-${new Date().toISOString().slice(0, 10)}.csv`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+    setNotice("Live location CSV exported.");
+  };
+  const toggleExpand = (id: string) =>
+    setExpanded((current) => {
+      const next = new Set(current);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  const row = (x: CanonicalLocation, depth = 0): React.ReactNode => {
+    if (!visible.has(x.id)) return null;
+    const nested = (children.get(x.id) ?? []).filter((child) =>
+      visible.has(child.id),
+    );
+    const open = expanded.has(x.id) || Boolean(query) || type !== "all";
+    return (
+      <div key={x.id}>
+        <div
+          className={`grid grid-cols-[minmax(0,1fr)_auto] gap-2 border-b border-slate-100 px-3 py-3 ${x.status === "inactive" ? "opacity-60" : ""}`}
+          style={{ paddingLeft: `${12 + depth * 20}px` }}
+        >
+          <button
+            onClick={() => setSelected(x)}
+            className="flex min-w-0 items-center gap-2 text-left"
+          >
+            <span
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleExpand(x.id);
+              }}
+              className={`grid h-7 w-7 shrink-0 place-items-center ${nested.length ? "" : "opacity-20"}`}
+            >
+              {open ? <ChevronDown size={17} /> : <ChevronRight size={17} />}
+            </span>
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-blue-50 text-[#1464F4]">
+              <MapPin size={18} />
+            </span>
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-bold text-[#041C43]">
+                {x.name}
+              </span>
+              <span className="block truncate text-xs text-slate-500">
+                {x.type} · {x.code || "no code"}
+                {x.postalCode ? ` · ${x.postalCode}` : ""}
+              </span>
+            </span>
+          </button>
+          <div className="flex items-center gap-1">
+            {x.type !== "area" && canManage && (
+              <button
+                onClick={() => openCreate(x)}
+                className="rounded-lg p-2 text-[#1464F4]"
+                title="Add child"
+              >
+                <Plus size={16} />
+              </button>
+            )}
+            {canManage && (
+              <>
+                <button
+                  onClick={() => openEdit(x)}
+                  className="rounded-lg p-2 text-slate-500"
+                  title="Edit"
+                >
+                  <Edit3 size={16} />
+                </button>
+                <button
+                  onClick={() => toggle(x)}
+                  className="rounded-lg p-2 text-slate-500"
+                  title={x.status === "active" ? "Inactivate" : "Activate"}
+                >
+                  {x.status === "active" ? (
+                    <EyeOff size={16} />
+                  ) : (
+                    <Eye size={16} />
+                  )}
+                </button>
+                <button
+                  onClick={() => remove(x)}
+                  className="rounded-lg p-2 text-red-500"
+                  title="Delete"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+        {open && nested.map((child) => row(child, depth + 1))}
+      </div>
+    );
+  };
+  return (
+    <section className="space-y-5 pb-24">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="flex items-center gap-2 text-2xl font-black text-[#041C43]">
+            <MapPin className="text-[#1464F4]" />
+            Locations
+          </h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Canonical database hierarchy used by profiles, listings and search.
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={exportCsv}
+            className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold"
+          >
+            <Download className="mr-2 inline" size={17} />
+            Export CSV
+          </button>
+          {canManage && (
+            <button
+              onClick={() => openCreate()}
+              className="rounded-xl bg-[#1464F4] px-4 py-3 text-sm font-bold text-white"
+            >
+              <Plus className="mr-2 inline" size={17} />
+              Add province
+            </button>
+          )}
+        </div>
+      </div>
+      {!canManage && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+          Moderators have read-only location access. Admin or Super Admin is
+          required for changes.
+        </div>
+      )}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {TYPES.map((item) => {
+          const count = locations.filter(
+            (x) => x.type === item.id && x.status === "active",
+          ).length;
+          return (
+            <button
+              key={item.id}
+              onClick={() => setType(type === item.id ? "all" : item.id)}
+              className={`rounded-2xl border bg-white p-4 text-left ${type === item.id ? "ring-2 ring-[#1464F4]" : "border-slate-200"}`}
+            >
+              <p className="text-xs font-bold uppercase text-slate-500">
+                {item.label}
+              </p>
+              <p className="mt-1 text-2xl font-black text-[#041C43]">{count}</p>
+              <p
+                className={`text-xs ${count === item.expected ? "text-emerald-600" : "text-amber-600"}`}
+              >
+                Canonical {item.expected}
+              </p>
+            </button>
+          );
+        })}
+      </div>
+      <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-3 sm:flex-row">
+        <label className="relative flex-1">
+          <Search className="absolute left-3 top-3 text-slate-400" size={18} />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search name, path, code or postal code"
+            className="w-full rounded-xl border border-slate-200 py-2.5 pl-10 pr-3 text-sm"
+          />
+        </label>
+        <label className="flex items-center gap-2 px-2 text-sm font-semibold text-slate-600">
+          <input
+            type="checkbox"
+            checked={showInactive}
+            onChange={(e) => setShowInactive(e.target.checked)}
+          />
+          Show inactive
+        </label>
+      </div>
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+      {notice && (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
+          {notice}
+        </div>
+      )}
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+          <div className="min-w-[560px]">
+            {loading ? (
+              <p className="p-8 text-center text-sm text-slate-500">
+                Loading live locations…
+              </p>
+            ) : roots.length ? (
+              roots.map((root) => row(root))
+            ) : (
+              <p className="p-8 text-center text-sm text-slate-500">
+                No locations match these filters.
+              </p>
+            )}
+          </div>
+        </div>
+        <aside className="rounded-2xl border border-slate-200 bg-white p-5">
+          {selected ? (
+            <>
+              <h2 className="text-lg font-black text-[#041C43]">
+                {selected.name}
+              </h2>
+              <p className="mt-1 text-xs text-slate-500">{path(selected)}</p>
+              <dl className="mt-5 space-y-3 text-sm">
+                <div>
+                  <dt className="font-bold text-slate-500">Status</dt>
+                  <dd>{selected.status}</dd>
+                </div>
+                <div>
+                  <dt className="font-bold text-slate-500">Coordinates</dt>
+                  <dd>
+                    {selected.latitude != null && selected.longitude != null
+                      ? `${selected.latitude}, ${selected.longitude}`
+                      : "Not recorded"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="font-bold text-slate-500">Localized names</dt>
+                  <dd>
+                    {selected.name_si || "—"} / {selected.name_ta || "—"}
+                  </dd>
+                </div>
+              </dl>
+              {selected.latitude != null && selected.longitude != null && (
+                <a
+                  target="_blank"
+                  rel="noreferrer"
+                  href={`https://www.openstreetmap.org/?mlat=${selected.latitude}&mlon=${selected.longitude}#map=14/${selected.latitude}/${selected.longitude}`}
+                  className="mt-5 inline-flex items-center gap-2 rounded-xl bg-blue-50 px-4 py-3 text-sm font-bold text-[#1464F4]"
+                >
+                  Open map <ExternalLink size={15} />
+                </a>
+              )}
+            </>
+          ) : (
+            <p className="text-sm text-slate-500">
+              Select a location to inspect its path and recorded coordinates.
+            </p>
+          )}
+        </aside>
+      </div>
+      {draft && (
+        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-950/50 sm:items-center sm:p-4">
+          <div className="max-h-[92vh] w-full overflow-y-auto rounded-t-3xl bg-white p-5 sm:max-w-2xl sm:rounded-3xl">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-black text-[#041C43]">
+                {draft.id ? "Edit location" : `Add ${draft.type}`}
+              </h2>
+              <button onClick={() => setDraft(null)} className="p-2">
+                <X />
+              </button>
+            </div>
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+              <label className="text-sm font-bold">
+                Type
+                <select
+                  disabled={Boolean(draft.id)}
+                  value={draft.type}
+                  onChange={(e) =>
+                    setDraft({
+                      ...draft,
+                      type: e.target.value as LocationType,
+                      parentId: undefined,
+                    })
+                  }
+                  className="mt-1 w-full rounded-xl border p-3"
+                >
+                  {TYPES.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {draft.type !== "province" && (
+                <label className="text-sm font-bold">
+                  Parent
+                  <select
+                    value={draft.parentId || ""}
+                    onChange={(e) =>
+                      setDraft({ ...draft, parentId: e.target.value })
+                    }
+                    className="mt-1 w-full rounded-xl border p-3"
+                  >
+                    <option value="">Choose parent</option>
+                    {parentOptions.map((x) => (
+                      <option key={x.id} value={x.id}>
+                        {path(x) || x.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              <label className="text-sm font-bold">
+                English name
+                <input
+                  value={draft.name}
+                  onChange={(e) =>
+                    setDraft({
+                      ...draft,
+                      name: e.target.value,
+                      code: draft.id
+                        ? draft.code
+                        : e.target.value
+                            .toLowerCase()
+                            .replace(/[^a-z0-9]+/g, "-")
+                            .replace(/^-|-$/g, ""),
+                    })
+                  }
+                  className="mt-1 w-full rounded-xl border p-3"
+                />
+              </label>
+              <label className="text-sm font-bold">
+                Unique code
+                <input
+                  value={draft.code || ""}
+                  onChange={(e) => setDraft({ ...draft, code: e.target.value })}
+                  className="mt-1 w-full rounded-xl border p-3"
+                />
+              </label>
+              <label className="text-sm font-bold">
+                Sinhala name
+                <input
+                  value={draft.name_si || ""}
+                  onChange={(e) =>
+                    setDraft({ ...draft, name_si: e.target.value })
+                  }
+                  className="mt-1 w-full rounded-xl border p-3"
+                />
+              </label>
+              <label className="text-sm font-bold">
+                Tamil name
+                <input
+                  value={draft.name_ta || ""}
+                  onChange={(e) =>
+                    setDraft({ ...draft, name_ta: e.target.value })
+                  }
+                  className="mt-1 w-full rounded-xl border p-3"
+                />
+              </label>
+              <label className="text-sm font-bold">
+                Postal code
+                <input
+                  value={draft.postalCode || ""}
+                  onChange={(e) =>
+                    setDraft({ ...draft, postalCode: e.target.value })
+                  }
+                  className="mt-1 w-full rounded-xl border p-3"
+                />
+              </label>
+              <label className="text-sm font-bold">
+                Status
+                <select
+                  value={draft.status}
+                  onChange={(e) =>
+                    setDraft({
+                      ...draft,
+                      status: e.target.value as Draft["status"],
+                    })
+                  }
+                  className="mt-1 w-full rounded-xl border p-3"
+                >
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                </select>
+              </label>
+              <label className="text-sm font-bold">
+                Latitude
+                <input
+                  type="number"
+                  min="-90"
+                  max="90"
+                  step="any"
+                  value={draft.latitude ?? ""}
+                  onChange={(e) =>
+                    setDraft({
+                      ...draft,
+                      latitude:
+                        e.target.value === ""
+                          ? undefined
+                          : Number(e.target.value),
+                    })
+                  }
+                  className="mt-1 w-full rounded-xl border p-3"
+                />
+              </label>
+              <label className="text-sm font-bold">
+                Longitude
+                <input
+                  type="number"
+                  min="-180"
+                  max="180"
+                  step="any"
+                  value={draft.longitude ?? ""}
+                  onChange={(e) =>
+                    setDraft({
+                      ...draft,
+                      longitude:
+                        e.target.value === ""
+                          ? undefined
+                          : Number(e.target.value),
+                    })
+                  }
+                  className="mt-1 w-full rounded-xl border p-3"
+                />
+              </label>
+
+              <label className="text-sm font-bold flex items-center gap-2 col-span-1 sm:col-span-2 p-3 border rounded-xl mt-2 bg-slate-50">
+                <input
+                  type="checkbox"
+                  checked={draft.is_featured_popular || false}
+                  onChange={(e) =>
+                    setDraft({ ...draft, is_featured_popular: e.target.checked })
+                  }
+                  className="w-5 h-5 rounded text-[#1464F4] focus:ring-[#1464F4]"
+                />
+                Show as Featured Popular Location on Home Page
+              </label>
+
+              <div className="col-span-1 sm:col-span-2">
+                <label className="text-sm font-bold block mb-2">Location Image (Featured Locations)</label>
+                {draft.image_url && (
+                  <div className="mb-3">
+                    <img src={draft.image_url} alt="Location" className="h-32 rounded-xl object-cover" />
+                  </div>
+                )}
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageUpload}
+                  disabled={busy}
+                  className="block w-full text-sm text-slate-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-[#1464F4] hover:file:bg-blue-100"
+                />
+              </div>
+            </div>
+            <p className="mt-3 text-xs text-slate-500">
+              Coordinates are optional but must be supplied as a valid pair.
+              Canonical hierarchy IDs are derived from the selected parent.
+            </p>
+            <div className="mt-6 flex gap-3">
+              <button
+                onClick={() => setDraft(null)}
+                className="flex-1 rounded-xl border p-3 font-bold"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={busy}
+                onClick={() => void save()}
+                className="flex-1 rounded-xl bg-[#1464F4] p-3 font-bold text-white disabled:opacity-50"
+              >
+                {busy ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
+  );
 };

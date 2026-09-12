@@ -21,12 +21,14 @@ interface PostFlowContainerProps {
   module: 'rentals' | 'jobs' | 'services';
   onNavigate: (route: AppRoute) => void;
   onListingCreated?: (listing: UserListingItem) => void;
+  editListingId?: string;
 }
 
 export const PostFlowContainer: React.FC<PostFlowContainerProps> = ({
   module,
   onNavigate,
-  onListingCreated
+  onListingCreated,
+  editListingId
 }) => {
   // If Rentals module, use the complete 7-Step Rental Engine
   if (module === 'rentals') {
@@ -34,6 +36,7 @@ export const PostFlowContainer: React.FC<PostFlowContainerProps> = ({
       <RentalPostFlow
         onNavigate={onNavigate}
         onListingCreated={onListingCreated}
+        editListingId={editListingId}
       />
     );
   }
@@ -44,6 +47,7 @@ export const PostFlowContainer: React.FC<PostFlowContainerProps> = ({
       <JobPostFlow
         onNavigate={onNavigate}
         onListingCreated={onListingCreated}
+        editListingId={editListingId}
       />
     );
   }
@@ -54,6 +58,7 @@ export const PostFlowContainer: React.FC<PostFlowContainerProps> = ({
       <ServicePostFlow
         onNavigate={onNavigate}
         onCancel={() => onNavigate('/post')}
+        editListingId={editListingId}
         onSuccess={(listingId) => {
           if (onListingCreated) {
             onListingCreated({

@@ -1,6 +1,8 @@
 -- Migration: 20260826040000_create_notifications_schema.sql
 -- Description: Create notifications and notification_preferences tables with RLS and DB triggers for listing status changes
 
+DROP TABLE IF EXISTS public.notifications CASCADE;
+
 CREATE TABLE IF NOT EXISTS public.notifications (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,

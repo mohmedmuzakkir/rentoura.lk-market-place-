@@ -5,7 +5,7 @@
 BEGIN;
 
 CREATE TEMP TABLE temp_job_canonical_categories (
-  module text NOT NULL DEFAULT 'job',
+  module listing_module NOT NULL DEFAULT 'job',
   level integer NOT NULL,
   name text NOT NULL,
   slug text NOT NULL,

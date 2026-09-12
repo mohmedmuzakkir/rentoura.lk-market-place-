@@ -26,6 +26,7 @@ interface ServicePostFlowProps {
   onNavigate?: (route: AppRoute) => void;
   onCancel?: () => void;
   onSuccess?: (listingId: string) => void;
+  editListingId?: string;
 }
 
 const SERVICE_STEPS: StepItem[] = [
@@ -43,7 +44,8 @@ export const ServicePostFlow: React.FC<ServicePostFlowProps> = ({
   initialDraft,
   onNavigate,
   onCancel,
-  onSuccess
+  onSuccess,
+  editListingId
 }) => {
   const accentColor = '#FF650A'; // Service Orange Accent
 
@@ -53,7 +55,14 @@ export const ServicePostFlow: React.FC<ServicePostFlowProps> = ({
       return initialDraft;
     }
     const saved = PostDraftService.getDraft('services');
-    if (saved) return saved;
+    if (saved) {
+      if (!editListingId && saved.id) {
+        PostDraftService.deleteDraft('services');
+        // fall through to create fresh draft
+      } else {
+        return saved;
+      }
+    }
 
     // Create fresh initial draft
     const fresh = PostDraftService.createInitialDraft('services');
@@ -100,6 +109,7 @@ export const ServicePostFlow: React.FC<ServicePostFlowProps> = ({
     };
   });
 
+  const [isLoadingEdit, setIsLoadingEdit] = useState<boolean>(!!editListingId);
   const [currentStep, setCurrentStep] = useState<number>(draft.currentStep || 1);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
@@ -122,6 +132,31 @@ export const ServicePostFlow: React.FC<ServicePostFlowProps> = ({
     const updated = { ...draft, currentStep };
     PostDraftService.saveDraft(updated);
   }, [draft, currentStep]);
+
+  // Fetch listing for edit mode
+  useEffect(() => {
+    if (!editListingId) {
+      setIsLoadingEdit(false);
+      return;
+    }
+    const loadListing = async () => {
+      setIsLoadingEdit(true);
+      try {
+        const fetchedDraft = await ListingSubmissionService.fetchListingForEdit(editListingId, 'services');
+        if (fetchedDraft) {
+          setDraft(fetchedDraft);
+          setCurrentStep(fetchedDraft.currentStep || 1);
+        } else {
+          setErrors(prev => ({ ...prev, fetch: 'Failed to load listing for editing.' }));
+        }
+      } catch (err: any) {
+        setErrors(prev => ({ ...prev, fetch: err.message || 'An error occurred while loading.' }));
+      } finally {
+        setIsLoadingEdit(false);
+      }
+    };
+    loadListing();
+  }, [editListingId]);
 
   const updateDraft = (fields: Partial<ListingDraft>) => {
     setDraft(prev => ({
@@ -225,7 +260,8 @@ export const ServicePostFlow: React.FC<ServicePostFlowProps> = ({
     try {
       if (agreementRequired) await AuthService.acceptUserAgreement('post_listing');
       const result = await ListingSubmissionService.submitListing(draft);
-      if (result.success) {
+      if (result.success && result.listing) {
+        PostDraftService.deleteDraft('services');
         setCreatedListing(result.listing);
         if (onSuccess) onSuccess(result.listing.id);
       } else {
@@ -238,10 +274,20 @@ export const ServicePostFlow: React.FC<ServicePostFlowProps> = ({
     }
   };
 
+  if (isLoadingEdit) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 pb-28">
+        <div className="w-12 h-12 border-4 border-orange-200 border-t-orange-600 rounded-full animate-spin mb-4"></div>
+        <h2 className="text-xl font-bold text-slate-800">Loading your listing...</h2>
+        <p className="text-slate-500 mt-2">Getting things ready for you to edit.</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-slate-50/60 pb-32">
+    <div className="min-h-screen bg-slate-50 flex flex-col pb-28 relative">
       {/* Top Header Bar */}
-      <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-slate-200/80 px-4 py-3">
+      <header className="sticky top-0 z-40 bg-white border-b border-slate-200/80 px-4 py-3 shadow-sm">
         <div className="max-w-xl mx-auto flex items-center justify-between">
           <button
             type="button"
@@ -278,9 +324,14 @@ export const ServicePostFlow: React.FC<ServicePostFlowProps> = ({
         totalSteps={8}
         steps={SERVICE_STEPS}
         onSelectStep={(step) => {
-          if (step < currentStep) setCurrentStep(step);
+          if (step < currentStep) {
+            setCurrentStep(step);
+          } else if ((step === currentStep + 1 || !!editListingId) && validateStep(currentStep)) {
+            setCurrentStep(step);
+          }
         }}
         accentColor={accentColor}
+        isEditMode={!!editListingId}
       />
 
       {/* Main Step Body */}
@@ -370,8 +421,8 @@ export const ServicePostFlow: React.FC<ServicePostFlowProps> = ({
       </main>
 
       {/* Sticky Step Bottom Navigation Bar */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200/90 py-3 px-4 shadow-lg">
-        <div className="max-w-xl mx-auto flex items-center justify-between gap-3">
+      <div className="max-w-xl mx-auto px-4 mt-6 mb-12">
+        <div className="flex items-center justify-between gap-3">
           {Object.keys(errors).length > 0 && (
             <p role="alert" className="max-w-[12rem] text-[11px] font-semibold text-rose-700">{Object.values(errors)[0]}</p>
           )}

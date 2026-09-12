@@ -1,15 +1,17 @@
 -- Phase 5: fix cross-conversation RLS predicates and support persisted read state.
 create or replace function public.is_conversation_participant(p_conversation_id uuid, p_user_id uuid)
 returns boolean
-language sql
+language plpgsql
 stable
 security definer
 set search_path = pg_catalog, public
 as $$
-  select exists (
+begin
+  return exists (
     select 1 from public.conversation_participants cp
     where cp.conversation_id = p_conversation_id and cp.user_id = p_user_id
   );
+end;
 $$;
 revoke all on function public.is_conversation_participant(uuid,uuid) from public,anon;
 grant execute on function public.is_conversation_participant(uuid,uuid) to authenticated;
