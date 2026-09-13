@@ -177,7 +177,8 @@ export class ListingSubmissionService {
         city_id: draft.location.cityId || null, area_id: draft.location.areaId || null,
         exact_address: draft.location.address || null, latitude: draft.location.latitude ?? null,
         longitude: draft.location.longitude ?? null, price: priceAmount || null, pricing_period: pricePeriod,
-        currency: 'LKR', status: 'pending', is_featured: false, module_data: moduleData,
+        currency: 'LKR', status: 'active', is_featured: false, module_data: moduleData,
+        published_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
 
@@ -247,8 +248,8 @@ export class ListingSubmissionService {
       }
 
       const result: UserListingItem = {
-        id: listingId, ownerId, module: draft.module, title, status: 'pending',
-        statusNote: targetId ? 'Updates submitted and queued for moderation review.' : 'Submitted and queued for moderation review.', imageUrl: '',
+        id: listingId, ownerId, module: draft.module, title, status: 'active',
+        statusNote: targetId ? 'Updates have been published and are now active.' : 'Listing is now active.', imageUrl: '',
         location: [draft.location.cityName, draft.location.districtName].filter(Boolean).join(', ') || 'Sri Lanka',
         price: priceFormatted, pricePeriod, category: draft.categoryName,
         subcategory: draft.subcategoryName || draft.categoryName, postedDate: 'Just now',

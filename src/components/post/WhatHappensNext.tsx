@@ -7,37 +7,37 @@ export const WhatHappensNext: React.FC = () => {
       step: '1',
       icon: Send,
       title: 'Submit Details',
-      statusTag: 'draft ➔ pending',
+      statusTag: 'draft ➔ active',
       color: 'text-[#1464F4]',
       bgColor: 'bg-blue-50/80 border-blue-100',
-      desc: 'Complete key listing details, upload images, and submit your post for review.'
+      desc: 'Complete key listing details, upload images, and submit your post.'
     },
     {
       step: '2',
-      icon: Clock,
-      title: 'Staff Moderation',
-      statusTag: 'pending',
-      color: 'text-amber-600',
-      bgColor: 'bg-amber-50/80 border-amber-100',
-      desc: 'Our staff team reviews content for quality, safety, and community guidelines.'
-    },
-    {
-      step: '3',
       icon: CheckCircle2,
       title: 'Live & Discoverable',
       statusTag: 'active',
       color: 'text-[#08A34F]',
       bgColor: 'bg-emerald-50/80 border-emerald-100',
-      desc: 'Once approved, your listing goes live across Sri Lanka for interested seekers.'
+      desc: 'Your listing goes live immediately across Sri Lanka for interested seekers.'
+    },
+    {
+      step: '3',
+      icon: Clock,
+      title: 'Ongoing Monitoring',
+      statusTag: 'active',
+      color: 'text-amber-600',
+      bgColor: 'bg-amber-50/80 border-amber-100',
+      desc: 'Our system continually monitors active listings for quality and safety compliance.'
     },
     {
       step: '4',
       icon: ShieldAlert,
-      title: 'Feedback & Updates',
-      statusTag: 'changes_requested / rejected',
+      title: 'Updates & Revisions',
+      statusTag: 'active',
       color: 'text-purple-600',
       bgColor: 'bg-purple-50/80 border-purple-100',
-      desc: 'If revisions are needed, staff provide feedback so you can update and resubmit.'
+      desc: 'You can easily edit and update your listing at any time to keep it fresh.'
     }
   ];
 

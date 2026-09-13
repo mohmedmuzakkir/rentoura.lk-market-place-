@@ -343,6 +343,13 @@ export const MyListingCard: React.FC<MyListingCardProps> = ({
                 {listing.status === 'active' && (
                   <>
                     <button
+                      onClick={() => onEdit(listing)}
+                      className="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200/60 transition-all flex items-center gap-1 active:scale-95"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                      <span>Edit</span>
+                    </button>
+                    <button
                       onClick={() => onView(listing.id, listing.module)}
                       className="px-3 py-1.5 rounded-xl text-xs font-bold text-[#1464F4] bg-blue-50/80 hover:bg-blue-100 border border-blue-200/60 transition-all flex items-center gap-1 active:scale-95"
                     >
