@@ -1,24 +1,24 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  LayoutDashboard, 
-  ShoppingBag, 
-  Clock, 
-  CheckCircle2, 
-  XCircle, 
-  AlertTriangle, 
-  Star, 
-  Users, 
-  ShieldCheck, 
-  Megaphone, 
-  Bell, 
-  FileText, 
-  Globe, 
-  Database, 
-  LogOut, 
-  ExternalLink, 
-  Search, 
-  ChevronRight, 
-  RotateCw, 
+import {
+  LayoutDashboard,
+  ShoppingBag,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  AlertTriangle,
+  Star,
+  Users,
+  ShieldCheck,
+  Megaphone,
+  Bell,
+  FileText,
+  Globe,
+  Database,
+  LogOut,
+  ExternalLink,
+  Search,
+  ChevronRight,
+  RotateCw,
   Menu,
   X,
   TrendingUp,
@@ -63,27 +63,27 @@ interface AdminDashboardPageProps {
   onLogout: () => void;
 }
 
-type ActiveSection = 
-  | 'overview' 
-  | 'all-listings' 
-  | 'pending-approvals' 
+type ActiveSection =
+  | 'overview'
+  | 'all-listings'
+  | 'pending-approvals'
   | 'moderation-queue'
   | 'listing-review'
-  | 'active-listings' 
-  | 'rejected-listings' 
-  | 'reported-listings' 
-  | 'all-users' 
-  | 'staff-roles' 
+  | 'active-listings'
+  | 'rejected-listings'
+  | 'reported-listings'
+  | 'all-users'
+  | 'staff-roles'
   | 'security'
   | 'slides'
   | 'companies'
-  | 'announcements' 
-  | 'notifications' 
-  | 'reviews' 
-  | 'reports' 
+  | 'announcements'
+  | 'notifications'
+  | 'reviews'
+  | 'reports'
   | 'categories'
   | 'locations'
-  | 'audit-logs' 
+  | 'audit-logs'
   | 'states'
   | 'settings';
 
@@ -98,9 +98,9 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  
+
   // Single Source of Truth Data State
-  const [kpiMetrics, setKpiMetrics] = useState<AdminKpiMetrics>({ totalListings:0, activeListings:0, pendingListings:0, rejectedListings:0, reportedListings:0, featuredListings:0, expiredListings:0, totalUsers:0, verifiedUsers:0, bannedUsers:0, totalViews:0, totalMessages:0, totalReviews:0, totalRevenue:0, rentalsCount:0, jobsCount:0, servicesCount:0 });
+  const [kpiMetrics, setKpiMetrics] = useState<AdminKpiMetrics>({ totalListings: 0, activeListings: 0, pendingListings: 0, rejectedListings: 0, reportedListings: 0, featuredListings: 0, expiredListings: 0, totalUsers: 0, verifiedUsers: 0, bannedUsers: 0, totalViews: 0, totalMessages: 0, totalReviews: 0, totalRevenue: 0, rentalsCount: 0, jobsCount: 0, servicesCount: 0 });
   const [listings, setListings] = useState<UserListingItem[]>([]);
   const [reports, setReports] = useState<ListingReport[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
@@ -133,7 +133,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
       setReports(reportPage.rows as unknown as ListingReport[]);
       if (staff.role === 'SUPER_ADMIN') {
         const events = await AdminModerationService.getModerationAudit();
-        setAuditLogs(events.map(event => ({ id:event.id, actorId:event.actorId || '', actorName:event.actorName, actorRole:event.actorRole.toUpperCase() as AuditLogItem['actorRole'], action:event.action, targetType:'listing', targetId:event.listingId, targetTitle:event.listingTitle, details:event.reason || '', timestamp:new Date(event.createdAt).getTime(), createdAt:event.createdAt })));
+        setAuditLogs(events.map(event => ({ id: event.id, actorId: event.actorId || '', actorName: event.actorName, actorRole: event.actorRole.toUpperCase() as AuditLogItem['actorRole'], action: event.action, targetType: 'listing', targetId: event.listingId, targetTitle: event.listingTitle, details: event.reason || '', timestamp: new Date(event.createdAt).getTime(), createdAt: event.createdAt })));
       } else setAuditLogs([]);
 
       const updatedAncs = await AdminService.getAnnouncementsAsync(moduleFilter);
@@ -150,7 +150,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
   // Derived filtered lists based on active module filter and searchQuery
   const filteredListings = listings.filter(item => {
     const matchesModule = moduleFilter === 'all' || item.module === moduleFilter;
-    const matchesQuery = !searchQuery.trim() || 
+    const matchesQuery = !searchQuery.trim() ||
       item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       item.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
       item.location.toLowerCase().includes(searchQuery.toLowerCase());
@@ -184,7 +184,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
     switch (activeSection) {
       case 'overview': return 'Overview Dashboard';
       case 'all-listings': return 'Marketplace Listings';
-      case 'pending-approvals': 
+      case 'pending-approvals':
       case 'moderation-queue': return 'Moderation Queue';
       case 'listing-review': return 'Listing Review Workspace';
       case 'active-listings': return 'Active Listings';
@@ -215,7 +215,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
 
     return (
       <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-6 text-xs font-medium">
-        
+
         {/* Main Section */}
         <div>
           {!isCollapsed && (
@@ -227,11 +227,10 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
             type="button"
             onClick={() => handleNavClick('overview')}
             title="Overview"
-            className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition-all ${
-              activeSection === 'overview'
+            className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl transition-all ${activeSection === 'overview'
                 ? 'bg-[#1464F4] text-white font-bold shadow-lg shadow-[#1464F4]/30'
                 : 'hover:bg-slate-800/60 text-slate-300'
-            }`}
+              }`}
           >
             <div className="flex items-center gap-2.5">
               <LayoutDashboard className="w-4 h-4 shrink-0" />
@@ -252,9 +251,8 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
               type="button"
               onClick={() => handleNavClick('all-listings')}
               title="All Listings"
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all ${
-                activeSection === 'all-listings' ? 'bg-[#1464F4] text-white font-bold' : 'hover:bg-slate-800/60 text-slate-300'
-              }`}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all ${activeSection === 'all-listings' ? 'bg-[#1464F4] text-white font-bold' : 'hover:bg-slate-800/60 text-slate-300'
+                }`}
             >
               <div className="flex items-center gap-2.5">
                 <ShoppingBag className="w-4 h-4 shrink-0" />
@@ -267,9 +265,8 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
               type="button"
               onClick={() => handleNavClick('pending-approvals')}
               title="Pending Approvals"
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all ${
-                activeSection === 'pending-approvals' ? 'bg-[#1464F4] text-white font-bold' : 'hover:bg-slate-800/60 text-slate-300'
-              }`}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all ${activeSection === 'pending-approvals' ? 'bg-[#1464F4] text-white font-bold' : 'hover:bg-slate-800/60 text-slate-300'
+                }`}
             >
               <div className="flex items-center gap-2.5">
                 <Clock className="w-4 h-4 text-amber-400 shrink-0" />
@@ -286,9 +283,8 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
               type="button"
               onClick={() => handleNavClick('active-listings')}
               title="Active Listings"
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all ${
-                activeSection === 'active-listings' ? 'bg-[#1464F4] text-white font-bold' : 'hover:bg-slate-800/60 text-slate-300'
-              }`}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all ${activeSection === 'active-listings' ? 'bg-[#1464F4] text-white font-bold' : 'hover:bg-slate-800/60 text-slate-300'
+                }`}
             >
               <div className="flex items-center gap-2.5">
                 <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
@@ -301,9 +297,8 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
               type="button"
               onClick={() => handleNavClick('rejected-listings')}
               title="Rejected Listings"
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all ${
-                activeSection === 'rejected-listings' ? 'bg-[#1464F4] text-white font-bold' : 'hover:bg-slate-800/60 text-slate-300'
-              }`}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all ${activeSection === 'rejected-listings' ? 'bg-[#1464F4] text-white font-bold' : 'hover:bg-slate-800/60 text-slate-300'
+                }`}
             >
               <div className="flex items-center gap-2.5">
                 <XCircle className="w-4 h-4 text-rose-400 shrink-0" />
@@ -316,9 +311,8 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
               type="button"
               onClick={() => handleNavClick('reported-listings')}
               title="Reported Listings"
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all ${
-                activeSection === 'reported-listings' ? 'bg-[#1464F4] text-white font-bold' : 'hover:bg-slate-800/60 text-slate-300'
-              }`}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all ${activeSection === 'reported-listings' ? 'bg-[#1464F4] text-white font-bold' : 'hover:bg-slate-800/60 text-slate-300'
+                }`}
             >
               <div className="flex items-center gap-2.5">
                 <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0" />
@@ -337,9 +331,8 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
                   type="button"
                   onClick={() => handleNavClick('categories')}
                   title="Category Taxonomy"
-                  className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all ${
-                    activeSection === 'categories' ? 'bg-[#1464F4] text-white font-bold' : 'hover:bg-slate-800/60 text-slate-300'
-                  }`}
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all ${activeSection === 'categories' ? 'bg-[#1464F4] text-white font-bold' : 'hover:bg-slate-800/60 text-slate-300'
+                    }`}
                 >
                   <div className="flex items-center gap-2.5">
                     <FolderTree className="w-4 h-4 text-cyan-400 shrink-0" />
@@ -351,9 +344,8 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
                   type="button"
                   onClick={() => handleNavClick('locations')}
                   title="Locations DB"
-                  className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all ${
-                    activeSection === 'locations' ? 'bg-[#1464F4] text-white font-bold' : 'hover:bg-slate-800/60 text-slate-300'
-                  }`}
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all ${activeSection === 'locations' ? 'bg-[#1464F4] text-white font-bold' : 'hover:bg-slate-800/60 text-slate-300'
+                    }`}
                 >
                   <div className="flex items-center gap-2.5">
                     <MapPin className="w-4 h-4 text-emerald-400 shrink-0" />
@@ -365,9 +357,8 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
                   type="button"
                   onClick={() => handleNavClick('slides')}
                   title="Hero Slides Manager"
-                  className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all ${
-                    activeSection === 'slides' ? 'bg-[#1464F4] text-white font-bold' : 'hover:bg-slate-800/60 text-slate-300'
-                  }`}
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all ${activeSection === 'slides' ? 'bg-[#1464F4] text-white font-bold' : 'hover:bg-slate-800/60 text-slate-300'
+                    }`}
                 >
                   <div className="flex items-center gap-2.5">
                     <Sliders className="w-4 h-4 text-[#00C2FF] shrink-0" />
@@ -379,9 +370,8 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
                   type="button"
                   onClick={() => handleNavClick('companies')}
                   title="Hiring Companies Manager"
-                  className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all ${
-                    activeSection === 'companies' ? 'bg-[#1464F4] text-white font-bold' : 'hover:bg-slate-800/60 text-slate-300'
-                  }`}
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all ${activeSection === 'companies' ? 'bg-[#1464F4] text-white font-bold' : 'hover:bg-slate-800/60 text-slate-300'
+                    }`}
                 >
                   <div className="flex items-center gap-2.5">
                     <Building2 className="w-4 h-4 text-[#08A34F] shrink-0" />
@@ -406,9 +396,8 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
                 type="button"
                 onClick={() => handleNavClick('all-users')}
                 title="All Users"
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all ${
-                  activeSection === 'all-users' ? 'bg-[#1464F4] text-white font-bold' : 'hover:bg-slate-800/60 text-slate-300'
-                }`}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all ${activeSection === 'all-users' ? 'bg-[#1464F4] text-white font-bold' : 'hover:bg-slate-800/60 text-slate-300'
+                  }`}
               >
                 <div className="flex items-center gap-2.5">
                   <Users className="w-4 h-4 shrink-0" />
@@ -422,9 +411,8 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
                   type="button"
                   onClick={() => handleNavClick('staff-roles')}
                   title="Staff & Roles"
-                  className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all ${
-                    activeSection === 'staff-roles' ? 'bg-[#1464F4] text-white font-bold' : 'hover:bg-slate-800/60 text-slate-300'
-                  }`}
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all ${activeSection === 'staff-roles' ? 'bg-[#1464F4] text-white font-bold' : 'hover:bg-slate-800/60 text-slate-300'
+                    }`}
                 >
                   <div className="flex items-center gap-2.5">
                     <ShieldCheck className="w-4 h-4 text-cyan-400 shrink-0" />
@@ -438,9 +426,8 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
                   type="button"
                   onClick={() => handleNavClick('security')}
                   title="Security & Password"
-                  className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all ${
-                    activeSection === 'security' ? 'bg-[#1464F4] text-white font-bold' : 'hover:bg-slate-800/60 text-slate-300'
-                  }`}
+                  className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all ${activeSection === 'security' ? 'bg-[#1464F4] text-white font-bold' : 'hover:bg-slate-800/60 text-slate-300'
+                    }`}
                 >
                   <div className="flex items-center gap-2.5">
                     <KeyRound className="w-4 h-4 text-amber-400 shrink-0" />
@@ -464,9 +451,8 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
               type="button"
               onClick={() => handleNavClick('announcements')}
               title="Announcements"
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all ${
-                activeSection === 'announcements' ? 'bg-[#1464F4] text-white font-bold' : 'hover:bg-slate-800/60 text-slate-300'
-              }`}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all ${activeSection === 'announcements' ? 'bg-[#1464F4] text-white font-bold' : 'hover:bg-slate-800/60 text-slate-300'
+                }`}
             >
               <div className="flex items-center gap-2.5">
                 <Megaphone className="w-4 h-4 text-amber-400 shrink-0" />
@@ -479,9 +465,8 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
               type="button"
               onClick={() => handleNavClick('reviews')}
               title="Reviews & Ratings"
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all ${
-                activeSection === 'reviews' ? 'bg-[#1464F4] text-white font-bold' : 'hover:bg-slate-800/60 text-slate-300'
-              }`}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all ${activeSection === 'reviews' ? 'bg-[#1464F4] text-white font-bold' : 'hover:bg-slate-800/60 text-slate-300'
+                }`}
             >
               <div className="flex items-center gap-2.5">
                 <Star className="w-4 h-4 text-amber-400 shrink-0" />
@@ -493,9 +478,8 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
               type="button"
               onClick={() => handleNavClick('audit-logs')}
               title="Audit Logs"
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all ${
-                activeSection === 'audit-logs' ? 'bg-[#1464F4] text-white font-bold' : 'hover:bg-slate-800/60 text-slate-300'
-              }`}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all ${activeSection === 'audit-logs' ? 'bg-[#1464F4] text-white font-bold' : 'hover:bg-slate-800/60 text-slate-300'
+                }`}
             >
               <div className="flex items-center gap-2.5">
                 <FileText className="w-4 h-4 text-emerald-400 shrink-0" />
@@ -508,9 +492,8 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
               type="button"
               onClick={() => handleNavClick('states')}
               title="Empty & Error States (Page 40)"
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all ${
-                activeSection === 'states' ? 'bg-[#1464F4] text-white font-bold' : 'hover:bg-slate-800/60 text-slate-300'
-              }`}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-xl transition-all ${activeSection === 'states' ? 'bg-[#1464F4] text-white font-bold' : 'hover:bg-slate-800/60 text-slate-300'
+                }`}
             >
               <div className="flex items-center gap-2.5">
                 <Inbox className="w-4 h-4 text-cyan-400 shrink-0" />
@@ -526,11 +509,11 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
 
   return (
     <div className="min-h-screen bg-[#F5F7FB] text-slate-800 flex flex-col font-sans select-none w-full overflow-x-hidden">
-      
+
       {/* Admin Desktop & Mobile Top Bar */}
       <header className="bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-40 h-16 px-4 md:px-6 flex items-center justify-between shadow-md w-full shrink-0">
         <div className="flex items-center gap-3 md:gap-4">
-          
+
           {/* Menu Toggle Button */}
           <button
             type="button"
@@ -579,7 +562,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
 
         {/* Top Right Controls & Staff Profile */}
         <div className="flex items-center gap-2.5 sm:gap-3">
-          
+
           <button
             type="button"
             onClick={refreshDashboardData}
@@ -653,12 +636,11 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
 
       {/* Main Admin Body Area */}
       <div className="flex-1 flex w-full relative min-h-[calc(100vh-4rem)]">
-        
+
         {/* Desktop Fixed Left Sidebar */}
         <aside
-          className={`hidden lg:flex bg-[#041C43] text-slate-300 border-r border-slate-800/80 flex-col justify-between transition-all duration-300 shrink-0 sticky top-16 h-[calc(100vh-4rem)] overflow-y-auto ${
-            sidebarCollapsed ? 'w-20' : 'w-[260px]'
-          }`}
+          className={`hidden lg:flex bg-[#041C43] text-slate-300 border-r border-slate-800/80 flex-col justify-between transition-all duration-300 shrink-0 sticky top-16 h-[calc(100vh-4rem)] overflow-y-auto ${sidebarCollapsed ? 'w-20' : 'w-[260px]'
+            }`}
         >
           {/* Staff Info Card Header */}
           {!sidebarCollapsed ? (
@@ -697,7 +679,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
                   title={staff.fullName}
                 />
               ) : (
-                <div 
+                <div
                   className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-[#1464F4] to-cyan-500 text-white font-black text-xs flex items-center justify-center ring-2 ring-[#1464F4]"
                   title={staff.fullName}
                 >
@@ -738,14 +720,14 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
         {mobileDrawerOpen && (
           <div className="lg:hidden">
             {/* Backdrop */}
-            <div 
+            <div
               className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs z-50 transition-opacity"
               onClick={() => setMobileDrawerOpen(false)}
             />
-            
+
             {/* Drawer Container */}
             <aside className="fixed inset-y-0 left-0 z-50 w-[280px] max-w-[85vw] bg-[#041C43] text-slate-300 shadow-2xl flex flex-col justify-between overflow-y-auto">
-              
+
               {/* Drawer Top Branding Header */}
               <div>
                 <div className="p-4 border-b border-slate-800/80 flex items-center justify-between">
@@ -757,7 +739,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
                       Admin
                     </span>
                   </div>
-                  
+
                   <button
                     type="button"
                     onClick={() => setMobileDrawerOpen(false)}
@@ -822,30 +804,30 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
 
         {/* Main Dashboard Content Workspace */}
         <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 space-y-6 overflow-y-auto bg-[#F5F7FB]">
-          
+
           {activeSection === 'moderation-queue' || activeSection === 'pending-approvals' ? (
-            <AdminModerationQueue 
-              staff={staff} 
+            <AdminModerationQueue
+              staff={staff}
               onReviewListing={(id) => {
                 setSelectedReviewListingId(id);
                 setActiveSection('listing-review');
                 window.history.pushState({}, '', `/admin/review?listing=${encodeURIComponent(id)}`);
               }}
-              onRefresh={refreshDashboardData} 
+              onRefresh={refreshDashboardData}
             />
           ) : activeSection === 'listing-review' ? (
-            <AdminListingReview 
+            <AdminListingReview
               listingId={selectedReviewListingId}
-              staff={staff} 
+              staff={staff}
               onBackToQueue={() => { setActiveSection('moderation-queue'); window.history.pushState({}, '', '/admin/queue'); }}
               onNavigateToListing={(id) => { setSelectedReviewListingId(id); window.history.pushState({}, '', `/admin/review?listing=${encodeURIComponent(id)}`); }}
               onOpenReports={() => setActiveSection('reports')}
               onRefresh={refreshDashboardData}
             />
           ) : activeSection === 'all-users' ? (
-            <AdminUsersView 
-              staff={staff} 
-              onRefresh={refreshDashboardData} 
+            <AdminUsersView
+              staff={staff}
+              onRefresh={refreshDashboardData}
               onNavigateToListings={(userId) => setActiveSection('all-listings')}
             />
           ) : activeSection === 'categories' ? (
@@ -868,17 +850,17 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
           ) : activeSection === 'companies' ? (
             <AdminCompaniesView staff={staff} />
           ) : activeSection === 'all-listings' || activeSection === 'active-listings' || activeSection === 'rejected-listings' ? (
-            <AdminListingsView 
-              staff={staff} 
-              initialTab={activeSection === 'active-listings' ? 'active' : activeSection === 'rejected-listings' ? 'rejected' : 'all'} 
-              onRefresh={refreshDashboardData} 
+            <AdminListingsView
+              staff={staff}
+              initialTab={activeSection === 'active-listings' ? 'active' : activeSection === 'rejected-listings' ? 'rejected' : 'all'}
+              onRefresh={refreshDashboardData}
             />
           ) : activeSection === 'audit-logs' ? (
             <AdminAuditLogsView staff={staff} />
           ) : activeSection === 'reports' || activeSection === 'reported-listings' ? (
-            <AdminReportsView 
-              staff={staff} 
-              onRefresh={refreshDashboardData} 
+            <AdminReportsView
+              staff={staff}
+              onRefresh={refreshDashboardData}
               onNavigateToTarget={(targetType, targetId) => {
                 if (targetType === 'listing') {
                   setSelectedReviewListingId(targetId);
@@ -918,14 +900,13 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
                         key={mod}
                         type="button"
                         onClick={() => setModuleFilter(mod)}
-                        className={`px-3 py-1.5 rounded-xl capitalize transition-all ${
-                          moduleFilter === mod 
+                        className={`px-3 py-1.5 rounded-xl capitalize transition-all ${moduleFilter === mod
                             ? (mod === 'rentals' ? 'bg-[#1464F4] text-white shadow-xs' :
-                               mod === 'jobs' ? 'bg-[#08A34F] text-white shadow-xs' :
-                               mod === 'services' ? 'bg-[#FF650A] text-white shadow-xs' :
-                               'bg-slate-900 text-white shadow-xs')
+                              mod === 'jobs' ? 'bg-[#08A34F] text-white shadow-xs' :
+                                mod === 'services' ? 'bg-[#FF650A] text-white shadow-xs' :
+                                  'bg-slate-900 text-white shadow-xs')
                             : 'text-slate-600 hover:text-slate-900'
-                        }`}
+                          }`}
                       >
                         {mod}
                       </button>
@@ -945,7 +926,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
 
               {/* Desktop & Mobile Responsive KPI Metric Cards Row */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 md:gap-5">
-                
+
                 {/* Total Listings Card */}
                 <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-md transition-shadow min-w-0">
                   <div className="flex items-center justify-between mb-3">
@@ -957,7 +938,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
                   <div className="text-2xl font-black text-slate-900 tracking-tight">{kpiMetrics.totalListings.toLocaleString()}</div>
                   <div className="text-[11px] text-emerald-600 font-bold mt-1.5 flex items-center gap-1">
                     <TrendingUp className="w-3.5 h-3.5 shrink-0" />
-                    <span className="truncate">{liveMetrics && liveMetrics.previousListings7d > 0 ? `${(((liveMetrics.newListings7d-liveMetrics.previousListings7d)/liveMetrics.previousListings7d)*100).toFixed(1)}% vs prior 7 days` : 'No comparison data'}</span>
+                    <span className="truncate">{liveMetrics && liveMetrics.previousListings7d > 0 ? `${(((liveMetrics.newListings7d - liveMetrics.previousListings7d) / liveMetrics.previousListings7d) * 100).toFixed(1)}% vs prior 7 days` : 'No comparison data'}</span>
                   </div>
                 </div>
 
@@ -1015,17 +996,17 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
                   <div className="text-2xl font-black text-slate-900 tracking-tight">{kpiMetrics.totalUsers.toLocaleString()}</div>
                   <div className="text-[11px] text-emerald-600 font-bold mt-1.5 flex items-center gap-1">
                     <TrendingUp className="w-3.5 h-3.5 shrink-0" />
-                    <span className="truncate">{liveMetrics && liveMetrics.previousUsers7d > 0 ? `${(((liveMetrics.newUsers7d-liveMetrics.previousUsers7d)/liveMetrics.previousUsers7d)*100).toFixed(1)}% vs prior 7 days` : 'No comparison data'}</span>
+                    <span className="truncate">{liveMetrics && liveMetrics.previousUsers7d > 0 ? `${(((liveMetrics.newUsers7d - liveMetrics.previousUsers7d) / liveMetrics.previousUsers7d) * 100).toFixed(1)}% vs prior 7 days` : 'No comparison data'}</span>
                   </div>
                 </div>
               </div>
 
               {/* Primary Dashboard Grid (Left 2/3 + Right 1/3) */}
               <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-                
+
                 {/* Left 2 Columns Workspace */}
                 <div className="xl:col-span-2 space-y-6 min-w-0">
-                  
+
                   {/* Overview Analytics Chart Card */}
                   <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs">
                     <div className="flex items-center justify-between mb-6">
@@ -1174,7 +1155,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
 
                 {/* Right Column Workspace (Quick Actions & System Health) */}
                 <div className="space-y-6 min-w-0">
-                  
+
                   {/* Quick Actions Card */}
                   <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs">
                     <h3 className="text-base font-extrabold text-slate-900 mb-4">Quick Actions</h3>
@@ -1220,7 +1201,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
                   {/* System Health Status Card */}
                   <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs">
                     <h3 className="text-base font-extrabold text-slate-900 mb-3">System Health Status</h3>
-                    
+
                     <div className="space-y-3 text-xs">
                       <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
                         <span className="text-slate-600 font-semibold flex items-center gap-2 truncate">
