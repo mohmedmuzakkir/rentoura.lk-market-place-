@@ -74,24 +74,49 @@ export class ListingDetailService {
         console.warn(`[ListingDetailService] Error fetching media for ${id}:`, mediaRes.error.message);
       }
 
-      // Format image URLs concurrently
+      // Format image URLs using a single batched storage request
       const images: string[] = [];
       if (mediaRows && mediaRows.length > 0) {
-        const urlPromises = mediaRows.map(async (m) => {
-          if (!m.storage_path) return null;
+        const rawPaths: string[] = [];
+        const directUrls: string[] = [];
+
+        for (const m of mediaRows) {
+          if (!m.storage_path) continue;
           if (m.storage_path.startsWith('http://') || m.storage_path.startsWith('https://')) {
-            return m.storage_path;
+            directUrls.push(m.storage_path);
+          } else {
+            rawPaths.push(m.storage_path);
           }
-          const { data: signedData } = await supabase
-            .storage
-            .from('listing-images')
-            .createSignedUrl(m.storage_path, 3600);
-          return signedData?.signedUrl || null;
-        });
-        const resolvedUrls = await Promise.all(urlPromises);
-        resolvedUrls.forEach(url => {
-          if (url) images.push(url);
-        });
+        }
+
+        const signedMap = new Map<string, string>();
+        if (rawPaths.length > 0) {
+          try {
+            const { data: batchSigned } = await supabase.storage
+              .from('listing-images')
+              .createSignedUrls(rawPaths, 3600);
+
+            if (batchSigned && Array.isArray(batchSigned)) {
+              batchSigned.forEach((item) => {
+                if (item.path && item.signedUrl) {
+                  signedMap.set(item.path, item.signedUrl);
+                }
+              });
+            }
+          } catch (e) {
+            console.warn('[ListingDetailService] Error batch signing gallery images:', e);
+          }
+        }
+
+        for (const m of mediaRows) {
+          if (!m.storage_path) continue;
+          if (m.storage_path.startsWith('http://') || m.storage_path.startsWith('https://')) {
+            images.push(m.storage_path);
+          } else {
+            const signedUrl = signedMap.get(m.storage_path);
+            if (signedUrl) images.push(signedUrl);
+          }
+        }
       }
 
       // 4. Map Location details

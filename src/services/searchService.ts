@@ -101,6 +101,47 @@ export class SearchService {
   }
 
   /**
+   * Helper: Batched resolution of cover image storage paths in private bucket 'listing-images'.
+   * Makes ONE single request to supabase.storage.from('listing-images').createSignedUrls(paths, expiry).
+   */
+  public static async resolveCoverUrlsBatch(
+    storagePaths: (string | null | undefined)[],
+    expirySeconds: number = 3600
+  ): Promise<Map<string, string>> {
+    const urlMap = new Map<string, string>();
+    const pathsToSign: string[] = [];
+
+    for (const path of storagePaths) {
+      if (!path) continue;
+      if (path.startsWith('http://') || path.startsWith('https://')) {
+        urlMap.set(path, path);
+      } else if (!pathsToSign.includes(path)) {
+        pathsToSign.push(path);
+      }
+    }
+
+    if (pathsToSign.length > 0) {
+      try {
+        const { data, error } = await supabase.storage
+          .from('listing-images')
+          .createSignedUrls(pathsToSign, expirySeconds);
+
+        if (!error && Array.isArray(data)) {
+          data.forEach((item) => {
+            if (item.path && item.signedUrl) {
+              urlMap.set(item.path, item.signedUrl);
+            }
+          });
+        }
+      } catch (e) {
+        console.warn('Error batch signing cover image URLs:', e);
+      }
+    }
+
+    return urlMap;
+  }
+
+  /**
    * Executes RPC `search_marketplace` in Supabase with client-side fallback
    */
   public static async search(params: SearchParams): Promise<SearchResponse> {
@@ -162,17 +203,18 @@ export class SearchService {
 
       const rawResults: any[] = Array.isArray(resObj?.results) ? resObj.results : [];
 
-      // Resolve cover signed URLs in parallel
-      const processedResults = await Promise.all(
-        rawResults.map(async (item) => {
-          const coverPath = item.cover_storage_path || (Array.isArray(item.media_urls) && item.media_urls[0]) || null;
-          const coverUrl = await SearchService.resolveCoverUrl(coverPath);
-          return {
-            ...item,
-            cover_url: coverUrl
-          };
-        })
-      );
+      // Resolve cover signed URLs in ONE batched request
+      const coverPaths = rawResults.map(item => item.cover_storage_path || (Array.isArray(item.media_urls) && item.media_urls[0]) || null);
+      const urlMap = await SearchService.resolveCoverUrlsBatch(coverPaths, 3600);
+
+      const processedResults = rawResults.map((item) => {
+        const coverPath = item.cover_storage_path || (Array.isArray(item.media_urls) && item.media_urls[0]) || null;
+        const coverUrl = coverPath ? (urlMap.get(coverPath) || SearchService.NEUTRAL_PLACEHOLDER) : SearchService.NEUTRAL_PLACEHOLDER;
+        return {
+          ...item,
+          cover_url: coverUrl
+        };
+      });
 
       return {
         counts,
@@ -190,75 +232,125 @@ export class SearchService {
 
   /**
    * Truthful client-side fallback query when RPC is absent or returns an error.
-   * Performs real multi-module counts and predicate matching.
+   * Performs real multi-module counts and predicate matching. Parallelizes count queries.
    */
   private static async executeFallbackSearch(params: SearchParams, modParam: string): Promise<SearchResponse> {
     try {
       const offset = params.offset || 0;
       const limit = params.limit || 12;
 
-      let baseQuery = supabase
+      const buildFilteredQuery = (moduleName?: string) => {
+        let q = supabase
+          .from('listing_search_view')
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'active');
+
+        if (params.categoryId) {
+          q = q.eq('category_id', params.categoryId);
+        }
+        if (params.provinceId) {
+          q = q.eq('province_id', params.provinceId);
+        }
+        if (params.districtId) {
+          q = q.eq('district_id', params.districtId);
+        }
+        if (params.cityId) {
+          q = q.eq('city_id', params.cityId);
+        }
+        if (params.areaId) {
+          q = q.eq('area_id', params.areaId);
+        }
+        if (params.minPrice !== null && params.minPrice !== undefined) {
+          q = q.or(`price.gte.${params.minPrice},minimum_price.gte.${params.minPrice}`);
+        }
+        if (params.maxPrice !== null && params.maxPrice !== undefined) {
+          q = q.or(`price.lte.${params.maxPrice},maximum_price.lte.${params.maxPrice}`);
+        }
+        if (params.rentalPeriod) {
+          q = q.or(`price_period.ilike.%${params.rentalPeriod}%`);
+        }
+        if (params.jobType) {
+          q = q.or(`job_type.ilike.%${params.jobType}%`);
+        }
+        if (params.workMode) {
+          q = q.or(`work_mode.ilike.%${params.workMode}%`);
+        }
+        if (params.pricingType) {
+          q = q.or(`pricing_type.ilike.%${params.pricingType}%`);
+        }
+        if (params.query && params.query.trim() !== '') {
+          const tokens = params.query.trim().toLowerCase().split(/\s+/).filter(t => t.length > 0);
+          for (const token of tokens) {
+            q = q.or(`title.ilike.%${token}%,description.ilike.%${token}%,search_text.ilike.%${token}%,category_name.ilike.%${token}%,location_name.ilike.%${token}%`);
+          }
+        }
+        if (moduleName) {
+          q = q.eq('module', moduleName);
+        }
+        return q;
+      };
+
+      // Parallelize module count queries with Promise.all
+      const [allRes, rentalsRes, jobsRes, servicesRes] = await Promise.all([
+        buildFilteredQuery(),
+        buildFilteredQuery('rental'),
+        buildFilteredQuery('job'),
+        buildFilteredQuery('service')
+      ]);
+
+      const counts: SearchCounts = {
+        all: allRes.count || 0,
+        rentals: rentalsRes.count || 0,
+        jobs: jobsRes.count || 0,
+        services: servicesRes.count || 0
+      };
+
+      // 3. Build query for active module page
+      let activeQuery = supabase
         .from('listing_search_view')
         .select('*', { count: 'exact' })
         .eq('status', 'active');
 
       if (params.categoryId) {
-        baseQuery = baseQuery.eq('category_id', params.categoryId);
+        activeQuery = activeQuery.eq('category_id', params.categoryId);
       }
       if (params.provinceId) {
-        baseQuery = baseQuery.eq('province_id', params.provinceId);
+        activeQuery = activeQuery.eq('province_id', params.provinceId);
       }
       if (params.districtId) {
-        baseQuery = baseQuery.eq('district_id', params.districtId);
+        activeQuery = activeQuery.eq('district_id', params.districtId);
       }
       if (params.cityId) {
-        baseQuery = baseQuery.eq('city_id', params.cityId);
+        activeQuery = activeQuery.eq('city_id', params.cityId);
       }
       if (params.areaId) {
-        baseQuery = baseQuery.eq('area_id', params.areaId);
+        activeQuery = activeQuery.eq('area_id', params.areaId);
       }
       if (params.minPrice !== null && params.minPrice !== undefined) {
-        baseQuery = baseQuery.or(`price.gte.${params.minPrice},minimum_price.gte.${params.minPrice}`);
+        activeQuery = activeQuery.or(`price.gte.${params.minPrice},minimum_price.gte.${params.minPrice}`);
       }
       if (params.maxPrice !== null && params.maxPrice !== undefined) {
-        baseQuery = baseQuery.or(`price.lte.${params.maxPrice},maximum_price.lte.${params.maxPrice}`);
+        activeQuery = activeQuery.or(`price.lte.${params.maxPrice},maximum_price.lte.${params.maxPrice}`);
       }
       if (params.rentalPeriod) {
-        baseQuery = baseQuery.or(`price_period.ilike.%${params.rentalPeriod}%`);
+        activeQuery = activeQuery.or(`price_period.ilike.%${params.rentalPeriod}%`);
       }
       if (params.jobType) {
-        baseQuery = baseQuery.or(`job_type.ilike.%${params.jobType}%`);
+        activeQuery = activeQuery.or(`job_type.ilike.%${params.jobType}%`);
       }
       if (params.workMode) {
-        baseQuery = baseQuery.or(`work_mode.ilike.%${params.workMode}%`);
+        activeQuery = activeQuery.or(`work_mode.ilike.%${params.workMode}%`);
       }
       if (params.pricingType) {
-        baseQuery = baseQuery.or(`pricing_type.ilike.%${params.pricingType}%`);
+        activeQuery = activeQuery.or(`pricing_type.ilike.%${params.pricingType}%`);
       }
       if (params.query && params.query.trim() !== '') {
         const tokens = params.query.trim().toLowerCase().split(/\s+/).filter(t => t.length > 0);
         for (const token of tokens) {
-          baseQuery = baseQuery.or(`title.ilike.%${token}%,description.ilike.%${token}%,search_text.ilike.%${token}%,category_name.ilike.%${token}%,location_name.ilike.%${token}%`);
+          activeQuery = activeQuery.or(`title.ilike.%${token}%,description.ilike.%${token}%,search_text.ilike.%${token}%,category_name.ilike.%${token}%,location_name.ilike.%${token}%`);
         }
       }
 
-      // 1. Fetch count for 'all'
-      const { count: countAll } = await baseQuery;
-
-      // 2. Fetch counts for modules
-      const { count: countRentals } = await baseQuery.eq('module', 'rental');
-      const { count: countJobs } = await baseQuery.eq('module', 'job');
-      const { count: countServices } = await baseQuery.eq('module', 'service');
-
-      const counts: SearchCounts = {
-        all: countAll || 0,
-        rentals: countRentals || 0,
-        jobs: countJobs || 0,
-        services: countServices || 0
-      };
-
-      // 3. Build query for active module page
-      let activeQuery = baseQuery;
       if (modParam !== 'all') {
         activeQuery = activeQuery.eq('module', modParam);
       }
@@ -287,16 +379,18 @@ export class SearchService {
 
       const totalSelected = activeCount || viewData.length;
 
-      const processedResults = await Promise.all(
-        viewData.map(async (item: any) => {
-          const coverPath = item.cover_storage_path || (Array.isArray(item.media_urls) && item.media_urls[0]) || null;
-          const coverUrl = await SearchService.resolveCoverUrl(coverPath);
-          return {
-            ...item,
-            cover_url: coverUrl
-          };
-        })
-      );
+      // Resolve cover signed URLs in ONE batched request
+      const coverPaths = viewData.map((item: any) => item.cover_storage_path || (Array.isArray(item.media_urls) && item.media_urls[0]) || null);
+      const urlMap = await SearchService.resolveCoverUrlsBatch(coverPaths, 3600);
+
+      const processedResults = viewData.map((item: any) => {
+        const coverPath = item.cover_storage_path || (Array.isArray(item.media_urls) && item.media_urls[0]) || null;
+        const coverUrl = coverPath ? (urlMap.get(coverPath) || SearchService.NEUTRAL_PLACEHOLDER) : SearchService.NEUTRAL_PLACEHOLDER;
+        return {
+          ...item,
+          cover_url: coverUrl
+        };
+      });
 
       return {
         counts,

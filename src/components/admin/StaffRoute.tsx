@@ -3,8 +3,6 @@ import { AlertCircle, RotateCw, LogOut } from 'lucide-react';
 import { AppRoute } from '../../types';
 import { UserProfile } from '../../types/profileTypes';
 import { StaffAccount } from '../../types/adminTypes';
-import { AdminDashboardPage } from '../../pages/AdminDashboardPage';
-import { AdminLoginPage } from '../../pages/admin/AdminLoginPage';
 import { AuthService } from '../../services/authService';
 import { RentouraLogo } from '../RentouraLogo';
 import { 
@@ -13,6 +11,9 @@ import {
   getDashboardRouteForRole,
   isStaff 
 } from '../../utils/roleUtils';
+
+const AdminDashboardPage = React.lazy(() => import('../../pages/AdminDashboardPage').then(m => ({ default: m.AdminDashboardPage })));
+const AdminLoginPage = React.lazy(() => import('../../pages/admin/AdminLoginPage').then(m => ({ default: m.AdminLoginPage })));
 
 interface StaffRouteProps {
   requiredRole: 'SUPER_ADMIN' | 'ADMIN' | 'MODERATOR';
@@ -57,10 +58,22 @@ export const StaffRoute: React.FC<StaffRouteProps> = ({
     );
   }
 
+  const staffLoadingFallback = (
+    <div className="min-h-screen bg-[#041C43] text-white flex flex-col items-center justify-center p-6">
+      <div className="w-12 h-12 border-4 border-[#1464F4] border-t-transparent rounded-full animate-spin mb-4" />
+      <RentouraLogo variant="horizontal" theme="dark-header" size="md" className="mb-1" />
+      <p className="text-slate-300 text-sm font-medium">Loading staff gateway...</p>
+    </div>
+  );
+
   // 2. Unauthenticated state -> Render Staff Gateway Login
   const currentUser = AuthService.getCurrentUser();
   if (!currentUser) {
-    return <AdminLoginPage onNavigate={onNavigate} />;
+    return (
+      <React.Suspense fallback={staffLoadingFallback}>
+        <AdminLoginPage onNavigate={onNavigate} />
+      </React.Suspense>
+    );
   }
 
   // 3. Profile query failure -> Offer retry or sign out
@@ -98,7 +111,11 @@ export const StaffRoute: React.FC<StaffRouteProps> = ({
 
   // 4. Validate Account Status (banned/suspended) or Non-Staff Role -> Render Staff Gateway Login with error state
   if (!isActiveAccount(userProfile.accountStatus) || !isStaff(userProfile)) {
-    return <AdminLoginPage onNavigate={onNavigate} />;
+    return (
+      <React.Suspense fallback={staffLoadingFallback}>
+        <AdminLoginPage onNavigate={onNavigate} />
+      </React.Suspense>
+    );
   }
 
   // 5. Active Staff Member Confirmed
@@ -119,10 +136,12 @@ export const StaffRoute: React.FC<StaffRouteProps> = ({
   };
 
   return (
-    <AdminDashboardPage
-      staff={staffAccount}
-      onNavigate={onNavigate}
-      onLogout={onLogout}
-    />
+    <React.Suspense fallback={staffLoadingFallback}>
+      <AdminDashboardPage
+        staff={staffAccount}
+        onNavigate={onNavigate}
+        onLogout={onLogout}
+      />
+    </React.Suspense>
   );
 };

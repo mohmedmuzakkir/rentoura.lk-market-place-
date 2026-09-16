@@ -52,6 +52,46 @@ export class JobService {
   }
 
   /**
+   * Helper: Batched resolution of image storage paths in private bucket 'listing-images'
+   */
+  public static async resolveMediaUrlsBatch(
+    storagePaths: (string | null | undefined)[],
+    expirySeconds: number = 3600
+  ): Promise<Map<string, string>> {
+    const urlMap = new Map<string, string>();
+    const pathsToSign: string[] = [];
+
+    for (const path of storagePaths) {
+      if (!path) continue;
+      if (path.startsWith('http://') || path.startsWith('https://')) {
+        urlMap.set(path, path);
+      } else if (!pathsToSign.includes(path)) {
+        pathsToSign.push(path);
+      }
+    }
+
+    if (pathsToSign.length > 0) {
+      try {
+        const { data, error } = await supabase.storage
+          .from('listing-images')
+          .createSignedUrls(pathsToSign, expirySeconds);
+
+        if (!error && Array.isArray(data)) {
+          data.forEach((item) => {
+            if (item.path && item.signedUrl) {
+              urlMap.set(item.path, item.signedUrl);
+            }
+          });
+        }
+      } catch (e) {
+        console.warn('Error batch signing job image URLs:', e);
+      }
+    }
+
+    return urlMap;
+  }
+
+  /**
    * 1. JOBS HERO SLIDES (placement = 'jobs')
    */
   static async getJobHeroSlides(): Promise<JobHeroSlide[]> {
@@ -108,13 +148,16 @@ export class JobService {
         return [];
       }
 
-      return Promise.all(data.map(async row => ({
+      const logoPaths = data.map(r => r.logo_url);
+      const urlMap = await JobService.resolveMediaUrlsBatch(logoPaths, 3600);
+
+      return data.map(row => ({
         id: row.id,
         name: row.name,
         brandKey: row.brand_key || 'custom',
         subtitle: row.subtitle || row.short_description || undefined,
-        logoUrl: row.logo_url ? await JobService.resolveMediaUrl(row.logo_url) : undefined,
-      })));
+        logoUrl: row.logo_url ? (urlMap.get(row.logo_url) || SearchService.NEUTRAL_PLACEHOLDER) : undefined,
+      }));
     } catch (e) {
       console.warn('Error fetching hiring companies:', e);
       return [];
@@ -228,7 +271,10 @@ export class JobService {
         return { items: [], totalCount: count || 0, hasMore: false };
       }
 
-      const mappedItems: JobItem[] = await Promise.all(data.map(async (row: any) => {
+      const logoPaths = data.map((row: any) => row.company_logo_url);
+      const urlMap = await JobService.resolveMediaUrlsBatch(logoPaths, 3600);
+
+      const mappedItems: JobItem[] = data.map((row: any) => {
         const catName = row.category_name || 'General';
         const companyName = row.company_name || 'Employer';
         const empType = row.employment_type || row.work_mode || 'Full Time';
@@ -244,7 +290,7 @@ export class JobService {
         }
 
         const period = row.pricing_period ? `/ ${row.pricing_period}` : (row.salary_type ? `/ ${row.salary_type}` : '/ Month');
-        const logoUrl = row.company_logo_url ? await JobService.resolveMediaUrl(row.company_logo_url) : undefined;
+        const logoUrl = row.company_logo_url ? (urlMap.get(row.company_logo_url) || SearchService.NEUTRAL_PLACEHOLDER) : undefined;
 
         let tagsArr: string[] = [];
         if (row.skills_text) {
@@ -282,7 +328,7 @@ export class JobService {
           category: catName,
           description: row.description || row.short_summary || ''
         };
-      }));
+      });
 
       const totalCount = count || mappedItems.length;
       const hasMore = offset + mappedItems.length < totalCount;

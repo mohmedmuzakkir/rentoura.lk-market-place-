@@ -13,12 +13,12 @@ const getEnvVar = (name: string): string => {
 const rawUrl = getEnvVar('VITE_SUPABASE_URL').trim();
 const rawKey = getEnvVar('VITE_SUPABASE_PUBLISHABLE_KEY').trim();
 
-// Ensure the runtime Supabase URL targets project mqezjpajegxmllwclrce
-export const supabaseUrl = (!rawUrl || rawUrl.includes('zcfsivizjnbgobtttodz'))
-  ? 'https://mqezjpajegxmllwclrce.supabase.co'
+// Ensure the runtime Supabase URL targets project qaawocdnozexffxwoyt
+export const supabaseUrl = (!rawUrl || rawUrl.includes('zcfsivizjnbgobtttodz') || rawUrl.includes('mqezjpajegxmllwclrce'))
+  ? 'https://qaawocdnozexffxwoyt.supabase.co'
   : rawUrl.replace(/\/rest\/v1\/?$/, '').replace(/\/$/, '');
 
-// Detect if key is missing, a placeholder, or the stale key from deleted project zcfsivizjnbgobtttodz
+// Detect if key is missing, a placeholder, or stale key from deleted project zcfsivizjnbgobtttodz
 const isStaleOldKey = rawKey.includes('fHjlfQoY4W1HhZhdTIPR0w') || rawKey.includes('zcfsivizjnbgobtttodz');
 export const isSupabaseConfigured = Boolean(
   rawKey &&
@@ -31,7 +31,7 @@ export const isSupabaseConfigured = Boolean(
 
 if (!isSupabaseConfigured && import.meta.env.DEV) {
   console.warn(
-    '[Supabase Configuration] VITE_SUPABASE_PUBLISHABLE_KEY for project "mqezjpajegxmllwclrce" is missing or invalid in environment.\n' +
+    '[Supabase Configuration] VITE_SUPABASE_PUBLISHABLE_KEY for project "qaawocdnozexffxwoyt" is missing or invalid in environment.\n' +
     'Please set VITE_SUPABASE_PUBLISHABLE_KEY in environment variables.'
   );
 }
@@ -46,7 +46,7 @@ export async function checkSupabaseConnection(): Promise<{ success: boolean; mes
   if (!isSupabaseConfigured) {
     return {
       success: false,
-      message: 'Supabase publishable key is missing, unconfigured, or invalid for project mqezjpajegxmllwclrce.'
+      message: 'Supabase publishable key is missing, unconfigured, or invalid for project qaawocdnozexffxwoyt.'
     };
   }
 

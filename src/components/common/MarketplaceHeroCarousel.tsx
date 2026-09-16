@@ -74,9 +74,25 @@ export const MarketplaceHeroCarousel: React.FC<MarketplaceHeroCarouselProps> = (
   }, [slideCount]);
 
   useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        setIsPaused(true);
+      } else {
+        setIsPaused(false);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
+
+  useEffect(() => {
     if (
       slideCount < 2
       || isPaused
+      || document.visibilityState === 'hidden'
       || window.matchMedia('(prefers-reduced-motion: reduce)').matches
     ) return;
 

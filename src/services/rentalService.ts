@@ -62,6 +62,47 @@ export class RentalService {
   }
 
   /**
+   * Helper: Batched resolution of image storage paths in private bucket 'listing-images'.
+   * Makes ONE single request to supabase.storage.from('listing-images').createSignedUrls(paths, expiry).
+   */
+  public static async resolveMediaUrlsBatch(
+    storagePaths: (string | null | undefined)[],
+    expirySeconds: number = 3600
+  ): Promise<Map<string, string>> {
+    const urlMap = new Map<string, string>();
+    const pathsToSign: string[] = [];
+
+    for (const path of storagePaths) {
+      if (!path) continue;
+      if (path.startsWith('http://') || path.startsWith('https://')) {
+        urlMap.set(path, path);
+      } else if (!pathsToSign.includes(path)) {
+        pathsToSign.push(path);
+      }
+    }
+
+    if (pathsToSign.length > 0) {
+      try {
+        const { data, error } = await supabase.storage
+          .from('listing-images')
+          .createSignedUrls(pathsToSign, expirySeconds);
+
+        if (!error && Array.isArray(data)) {
+          data.forEach((item) => {
+            if (item.path && item.signedUrl) {
+              urlMap.set(item.path, item.signedUrl);
+            }
+          });
+        }
+      } catch (e) {
+        console.warn('Error batch signing rental image URLs:', e);
+      }
+    }
+
+    return urlMap;
+  }
+
+  /**
    * Helper: Resolves canonical category IDs for a given selected category (ID, slug, or name).
    * Includes child and grandchild category IDs so parent category selection returns all descendant listings.
    */
@@ -184,7 +225,27 @@ export class RentalService {
         return [];
       }
 
-      return await Promise.all(data.map((row: any) => this.mapListingRowToFeaturedItem(row)));
+      const rawPaths = data.map((row: any) => {
+        if (row.listing_media && row.listing_media.length > 0) {
+          const sorted = [...row.listing_media].sort((a: any, b: any) => (a.position || 0) - (b.position || 0));
+          return sorted[0]?.storage_path || null;
+        }
+        return null;
+      });
+
+      const urlMap = await this.resolveMediaUrlsBatch(rawPaths, 3600);
+
+      return await Promise.all(
+        data.map((row: any) => {
+          let coverPath: string | null = null;
+          if (row.listing_media && row.listing_media.length > 0) {
+            const sorted = [...row.listing_media].sort((a: any, b: any) => (a.position || 0) - (b.position || 0));
+            coverPath = sorted[0]?.storage_path || null;
+          }
+          const coverUrl = coverPath ? (urlMap.get(coverPath) || SearchService.NEUTRAL_PLACEHOLDER) : SearchService.NEUTRAL_PLACEHOLDER;
+          return this.mapListingRowToFeaturedItem(row, coverUrl);
+        })
+      );
     } catch (e) {
       console.error('Error fetching featured rentals:', e);
       return [];
@@ -226,7 +287,27 @@ export class RentalService {
         return [];
       }
 
-      const items = await Promise.all(data.map((row: any) => this.mapListingRowToFeaturedItem(row)));
+      const rawPaths = data.map((row: any) => {
+        if (row.listing_media && row.listing_media.length > 0) {
+          const sorted = [...row.listing_media].sort((a: any, b: any) => (a.position || 0) - (b.position || 0));
+          return sorted[0]?.storage_path || null;
+        }
+        return null;
+      });
+
+      const urlMap = await this.resolveMediaUrlsBatch(rawPaths, 3600);
+
+      const items = await Promise.all(
+        data.map((row: any) => {
+          let coverPath: string | null = null;
+          if (row.listing_media && row.listing_media.length > 0) {
+            const sorted = [...row.listing_media].sort((a: any, b: any) => (a.position || 0) - (b.position || 0));
+            coverPath = sorted[0]?.storage_path || null;
+          }
+          const coverUrl = coverPath ? (urlMap.get(coverPath) || SearchService.NEUTRAL_PLACEHOLDER) : SearchService.NEUTRAL_PLACEHOLDER;
+          return this.mapListingRowToFeaturedItem(row, coverUrl);
+        })
+      );
 
       if (userLocation && userLocation !== 'All Sri Lanka') {
         return items.filter(item => matchesLocation(item.location, userLocation));
@@ -330,7 +411,27 @@ export class RentalService {
         return { items: [], totalCount: 0, hasMore: false };
       }
 
-      let mappedItems = await Promise.all(data.map((row: any) => this.mapListingRowToFeaturedItem(row)));
+      const rawPaths = data.map((row: any) => {
+        if (row.listing_media && row.listing_media.length > 0) {
+          const sorted = [...row.listing_media].sort((a: any, b: any) => (a.position || 0) - (b.position || 0));
+          return sorted[0]?.storage_path || null;
+        }
+        return null;
+      });
+
+      const urlMap = await this.resolveMediaUrlsBatch(rawPaths, 3600);
+
+      let mappedItems = await Promise.all(
+        data.map((row: any) => {
+          let coverPath: string | null = null;
+          if (row.listing_media && row.listing_media.length > 0) {
+            const sorted = [...row.listing_media].sort((a: any, b: any) => (a.position || 0) - (b.position || 0));
+            coverPath = sorted[0]?.storage_path || null;
+          }
+          const coverUrl = coverPath ? (urlMap.get(coverPath) || SearchService.NEUTRAL_PLACEHOLDER) : SearchService.NEUTRAL_PLACEHOLDER;
+          return this.mapListingRowToFeaturedItem(row, coverUrl);
+        })
+      );
 
       // Location filtering fallback if city name string is passed
       if (selectedLocation && selectedLocation !== 'All Sri Lanka') {
@@ -423,15 +524,19 @@ export class RentalService {
    * Truthful: No fake ratings, reviews, verified badges, or fake specs.
    */
   private static async mapListingRowToFeaturedItem(
-    row: any
+    row: any,
+    resolvedCoverUrl?: string
   ): Promise<FeaturedListingItem> {
-    let coverPath: string | null = null;
-    if (row.listing_media && row.listing_media.length > 0) {
-      const sortedMedia = [...row.listing_media].sort((a: any, b: any) => (a.position || 0) - (b.position || 0));
-      coverPath = sortedMedia[0]?.storage_path || null;
-    }
+    let imageUrl = resolvedCoverUrl;
+    if (!imageUrl) {
+      let coverPath: string | null = null;
+      if (row.listing_media && row.listing_media.length > 0) {
+        const sortedMedia = [...row.listing_media].sort((a: any, b: any) => (a.position || 0) - (b.position || 0));
+        coverPath = sortedMedia[0]?.storage_path || null;
+      }
 
-    const imageUrl = await this.resolveMediaUrl(coverPath);
+      imageUrl = await this.resolveMediaUrl(coverPath);
+    }
 
     let priceFormatted = 'Contact for Price';
     let pricePeriod = '/ Month';

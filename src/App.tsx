@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import { ShieldCheck } from 'lucide-react';
 import { Header } from './components/Header';
 import { BottomNavigation } from './components/BottomNavigation';
@@ -13,45 +13,13 @@ import {
   NotificationModal, 
   LearnMoreModal 
 } from './components/FilterModals';
-import { HomePage } from './pages/HomePage';
-import { RentalsPage } from './pages/RentalsPage';
-import { JobsPage } from './pages/JobsPage';
-import { ServicesPage } from './pages/ServicesPage';
-import { SavedPage } from './pages/SavedPage';
-import { PostPage } from './pages/PostPage';
-import { MessagesPage } from './pages/MessagesPage';
-import { ChatPage } from './pages/ChatPage';
-import { ProfileOverviewPage } from './pages/ProfileOverviewPage';
-import { EditProfilePage } from './pages/EditProfilePage';
-import { MyListingsPage } from './pages/MyListingsPage';
-import { SearchResultsPage } from './pages/SearchResultsPage';
-import { LocationSelectorPage } from './pages/LocationSelectorPage';
+import type { ReportListingTarget } from './pages/ReportListingPage';
 import { LocationValueModel } from './services/locationService';
-import { CategorySelectorPage } from './pages/CategorySelectorPage';
-import { AdvancedFiltersPage } from './pages/AdvancedFiltersPage';
-import { RentalDetailPage } from './pages/RentalDetailPage';
-import { JobDetailPage } from './pages/JobDetailPage';
-import { ServiceDetailPage } from './pages/ServiceDetailPage';
-import { NotificationsPage } from './pages/NotificationsPage';
-import { LoginPage } from './pages/LoginPage';
-import { RegisterPage } from './pages/RegisterPage';
-import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
-import { ResetPasswordPage } from './pages/ResetPasswordPage';
-import { UserAgreementPage } from './pages/UserAgreementPage';
-import { CompleteProfilePage } from './pages/CompleteProfilePage';
-import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage';
-import { SafetyCenterPage } from './pages/SafetyCenterPage';
-import { HelpCenterPage } from './pages/HelpCenterPage';
-import { ReportListingPage, ReportListingTarget } from './pages/ReportListingPage';
-import { ReviewsPage } from './pages/ReviewsPage';
-import { AdminDashboardPage } from './pages/AdminDashboardPage';
-import { StaffRoute } from './components/admin/StaffRoute';
 import { AdminService } from './services/adminService';
 import { StaffAccount } from './types/adminTypes';
 import { ForgotPasswordModal } from './components/auth/ForgotPasswordModal';
 import { LegalModal } from './components/auth/LegalModals';
 import { AuthService, getProfileCompletionState } from './services/authService';
-import { PostFlowContainer } from './components/post/PostFlowContainer';
 import { ListingDetailService } from './services/listingDetailService';
 import { RentalListingDetail, JobListingDetail, ServiceListingDetail } from './types/listingDetailsTypes';
 import { AppRoute, FilterState } from './types';
@@ -68,6 +36,50 @@ import { isStaffRoute, resolveRoute } from './routing/routes';
 import { normalizeProtectedAction, PendingProtectedAction, ProtectedActionRequest } from './services/protectedActionService';
 
 import { isSuperAdmin, isAdmin, isModerator, isStaff } from './utils/roleUtils';
+
+// Lazy-loaded page components for Route-Level Code Splitting (TASK 1)
+const HomePage = React.lazy(() => import('./pages/HomePage').then(m => ({ default: m.HomePage })));
+const RentalsPage = React.lazy(() => import('./pages/RentalsPage').then(m => ({ default: m.RentalsPage })));
+const JobsPage = React.lazy(() => import('./pages/JobsPage').then(m => ({ default: m.JobsPage })));
+const ServicesPage = React.lazy(() => import('./pages/ServicesPage').then(m => ({ default: m.ServicesPage })));
+const SavedPage = React.lazy(() => import('./pages/SavedPage').then(m => ({ default: m.SavedPage })));
+const PostPage = React.lazy(() => import('./pages/PostPage').then(m => ({ default: m.PostPage })));
+const MessagesPage = React.lazy(() => import('./pages/MessagesPage').then(m => ({ default: m.MessagesPage })));
+const ChatPage = React.lazy(() => import('./pages/ChatPage').then(m => ({ default: m.ChatPage })));
+const ProfileOverviewPage = React.lazy(() => import('./pages/ProfileOverviewPage').then(m => ({ default: m.ProfileOverviewPage })));
+const EditProfilePage = React.lazy(() => import('./pages/EditProfilePage').then(m => ({ default: m.EditProfilePage })));
+const MyListingsPage = React.lazy(() => import('./pages/MyListingsPage').then(m => ({ default: m.MyListingsPage })));
+const SearchResultsPage = React.lazy(() => import('./pages/SearchResultsPage').then(m => ({ default: m.SearchResultsPage })));
+const LocationSelectorPage = React.lazy(() => import('./pages/LocationSelectorPage').then(m => ({ default: m.LocationSelectorPage })));
+const CategorySelectorPage = React.lazy(() => import('./pages/CategorySelectorPage').then(m => ({ default: m.CategorySelectorPage })));
+const AdvancedFiltersPage = React.lazy(() => import('./pages/AdvancedFiltersPage').then(m => ({ default: m.AdvancedFiltersPage })));
+const RentalDetailPage = React.lazy(() => import('./pages/RentalDetailPage').then(m => ({ default: m.RentalDetailPage })));
+const JobDetailPage = React.lazy(() => import('./pages/JobDetailPage').then(m => ({ default: m.JobDetailPage })));
+const ServiceDetailPage = React.lazy(() => import('./pages/ServiceDetailPage').then(m => ({ default: m.ServiceDetailPage })));
+const NotificationsPage = React.lazy(() => import('./pages/NotificationsPage').then(m => ({ default: m.NotificationsPage })));
+const LoginPage = React.lazy(() => import('./pages/LoginPage').then(m => ({ default: m.LoginPage })));
+const RegisterPage = React.lazy(() => import('./pages/RegisterPage').then(m => ({ default: m.RegisterPage })));
+const ForgotPasswordPage = React.lazy(() => import('./pages/ForgotPasswordPage').then(m => ({ default: m.ForgotPasswordPage })));
+const ResetPasswordPage = React.lazy(() => import('./pages/ResetPasswordPage').then(m => ({ default: m.ResetPasswordPage })));
+const UserAgreementPage = React.lazy(() => import('./pages/UserAgreementPage').then(m => ({ default: m.UserAgreementPage })));
+const CompleteProfilePage = React.lazy(() => import('./pages/CompleteProfilePage').then(m => ({ default: m.CompleteProfilePage })));
+const PrivacyPolicyPage = React.lazy(() => import('./pages/PrivacyPolicyPage').then(m => ({ default: m.PrivacyPolicyPage })));
+const SafetyCenterPage = React.lazy(() => import('./pages/SafetyCenterPage').then(m => ({ default: m.SafetyCenterPage })));
+const HelpCenterPage = React.lazy(() => import('./pages/HelpCenterPage').then(m => ({ default: m.HelpCenterPage })));
+const ReportListingPage = React.lazy(() => import('./pages/ReportListingPage').then(m => ({ default: m.ReportListingPage })));
+const ReviewsPage = React.lazy(() => import('./pages/ReviewsPage').then(m => ({ default: m.ReviewsPage })));
+const AdminDashboardPage = React.lazy(() => import('./pages/AdminDashboardPage').then(m => ({ default: m.AdminDashboardPage })));
+const StaffRoute = React.lazy(() => import('./components/admin/StaffRoute').then(m => ({ default: m.StaffRoute })));
+const PostFlowContainer = React.lazy(() => import('./components/post/PostFlowContainer').then(m => ({ default: m.PostFlowContainer })));
+
+const PageLoadingFallback = () => (
+  <div className="min-h-[60vh] flex flex-col items-center justify-center p-6 text-center">
+    <div className="w-9 h-9 border-3 border-[#041C43]/15 border-t-[#1464F4] rounded-full animate-spin mb-3" />
+    <span className="text-xs font-bold text-slate-500 font-heading tracking-wide">
+      Loading RENTOURA.LK...
+    </span>
+  </div>
+);
 
 export default function App() {
   const isIdentityProfileComplete = (profile: UserProfile | null): boolean =>
@@ -184,7 +196,7 @@ export default function App() {
 
   useEffect(() => {
     loadConversations();
-  }, [userProfile, currentRoute, loadConversations]);
+  }, [userProfile, loadConversations]);
 
   // Notifications State with Supabase Backend & Realtime
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
@@ -217,7 +229,7 @@ export default function App() {
   useEffect(() => {
     loadNotifications();
     loadNotificationPreferences();
-  }, [loadNotifications, loadNotificationPreferences, currentRoute]);
+  }, [loadNotifications, loadNotificationPreferences]);
 
   // Real-time notifications subscription
   useEffect(() => {
@@ -1382,7 +1394,9 @@ export default function App() {
         {/* Dynamic Main View */}
         <main className="flex-1 w-full overflow-x-hidden">
           <ErrorBoundary>
-            {renderCurrentPage()}
+            <Suspense fallback={<PageLoadingFallback />}>
+              {renderCurrentPage()}
+            </Suspense>
           </ErrorBoundary>
         </main>
 

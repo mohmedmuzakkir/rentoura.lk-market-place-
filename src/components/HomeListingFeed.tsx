@@ -32,7 +32,7 @@ interface HomeListingFeedProps {
   onNavigate: (route: AppRoute) => void;
 }
 
-export const HomeListingFeed: React.FC<HomeListingFeedProps> = ({
+export const HomeListingFeed: React.FC<HomeListingFeedProps> = React.memo(({
   items,
   totalCount,
   hasMore,
@@ -171,6 +171,9 @@ export const HomeListingFeed: React.FC<HomeListingFeedProps> = ({
                   <img
                     src={item.imageUrl || SearchService.NEUTRAL_PLACEHOLDER}
                     alt={item.title}
+                    width={300}
+                    height={170}
+                    style={{ aspectRatio: '16/9' }}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     loading="lazy"
                   />
@@ -255,4 +258,4 @@ export const HomeListingFeed: React.FC<HomeListingFeedProps> = ({
       )}
     </section>
   );
-};
+});

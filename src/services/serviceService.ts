@@ -75,6 +75,46 @@ export class ServiceService {
   }
 
   /**
+   * Helper: Batched resolution of image storage paths in private bucket 'listing-images'
+   */
+  public static async resolveMediaUrlsBatch(
+    storagePaths: (string | null | undefined)[],
+    expirySeconds: number = 3600
+  ): Promise<Map<string, string>> {
+    const urlMap = new Map<string, string>();
+    const pathsToSign: string[] = [];
+
+    for (const path of storagePaths) {
+      if (!path) continue;
+      if (path.startsWith('http://') || path.startsWith('https://')) {
+        urlMap.set(path, path);
+      } else if (!pathsToSign.includes(path)) {
+        pathsToSign.push(path);
+      }
+    }
+
+    if (pathsToSign.length > 0) {
+      try {
+        const { data, error } = await supabase.storage
+          .from('listing-images')
+          .createSignedUrls(pathsToSign, expirySeconds);
+
+        if (!error && Array.isArray(data)) {
+          data.forEach((item) => {
+            if (item.path && item.signedUrl) {
+              urlMap.set(item.path, item.signedUrl);
+            }
+          });
+        }
+      } catch (e) {
+        console.warn('Error batch signing service image URLs:', e);
+      }
+    }
+
+    return urlMap;
+  }
+
+  /**
    * 1. SERVICES HERO SLIDES (placement = 'services')
    */
   static async getServiceHeroSlides(): Promise<ServiceHeroSlide[]> {
@@ -262,58 +302,66 @@ export class ServiceService {
         }
       }
 
+      const coverPaths: (string | null | undefined)[] = rawListings.map((row) => {
+        const rawMediaPaths = mediaMap[row.id] || [];
+        if (rawMediaPaths.length > 0) return rawMediaPaths[0];
+        return row.module_data?.cover_image_url || row.module_data?.image_url || null;
+      });
+
+      const urlMap = await ServiceService.resolveMediaUrlsBatch(coverPaths, 3600);
+
       // Format listings to ServiceItem objects with real database values
-      const items: ServiceItem[] = await Promise.all(
-        rawListings.map(async (row) => {
-          const rawMediaPaths = mediaMap[row.id] || [];
-          let coverUrl = SearchService.NEUTRAL_PLACEHOLDER;
+      const items: ServiceItem[] = rawListings.map((row) => {
+        const rawMediaPaths = mediaMap[row.id] || [];
+        let chosenPath: string | null = null;
 
-          if (rawMediaPaths.length > 0) {
-            coverUrl = await ServiceService.resolveMediaUrl(rawMediaPaths[0]);
-          } else if (row.module_data?.cover_image_url || row.module_data?.image_url) {
-            coverUrl = await ServiceService.resolveMediaUrl(row.module_data.cover_image_url || row.module_data.image_url);
-          }
+        if (rawMediaPaths.length > 0) {
+          chosenPath = rawMediaPaths[0];
+        } else if (row.module_data?.cover_image_url || row.module_data?.image_url) {
+          chosenPath = row.module_data.cover_image_url || row.module_data.image_url;
+        }
 
-          // Format price display
-          let formattedPrice = 'Contact for Quote';
-          if (row.price && Number(row.price) > 0) {
-            formattedPrice = `Rs. ${Number(row.price).toLocaleString()}`;
-          } else if (row.minimum_price && row.maximum_price) {
-            formattedPrice = `Rs. ${Number(row.minimum_price).toLocaleString()} - ${Number(row.maximum_price).toLocaleString()}`;
-          } else if (row.minimum_price) {
-            formattedPrice = `From Rs. ${Number(row.minimum_price).toLocaleString()}`;
-          }
+        const coverUrl = chosenPath ? (urlMap.get(chosenPath) || SearchService.NEUTRAL_PLACEHOLDER) : SearchService.NEUTRAL_PLACEHOLDER;
 
-          let pricePeriod = row.pricing_period ? `/ ${row.pricing_period}` : (row.pricing_type ? `/ ${row.pricing_type}` : '/ service');
+        // Format price display
+        let formattedPrice = 'Contact for Quote';
+        if (row.price && Number(row.price) > 0) {
+          formattedPrice = `Rs. ${Number(row.price).toLocaleString()}`;
+        } else if (row.minimum_price && row.maximum_price) {
+          formattedPrice = `Rs. ${Number(row.minimum_price).toLocaleString()} - ${Number(row.maximum_price).toLocaleString()}`;
+        } else if (row.minimum_price) {
+          formattedPrice = `From Rs. ${Number(row.minimum_price).toLocaleString()}`;
+        }
 
-          // Strict DB values only - NO fake defaults or forced ratings
-          const realProviderName = row.provider_name || row.module_data?.provider_name || 'Service Provider';
-          const realIsVerified = false;
-          const realRating = row.rating !== null && row.rating !== undefined ? Number(row.rating) : 0;
-          const realReviewsCount = row.reviews_count !== null && row.reviews_count !== undefined ? Number(row.reviews_count) : 0;
-          const realWhatsapp = row.whatsapp_number || row.module_data?.whatsapp_number || undefined;
-          const realPhone = row.phone_number || row.module_data?.phone_number || undefined;
+        let pricePeriod = row.pricing_period ? `/ ${row.pricing_period}` : (row.pricing_type ? `/ ${row.pricing_type}` : '/ service');
 
-          return {
-            id: row.id,
-            title: row.title || 'Untitled Service',
-            providerName: realProviderName,
-            isVerified: realIsVerified,
-            category: row.category_name || 'General Service',
-            categoryTag: row.category_name || 'General Service',
-            location: row.exact_address || row.city_name || row.district_name || 'Sri Lanka',
-            rating: realRating,
-            reviewsCount: realReviewsCount,
-            price: formattedPrice,
-            priceUnit: pricePeriod,
-            imageUrl: coverUrl,
-            isFeatured: Boolean(row.is_featured),
-            whatsappNumber: realWhatsapp,
-            phone: realPhone,
-            description: row.description || row.short_summary || ''
-          };
-        })
-      );
+        // Strict DB values only - NO fake defaults or forced ratings
+        const realProviderName = row.provider_name || row.module_data?.provider_name || 'Service Provider';
+        const realIsVerified = false;
+        const realRating = row.rating !== null && row.rating !== undefined ? Number(row.rating) : 0;
+        const realReviewsCount = row.reviews_count !== null && row.reviews_count !== undefined ? Number(row.reviews_count) : 0;
+        const realWhatsapp = row.whatsapp_number || row.module_data?.whatsapp_number || undefined;
+        const realPhone = row.phone_number || row.module_data?.phone_number || undefined;
+
+        return {
+          id: row.id,
+          title: row.title || 'Untitled Service',
+          providerName: realProviderName,
+          isVerified: realIsVerified,
+          category: row.category_name || 'General Service',
+          categoryTag: row.category_name || 'General Service',
+          location: row.exact_address || row.city_name || row.district_name || 'Sri Lanka',
+          rating: realRating,
+          reviewsCount: realReviewsCount,
+          price: formattedPrice,
+          priceUnit: pricePeriod,
+          imageUrl: coverUrl,
+          isFeatured: Boolean(row.is_featured),
+          whatsappNumber: realWhatsapp,
+          phone: realPhone,
+          description: row.description || row.short_summary || ''
+        };
+      });
 
       return {
         items,

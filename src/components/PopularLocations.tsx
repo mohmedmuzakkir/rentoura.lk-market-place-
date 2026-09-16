@@ -51,6 +51,9 @@ export const PopularLocations: React.FC<PopularLocationsProps> = ({
             <img
               src={loc.imageUrl || NEUTRAL_LOCATION_IMAGE}
               alt={loc.name}
+              width={200}
+              height={150}
+              style={{ aspectRatio: '4/3' }}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
               loading="lazy"
             />

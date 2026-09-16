@@ -9,7 +9,7 @@ interface SearchResultCardProps {
   onOpenDetail: (id: string, module: 'rental' | 'job' | 'service') => void;
 }
 
-export const SearchResultCard: React.FC<SearchResultCardProps> = ({
+export const SearchResultCard: React.FC<SearchResultCardProps> = React.memo(({
   item,
   isSaved,
   onToggleSave,
@@ -85,6 +85,9 @@ export const SearchResultCard: React.FC<SearchResultCardProps> = ({
         <img
           src={imageUrl}
           alt={item.title}
+          width={224}
+          height={192}
+          style={{ aspectRatio: '4/3' }}
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
           loading="lazy"
           onError={(e) => {
@@ -188,4 +191,4 @@ export const SearchResultCard: React.FC<SearchResultCardProps> = ({
       </div>
     </div>
   );
-};
+});

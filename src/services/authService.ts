@@ -1,5 +1,5 @@
 import { User, Session } from '@supabase/supabase-js';
-import { supabase } from '../lib/supabase';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { featureFlags } from '../config/features';
 import { UserProfile } from '../types/profileTypes';
 import { ProfileService } from './profileService';
@@ -267,10 +267,13 @@ export class AuthService {
     if (!featureFlags.googleAuth) {
       throw new Error('Google sign-in is not currently available.');
     }
+    if (!isSupabaseConfigured) {
+      throw new Error('Supabase publishable key is missing or invalid. Please configure VITE_SUPABASE_PUBLISHABLE_KEY.');
+    }
     const safeReturn = returnTo.startsWith('/') && !returnTo.startsWith('//') ? returnTo : '/';
     sessionStorage.setItem('rentoura_oauth_return_to', safeReturn);
-    const origin = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-      ? window.location.origin : 'https://www.rentoura.lk';
+    const isDevOrPreview = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.hostname.includes('run.app');
+    const origin = isDevOrPreview ? window.location.origin : 'https://www.rentoura.lk';
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google', options: { redirectTo: `${origin}/login?oauth=google` }
     });

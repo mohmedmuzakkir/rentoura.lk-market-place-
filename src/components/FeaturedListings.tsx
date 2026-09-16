@@ -11,7 +11,7 @@ interface FeaturedListingsProps {
   isLoading?: boolean;
 }
 
-export const FeaturedListings: React.FC<FeaturedListingsProps> = ({
+export const FeaturedListings: React.FC<FeaturedListingsProps> = React.memo(({
   listings,
   onToggleSave,
   onSelectListing,
@@ -62,6 +62,9 @@ export const FeaturedListings: React.FC<FeaturedListingsProps> = ({
               <img
                 src={item.imageUrl || SearchService.NEUTRAL_PLACEHOLDER}
                 alt={item.title}
+                width={320}
+                height={180}
+                style={{ aspectRatio: '16/9' }}
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                 loading="lazy"
               />
@@ -105,4 +108,4 @@ export const FeaturedListings: React.FC<FeaturedListingsProps> = ({
       )}
     </section>
   );
-};
+});

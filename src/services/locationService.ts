@@ -1,4 +1,5 @@
-import { supabase } from '../lib/supabase';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { SRI_LANKA_PROVINCES } from '../data/sriLankaLocations';
 
 export type LocationType = 'country' | 'province' | 'district' | 'city' | 'area';
 export type LocationStatus = 'active' | 'inactive';
@@ -113,6 +114,104 @@ export class LocationService {
   private static cache: LocationRecord[] | null = null;
   private static cacheTimestamp = 0;
   private static CACHE_TTL_MS = 60000; // 1 minute
+
+  /**
+   * Generates LocationRecord[] fallback data from SRI_LANKA_PROVINCES
+   */
+  public static getFallbackLocationRecords(): LocationRecord[] {
+    const records: LocationRecord[] = [];
+    let order = 1;
+
+    for (const prov of SRI_LANKA_PROVINCES) {
+      const provId = `prov_${prov.id}`;
+      records.push({
+        id: provId,
+        code: prov.id,
+        name: prov.name,
+        type: 'province',
+        parent_id: null,
+        province_id: provId,
+        district_id: null,
+        city_id: null,
+        latitude: PROVINCE_COORDINATES[prov.id]?.lat || null,
+        longitude: PROVINCE_COORDINATES[prov.id]?.lng || null,
+        postal_code: null,
+        name_si: null,
+        name_ta: null,
+        status: 'active',
+        sort_order: order++,
+        is_featured_popular: true
+      });
+
+      for (const dist of prov.districts) {
+        const distId = `dist_${dist.id}`;
+        records.push({
+          id: distId,
+          code: dist.id,
+          name: dist.name,
+          type: 'district',
+          parent_id: provId,
+          province_id: provId,
+          district_id: distId,
+          city_id: null,
+          latitude: null,
+          longitude: null,
+          postal_code: null,
+          name_si: null,
+          name_ta: null,
+          status: 'active',
+          sort_order: order++
+        });
+
+        for (const city of dist.cities) {
+          const cityId = `city_${city.id}`;
+          records.push({
+            id: cityId,
+            code: city.id,
+            name: city.name,
+            type: 'city',
+            parent_id: distId,
+            province_id: provId,
+            district_id: distId,
+            city_id: cityId,
+            latitude: null,
+            longitude: null,
+            postal_code: city.postalCode || null,
+            name_si: null,
+            name_ta: null,
+            status: 'active',
+            sort_order: order++
+          });
+
+          if (city.areas) {
+            for (const area of city.areas) {
+              const areaId = `area_${area.id}`;
+              records.push({
+                id: areaId,
+                code: area.id,
+                name: area.name,
+                type: 'area',
+                parent_id: cityId,
+                province_id: provId,
+                district_id: distId,
+                city_id: cityId,
+                latitude: null,
+                longitude: null,
+                postal_code: area.postalCode || city.postalCode || null,
+                name_si: null,
+                name_ta: null,
+                status: 'active',
+                sort_order: order++
+              });
+            }
+          }
+        }
+      }
+    }
+
+    return records;
+  }
+
   /**
    * Loads all locations from Supabase public.locations
    */
@@ -123,6 +222,13 @@ export class LocationService {
     }
 
     try {
+      if (!isSupabaseConfigured) {
+        const fallback = this.getFallbackLocationRecords();
+        this.cache = fallback;
+        this.cacheTimestamp = now;
+        return fallback;
+      }
+
       const { data, error } = await supabase
         .from('locations')
         .select('*')
@@ -130,16 +236,33 @@ export class LocationService {
         .order('name', { ascending: true });
 
       if (error) {
-        console.error('Error loading locations from Supabase:', error);
-        return this.cache || [];
+        if (error.message?.includes('Invalid API key') || error.message?.includes('unconfigured')) {
+          console.warn('[LocationService] Supabase API key is unconfigured or invalid. Using local location seed dataset.');
+        } else {
+          console.warn('[LocationService] Could not load locations from Supabase, using fallback:', error.message);
+        }
+        const fallback = this.cache && this.cache.length > 0 ? this.cache : this.getFallbackLocationRecords();
+        this.cache = fallback;
+        this.cacheTimestamp = now;
+        return fallback;
+      }
+
+      if (!data || data.length === 0) {
+        const fallback = this.cache && this.cache.length > 0 ? this.cache : this.getFallbackLocationRecords();
+        this.cache = fallback;
+        this.cacheTimestamp = now;
+        return fallback;
       }
 
       this.cache = (data || []) as LocationRecord[];
       this.cacheTimestamp = now;
       return this.cache;
     } catch (err) {
-      console.error('Failed to query locations table:', err);
-      return this.cache || [];
+      console.warn('Failed to query locations table, using fallback:', err);
+      const fallback = this.cache && this.cache.length > 0 ? this.cache : this.getFallbackLocationRecords();
+      this.cache = fallback;
+      this.cacheTimestamp = now;
+      return fallback;
     }
   }
 

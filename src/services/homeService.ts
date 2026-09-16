@@ -39,6 +39,47 @@ export class HomeService {
   }
 
   /**
+   * Helper: Batched resolution of image storage paths in private bucket 'listing-images' using signed URLs.
+   * Makes ONE single request to supabase.storage.from('listing-images').createSignedUrls(paths, expiry).
+   */
+  public static async resolveSignedMediaUrlsBatch(
+    storagePaths: (string | null | undefined)[],
+    expirySeconds: number = 3600
+  ): Promise<Map<string, string>> {
+    const urlMap = new Map<string, string>();
+    const pathsToSign: string[] = [];
+
+    for (const path of storagePaths) {
+      if (!path) continue;
+      if (path.startsWith('http://') || path.startsWith('https://')) {
+        urlMap.set(path, path);
+      } else if (!pathsToSign.includes(path)) {
+        pathsToSign.push(path);
+      }
+    }
+
+    if (pathsToSign.length > 0) {
+      try {
+        const { data, error } = await supabase.storage
+          .from('listing-images')
+          .createSignedUrls(pathsToSign, expirySeconds);
+
+        if (!error && Array.isArray(data)) {
+          data.forEach((item) => {
+            if (item.path && item.signedUrl) {
+              urlMap.set(item.path, item.signedUrl);
+            }
+          });
+        }
+      } catch (e) {
+        console.warn('Error batch signing listing image URLs:', e);
+      }
+    }
+
+    return urlMap;
+  }
+
+  /**
    * 1. HERO SLIDES
    * Fetches hero slides from Supabase `home_slides` table where placement='home' and is_active=true.
    * The database is the canonical source; no browser-local production slides are fabricated.
@@ -80,47 +121,22 @@ export class HomeService {
 
   /**
    * 2. MARKETPLACE STATISTICS
-   * Returns exact counts of active listings in Supabase.
+   * Returns exact counts of active listings in Supabase. Parallelized with Promise.all.
    */
   static async getMarketplaceStats(): Promise<MarketplaceStats> {
     try {
-      const { count: totalCount, error: totalErr } = await supabase
-        .from('listings')
-        .select('id', { count: 'exact', head: true })
-        .eq('status', 'active');
-
-      if (totalErr) {
-        return {
-          totalActiveListings: 0,
-          activeRentalCount: 0,
-          activeJobCount: 0,
-          activeServiceCount: 0
-        };
-      }
-
-      const { count: rentalCount } = await supabase
-        .from('listings')
-        .select('id', { count: 'exact', head: true })
-        .eq('status', 'active')
-        .eq('module', 'rental');
-
-      const { count: jobCount } = await supabase
-        .from('listings')
-        .select('id', { count: 'exact', head: true })
-        .eq('status', 'active')
-        .eq('module', 'job');
-
-      const { count: serviceCount } = await supabase
-        .from('listings')
-        .select('id', { count: 'exact', head: true })
-        .eq('status', 'active')
-        .eq('module', 'service');
+      const [totalRes, rentalRes, jobRes, serviceRes] = await Promise.all([
+        supabase.from('listings').select('id', { count: 'exact', head: true }).eq('status', 'active'),
+        supabase.from('listings').select('id', { count: 'exact', head: true }).eq('status', 'active').eq('module', 'rental'),
+        supabase.from('listings').select('id', { count: 'exact', head: true }).eq('status', 'active').eq('module', 'job'),
+        supabase.from('listings').select('id', { count: 'exact', head: true }).eq('status', 'active').eq('module', 'service')
+      ]);
 
       return {
-        totalActiveListings: totalCount || 0,
-        activeRentalCount: rentalCount || 0,
-        activeJobCount: jobCount || 0,
-        activeServiceCount: serviceCount || 0
+        totalActiveListings: totalRes.count || 0,
+        activeRentalCount: rentalRes.count || 0,
+        activeJobCount: jobRes.count || 0,
+        activeServiceCount: serviceRes.count || 0
       };
     } catch (e) {
       console.error('Error fetching marketplace stats:', e);
@@ -164,57 +180,66 @@ export class HomeService {
         return [];
       }
 
-      const items = await Promise.all(
-        data.map(async (row: any) => {
-          const rawMod = row.module || 'rental';
-          const normMod = rawMod === 'rental' ? 'RENTAL' : (rawMod === 'job' ? 'JOB' : 'SERVICE');
-          const badgeColor = normMod === 'RENTAL' ? '#1464F4' : (normMod === 'JOB' ? '#08A34F' : '#FF650A');
-          
-          let coverImg = SearchService.NEUTRAL_PLACEHOLDER;
-          if (row.listing_media && row.listing_media.length > 0) {
-            const sorted = [...row.listing_media].sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0));
-            if (sorted[0]?.storage_path) {
-              coverImg = await this.resolveSignedMediaUrl(sorted[0].storage_path);
-            }
+      const rawPaths: (string | null | undefined)[] = data.map((row: any) => {
+        if (row.listing_media && row.listing_media.length > 0) {
+          const sorted = [...row.listing_media].sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0));
+          return sorted[0]?.storage_path;
+        }
+        return null;
+      });
+
+      const urlMap = await this.resolveSignedMediaUrlsBatch(rawPaths, 3600);
+
+      const items = data.map((row: any) => {
+        const rawMod = row.module || 'rental';
+        const normMod = rawMod === 'rental' ? 'RENTAL' : (rawMod === 'job' ? 'JOB' : 'SERVICE');
+        const badgeColor = normMod === 'RENTAL' ? '#1464F4' : (normMod === 'JOB' ? '#08A34F' : '#FF650A');
+        
+        let coverImg = SearchService.NEUTRAL_PLACEHOLDER;
+        if (row.listing_media && row.listing_media.length > 0) {
+          const sorted = [...row.listing_media].sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0));
+          const storagePath = sorted[0]?.storage_path;
+          if (storagePath) {
+            coverImg = urlMap.get(storagePath) || SearchService.NEUTRAL_PLACEHOLDER;
           }
+        }
 
-          let price = 'Contact for Price';
-          let pricePeriod = '/ Month';
+        let price = 'Contact for Price';
+        let pricePeriod = '/ Month';
 
-          if (row.price != null && row.price > 0) {
-            price = `LKR ${Number(row.price).toLocaleString()}`;
-            if (row.pricing_period) pricePeriod = row.pricing_period;
-          } else if (normMod === 'RENTAL') {
-            const rates = row.module_data?.rates;
-            if (rates?.monthly) price = `LKR ${Number(rates.monthly).toLocaleString()}`;
-          } else if (normMod === 'JOB') {
-            const salMin = row.module_data?.salary_min;
-            if (salMin) price = `LKR ${Number(salMin).toLocaleString()}`;
-            pricePeriod = 'Full Time';
-          } else if (normMod === 'SERVICE') {
-            const startingPrice = row.module_data?.starting_price;
-            if (startingPrice) price = `From LKR ${Number(startingPrice).toLocaleString()}`;
-            pricePeriod = 'Per Service';
-          }
+        if (row.price != null && row.price > 0) {
+          price = `LKR ${Number(row.price).toLocaleString()}`;
+          if (row.pricing_period) pricePeriod = row.pricing_period;
+        } else if (normMod === 'RENTAL') {
+          const rates = row.module_data?.rates;
+          if (rates?.monthly) price = `LKR ${Number(rates.monthly).toLocaleString()}`;
+        } else if (normMod === 'JOB') {
+          const salMin = row.module_data?.salary_min;
+          if (salMin) price = `LKR ${Number(salMin).toLocaleString()}`;
+          pricePeriod = 'Full Time';
+        } else if (normMod === 'SERVICE') {
+          const startingPrice = row.module_data?.starting_price;
+          if (startingPrice) price = `From LKR ${Number(startingPrice).toLocaleString()}`;
+          pricePeriod = 'Per Service';
+        }
 
-          const categoryName = row.categories?.name || (normMod === 'RENTAL' ? 'Property' : (normMod === 'JOB' ? 'Jobs' : 'Services'));
-          const locationName = row.locations?.name || 'Sri Lanka';
+        const categoryName = row.categories?.name || (normMod === 'RENTAL' ? 'Property' : (normMod === 'JOB' ? 'Jobs' : 'Services'));
+        const locationName = row.locations?.name || 'Sri Lanka';
 
-          return {
-            id: row.id,
-            title: row.title,
-            category: categoryName,
-            categoryType: 'HOUSE' as const,
-            badgeType: 'FEATURED' as const,
-            badgeColor,
-            location: locationName,
-            price,
-            pricePeriod,
-            imageUrl: coverImg,
-            isSaved: false
-          };
-        })
-      );
+        return {
+          id: row.id,
+          title: row.title,
+          category: categoryName,
+          categoryType: 'HOUSE' as const,
+          badgeType: 'FEATURED' as const,
+          badgeColor,
+          location: locationName,
+          price,
+          pricePeriod,
+          imageUrl: coverImg,
+          isSaved: false
+        };
+      });
 
       return items;
     } catch (e) {
@@ -277,72 +302,81 @@ export class HomeService {
       const total = count || 0;
       const hasMore = toIndex < total - 1;
 
-      const items: FeedListingItem[] = await Promise.all(
-        data.map(async (row: any) => {
-          const rawMod = row.module || 'rental';
-          const normMod: 'rentals' | 'jobs' | 'services' =
-            rawMod === 'rental' ? 'rentals' : (rawMod === 'job' ? 'jobs' : 'services');
+      const rawPaths: (string | null | undefined)[] = data.map((row: any) => {
+        if (row.listing_media && row.listing_media.length > 0) {
+          const sortedMedia = [...row.listing_media].sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0));
+          return sortedMedia[0]?.storage_path;
+        }
+        return null;
+      });
 
-          let priceOrSalary = 'Contact for Price';
-          let periodOrType = 'Fixed';
+      const urlMap = await this.resolveSignedMediaUrlsBatch(rawPaths, 3600);
 
-          if (row.price != null && row.price > 0) {
-            priceOrSalary = `LKR ${Number(row.price).toLocaleString()}`;
-            if (row.pricing_period) periodOrType = row.pricing_period;
-          } else if (normMod === 'rentals') {
-            const rates = row.module_data?.rates;
-            if (rates?.monthly) {
-              priceOrSalary = `LKR ${Number(rates.monthly).toLocaleString()}`;
-              periodOrType = '/ Month';
-            } else if (rates?.daily) {
-              priceOrSalary = `LKR ${Number(rates.daily).toLocaleString()}`;
-              periodOrType = '/ Day';
-            }
-          } else if (normMod === 'jobs') {
-            const salMin = row.module_data?.salary_min;
-            const salMax = row.module_data?.salary_max;
-            if (salMin && salMax) {
-              priceOrSalary = `LKR ${(salMin / 1000).toFixed(0)}k - ${(salMax / 1000).toFixed(0)}k`;
-            } else if (salMin) {
-              priceOrSalary = `LKR ${Number(salMin).toLocaleString()}`;
-            }
-            periodOrType = row.module_data?.employment_type || 'Full Time';
-          } else if (normMod === 'services') {
-            const startingPrice = row.module_data?.starting_price;
-            if (startingPrice) {
-              priceOrSalary = `From LKR ${Number(startingPrice).toLocaleString()}`;
-            }
-            periodOrType = row.module_data?.pricing_type || 'Per Service';
+      const items: FeedListingItem[] = data.map((row: any) => {
+        const rawMod = row.module || 'rental';
+        const normMod: 'rentals' | 'jobs' | 'services' =
+          rawMod === 'rental' ? 'rentals' : (rawMod === 'job' ? 'jobs' : 'services');
+
+        let priceOrSalary = 'Contact for Price';
+        let periodOrType = 'Fixed';
+
+        if (row.price != null && row.price > 0) {
+          priceOrSalary = `LKR ${Number(row.price).toLocaleString()}`;
+          if (row.pricing_period) periodOrType = row.pricing_period;
+        } else if (normMod === 'rentals') {
+          const rates = row.module_data?.rates;
+          if (rates?.monthly) {
+            priceOrSalary = `LKR ${Number(rates.monthly).toLocaleString()}`;
+            periodOrType = '/ Month';
+          } else if (rates?.daily) {
+            priceOrSalary = `LKR ${Number(rates.daily).toLocaleString()}`;
+            periodOrType = '/ Day';
           }
-
-          let coverUrl = SearchService.NEUTRAL_PLACEHOLDER;
-          if (row.listing_media && row.listing_media.length > 0) {
-            const sortedMedia = [...row.listing_media].sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0));
-            if (sortedMedia[0]?.storage_path) {
-              coverUrl = await this.resolveSignedMediaUrl(sortedMedia[0].storage_path);
-            }
+        } else if (normMod === 'jobs') {
+          const salMin = row.module_data?.salary_min;
+          const salMax = row.module_data?.salary_max;
+          if (salMin && salMax) {
+            priceOrSalary = `LKR ${(salMin / 1000).toFixed(0)}k - ${(salMax / 1000).toFixed(0)}k`;
+          } else if (salMin) {
+            priceOrSalary = `LKR ${Number(salMin).toLocaleString()}`;
           }
+          periodOrType = row.module_data?.employment_type || 'Full Time';
+        } else if (normMod === 'services') {
+          const startingPrice = row.module_data?.starting_price;
+          if (startingPrice) {
+            priceOrSalary = `From LKR ${Number(startingPrice).toLocaleString()}`;
+          }
+          periodOrType = row.module_data?.pricing_type || 'Per Service';
+        }
 
-          const badgeLabel = normMod === 'rentals' ? 'Rental' : (normMod === 'jobs' ? 'Job' : 'Service');
-          const badgeColor = normMod === 'rentals' ? '#1464F4' : (normMod === 'jobs' ? '#08A34F' : '#FF650A');
-          const locationName = row.locations?.name || 'Sri Lanka';
-          const categoryName = row.categories?.name || (normMod === 'rentals' ? 'Property' : (normMod === 'jobs' ? 'Opportunities' : 'Service'));
+        let coverUrl = SearchService.NEUTRAL_PLACEHOLDER;
+        if (row.listing_media && row.listing_media.length > 0) {
+          const sortedMedia = [...row.listing_media].sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0));
+          const storagePath = sortedMedia[0]?.storage_path;
+          if (storagePath) {
+            coverUrl = urlMap.get(storagePath) || SearchService.NEUTRAL_PLACEHOLDER;
+          }
+        }
 
-          return {
-            id: row.id,
-            title: row.title,
-            module: normMod,
-            category: categoryName,
-            location: locationName,
-            priceOrSalary,
-            periodOrType,
-            imageUrl: coverUrl,
-            postedDate: row.published_at || row.created_at || new Date().toISOString(),
-            badgeLabel,
-            badgeColor
-          };
-        })
-      );
+        const badgeLabel = normMod === 'rentals' ? 'Rental' : (normMod === 'jobs' ? 'Job' : 'Service');
+        const badgeColor = normMod === 'rentals' ? '#1464F4' : (normMod === 'jobs' ? '#08A34F' : '#FF650A');
+        const locationName = row.locations?.name || 'Sri Lanka';
+        const categoryName = row.categories?.name || (normMod === 'rentals' ? 'Property' : (normMod === 'jobs' ? 'Opportunities' : 'Service'));
+
+        return {
+          id: row.id,
+          title: row.title,
+          module: normMod,
+          category: categoryName,
+          location: locationName,
+          priceOrSalary,
+          periodOrType,
+          imageUrl: coverUrl,
+          postedDate: row.published_at || row.created_at || new Date().toISOString(),
+          badgeLabel,
+          badgeColor
+        };
+      });
 
       return { items, totalCount: total, hasMore };
     } catch (e) {
@@ -357,7 +391,10 @@ export class HomeService {
    */
   static async getPopularLocations(): Promise<(LocationItem & { searchCount?: number; listingCount?: number })[]> {
     try {
-      const allCanonicals = await LocationService.getAllLocationsAsync(false);
+      const [allCanonicals, rpcRes] = await Promise.all([
+        LocationService.getAllLocationsAsync(false),
+        supabase.rpc('get_popular_locations')
+      ]);
       const topLocationsMap = new Map<string, { location: any; searchCount: number; listingCount: number }>();
 
       // 1. First, pull featured popular locations from the canonical dataset
@@ -369,8 +406,9 @@ export class HomeService {
         });
       });
 
-      // 2. Try calling get_popular_locations RPC
-      const { data: rpcData, error: rpcErr } = await supabase.rpc('get_popular_locations');
+      // 2. Try processing get_popular_locations RPC results
+      const rpcData = rpcRes.data;
+      const rpcErr = rpcRes.error;
 
       if (!rpcErr && Array.isArray(rpcData) && rpcData.length > 0) {
         rpcData.forEach((item: any) => {
