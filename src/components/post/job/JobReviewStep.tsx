@@ -81,7 +81,7 @@ export const JobReviewStep: React.FC<JobReviewStepProps> = ({
           </span>
         </div>
         <p className="text-xs text-slate-500">
-          Review all job posting details before submitting for moderation approval.
+          Review all job posting details before publishing on RENTOURA.LK.
         </p>
       </div>
 
@@ -91,8 +91,8 @@ export const JobReviewStep: React.FC<JobReviewStepProps> = ({
           <span className="text-[11px] font-bold tracking-wider text-emerald-400 uppercase flex items-center gap-1.5">
             <ShieldCheck className="w-4 h-4" /> Live Job Card Preview
           </span>
-          <span className="text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
-            Pending Approval
+          <span className="text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+            Status: Active / Live
           </span>
         </div>
 
@@ -257,17 +257,17 @@ export const JobReviewStep: React.FC<JobReviewStepProps> = ({
           {isSubmitting ? (
             <span className="flex items-center gap-2">
               <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-              Submitting Job Post...
+              Publishing Job Post...
             </span>
           ) : (
             <>
-              <Send className="w-4 h-4" /> SUBMIT FOR REVIEW
+              <Send className="w-4 h-4" /> PUBLISH JOB NOW
             </>
           )}
         </button>
 
         <p className="text-[11px] text-slate-400 text-center font-medium">
-          Once submitted, our moderation team will review your post within 2-4 hours.
+          Once submitted, your job post will be published immediately across Sri Lanka.
         </p>
       </div>
     </div>

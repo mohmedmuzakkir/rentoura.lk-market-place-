@@ -46,6 +46,7 @@ import { RENTOURA_CONTACT, RENTOURA_SUPPORT_WHATSAPP_URL } from '../config/conta
 
 interface HelpCenterPageProps {
   onNavigate: (route: AppRoute) => void;
+  onBack?: () => void;
   selectedLanguage?: 'English' | 'Sinhala' | 'Tamil';
   onLanguageChange?: (lang: 'English' | 'Sinhala' | 'Tamil') => void;
   initialTopic?: string;
@@ -64,6 +65,7 @@ interface HelpArticle {
 
 export const HelpCenterPage: React.FC<HelpCenterPageProps> = ({
   onNavigate,
+  onBack,
   selectedLanguage = 'English',
   onLanguageChange,
   initialTopic
@@ -224,22 +226,21 @@ export const HelpCenterPage: React.FC<HelpCenterPageProps> = ({
         'Choose whether to post a Rental (Property, Vehicles, Tools), a Job Vacancy, or a Skilled Service.',
         'Fill in the listing title, category, location, pricing, and detailed description.',
         'Upload clear photos for rental or service listings.',
-        'Submit for review. All newly submitted listings enter "Pending Review" status prior to public display.'
+        'Submit & Publish. All newly submitted listings go live immediately on RENTOURA.LK and are published publicly right away.'
       ],
       relatedRoute: '/post',
       relatedRouteLabel: 'Post a Listing Now'
     },
     {
       id: 'pending-listing-explanation',
-      title: 'Why is my listing in "Pending Review"?',
+      title: 'How does listing publication and moderation work?',
       category: 'post-listing',
-      keywords: ['pending', 'review', 'approval', 'how long', 'pending status', 'moderation'],
-      summary: 'All new and resubmitted listings undergo manual moderation to maintain marketplace quality.',
+      keywords: ['publication', 'moderation', 'live', 'review', 'approval', 'active status'],
+      summary: 'New listings go live immediately, supported by automated and ongoing safety reviews.',
       content: [
-        'To protect users from scams, inappropriate content, and spam, our moderation team reviews all newly submitted listings.',
-        'Listings are usually reviewed promptly within a few hours.',
-        'You can check the real-time status of your submission in "My Listings" under your profile menu.',
-        'Once approved, your listing status changes to "Active" and becomes visible publicly across Sri Lanka.'
+        'Listings published on RENTOURA.LK are active immediately after submission.',
+        'To maintain community safety and quality, listings undergo continuous automated and manual quality reviews.',
+        'If a listing is flagged or requires updates, moderation may request changes or place it under review. You can check your listing status in "My Listings".'
       ],
       relatedRoute: '/my-listings',
       relatedRouteLabel: 'View My Listings'
@@ -355,8 +356,8 @@ export const HelpCenterPage: React.FC<HelpCenterPageProps> = ({
       a: 'Tap the "Report Listing" button on the listing page, or use the "Report a Safety Concern" form in our Safety Center (/safety). Our trust team will review the issue.'
     },
     {
-      q: 'Why is my listing in "Pending Review"?',
-      a: 'Pending Review means the listing is not public yet. Review timing varies; check My Listings for the current status.'
+      q: 'When does my listing become visible to the public?',
+      a: 'Your listing becomes visible immediately after submission across RENTOURA.LK. If moderation later flags a listing for review or requests changes, its status will update in My Listings.'
     },
     {
       q: 'How do I reset my password?',
@@ -485,7 +486,7 @@ export const HelpCenterPage: React.FC<HelpCenterPageProps> = ({
         <div className="w-full max-w-5xl mx-auto flex items-center justify-between">
           <button
             type="button"
-            onClick={() => onNavigate('/')}
+            onClick={onBack ? onBack : () => onNavigate('/')}
             className="w-10 h-10 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center transition-all tap-bounce"
             aria-label="Go Back"
           >

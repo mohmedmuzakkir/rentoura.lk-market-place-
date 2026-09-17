@@ -33,6 +33,7 @@ import { AuthService, CURRENT_AGREEMENT_VERSION } from '../services/authService'
 
 interface UserAgreementPageProps {
   onNavigate: (route: AppRoute) => void;
+  onBack?: () => void;
   selectedLanguage?: 'English' | 'Sinhala' | 'Tamil';
   onLanguageChange?: (lang: 'English' | 'Sinhala' | 'Tamil') => void;
   onAgreeAndContinue?: () => void;
@@ -41,6 +42,7 @@ interface UserAgreementPageProps {
 
 export const UserAgreementPage: React.FC<UserAgreementPageProps> = ({
   onNavigate,
+  onBack,
   selectedLanguage = 'English',
   onLanguageChange,
   onAgreeAndContinue,
@@ -95,7 +97,11 @@ export const UserAgreementPage: React.FC<UserAgreementPageProps> = ({
   };
 
   const handleDecline = () => {
-    onNavigate('/');
+    if (onBack) {
+      onBack();
+    } else {
+      onNavigate('/');
+    }
   };
 
   const scrollToSection = (id: string) => {
@@ -127,7 +133,7 @@ export const UserAgreementPage: React.FC<UserAgreementPageProps> = ({
     { id: 'sec-8', number: '8', title: 'Payments & Advance Payments' },
     { id: 'sec-9', number: '9', title: 'Communication Safety' },
     { id: 'sec-10', number: '10', title: 'Listing Rules' },
-    { id: 'sec-11', number: '11', title: 'Moderation & Pending Review' },
+    { id: 'sec-11', number: '11', title: 'Moderation & Listing Quality' },
     { id: 'sec-12', number: '12', title: 'Reports & Fraud Prevention' },
     { id: 'sec-13', number: '13', title: 'Reviews & Ratings' },
     { id: 'sec-14', number: '14', title: 'Prohibited Conduct' },
@@ -623,14 +629,14 @@ export const UserAgreementPage: React.FC<UserAgreementPageProps> = ({
               </p>
             </div>
 
-            {/* SECTION 11: Moderation & Pending Review */}
+            {/* SECTION 11: Moderation & Listing Quality */}
             <div id="sec-11" className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 space-y-3 scroll-mt-24">
               <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
                 <span className="w-6 h-6 rounded-lg bg-blue-50 text-[#1464F4] text-xs font-bold flex items-center justify-center">11</span>
-                <h3 className="text-sm font-bold text-[#041C43]">Moderation & Pending Review</h3>
+                <h3 className="text-sm font-bold text-[#041C43]">Moderation & Listing Quality</h3>
               </div>
               <p className="text-xs text-slate-600 leading-relaxed">
-                Newly submitted listings enter a <span className="font-bold text-[#1464F4]">Pending Review</span> state and are not immediately visible to the public. Reviews aim to be completed promptly (typically within 24 hours depending on review volume). Authorized staff reserve the right to approve, reject, request corrections, or remove listings according to platform standards.
+                Newly submitted listings publish immediately and become visible to the public across RENTOURA.LK. To maintain marketplace safety and quality standards, automated systems and moderation staff perform continuous post-publication quality audits. RENTOURA.LK reserves the right to review, request corrections, or remove any listing that violates platform policies or community guidelines.
               </p>
             </div>
 

@@ -44,7 +44,7 @@ export const RentalReviewStep: React.FC<RentalReviewStepProps> = ({
         <div className="text-xs">
           <p className="font-bold text-slate-900">Step 7: Final Review & Publish</p>
           <p className="text-slate-600 mt-0.5 leading-relaxed">
-            Review your rental listing below. Once submitted, your listing will be queued for rapid moderation and published on RENTOURA.LK.
+            Review your rental listing below. Once submitted, your listing will be published immediately on RENTOURA.LK.
           </p>
         </div>
       </div>
@@ -58,8 +58,8 @@ export const RentalReviewStep: React.FC<RentalReviewStepProps> = ({
               Live Listing Preview
             </span>
           </div>
-          <span className="text-[10px] font-bold bg-blue-500/30 text-blue-300 px-2 py-0.5 rounded-full">
-            Status: Pending Review
+          <span className="text-[10px] font-bold bg-emerald-500/30 text-emerald-300 px-2 py-0.5 rounded-full">
+            Status: Active / Live
           </span>
         </div>
 
@@ -334,7 +334,7 @@ export const RentalReviewStep: React.FC<RentalReviewStepProps> = ({
           <div>
             <h3 className="text-sm font-extrabold">Ready to Publish?</h3>
             <p className="text-xs text-blue-200 mt-0.5">
-              Your rental listing will be submitted to the moderation queue.
+              Your rental listing will be published immediately on the marketplace.
             </p>
           </div>
         </div>
@@ -348,12 +348,12 @@ export const RentalReviewStep: React.FC<RentalReviewStepProps> = ({
           {isSubmitting ? (
             <>
               <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              <span>Submitting Listing...</span>
+              <span>Publishing Listing...</span>
             </>
           ) : (
             <>
               <CheckCircle2 className="w-5 h-5" />
-              <span>SUBMIT FOR REVIEW</span>
+              <span>PUBLISH LISTING NOW</span>
             </>
           )}
         </button>

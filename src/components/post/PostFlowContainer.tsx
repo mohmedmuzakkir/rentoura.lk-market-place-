@@ -65,7 +65,7 @@ export const PostFlowContainer: React.FC<PostFlowContainerProps> = ({
               id: listingId,
               title: 'New Service',
               module: 'services',
-              status: 'pending',
+              status: 'active',
               postedDate: 'Just now'
             } as UserListingItem);
           }
@@ -399,10 +399,10 @@ export const PostFlowContainer: React.FC<PostFlowContainerProps> = ({
           <div className="space-y-4 animate-in fade-in duration-200">
             <div className="text-left">
               <h2 className="text-base font-extrabold text-slate-900 font-heading">
-                4. Review & Submit for Moderation
+                4. Review & Publish Listing
               </h2>
               <p className="text-xs text-slate-500">
-                Double-check your information before sending your listing to our moderation team.
+                Double-check your information before publishing your listing on RENTOURA.LK.
               </p>
             </div>
 

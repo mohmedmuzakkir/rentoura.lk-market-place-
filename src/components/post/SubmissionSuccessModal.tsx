@@ -41,8 +41,8 @@ export const SubmissionSuccessModal: React.FC<SubmissionSuccessModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl text-center space-y-5 animate-in zoom-in-95 duration-200">
         {/* Animated Success Badge */}
-        <div className={`relative w-20 h-20 rounded-3xl border-2 flex items-center justify-center mx-auto shadow-md ${listing.status === 'active' ? 'bg-emerald-50 border-emerald-200 text-emerald-600' : 'bg-amber-50 border-amber-200 text-amber-600'}`}>
-          {listing.status === 'active' ? (
+        <div className={`relative w-20 h-20 rounded-3xl border-2 flex items-center justify-center mx-auto shadow-md ${listing.status !== 'pending' ? 'bg-emerald-50 border-emerald-200 text-emerald-600' : 'bg-amber-50 border-amber-200 text-amber-600'}`}>
+          {listing.status !== 'pending' ? (
             <Sparkles className="w-10 h-10 animate-pulse" />
           ) : (
             <Clock className="w-10 h-10 animate-pulse" />
@@ -54,14 +54,14 @@ export const SubmissionSuccessModal: React.FC<SubmissionSuccessModalProps> = ({
 
         {/* Title and Explanation */}
         <div className="space-y-1.5">
-          <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider ${listing.status === 'active' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
-            {listing.status === 'active' ? 'Live & Published' : 'Pending Moderation Review'}
+          <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider ${listing.status !== 'pending' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>
+            {listing.status !== 'pending' ? 'Live & Published' : 'Pending Moderation Review'}
           </span>
           <h2 className="text-xl font-extrabold text-slate-900 font-heading">
             Listing Submitted Successfully!
           </h2>
           <p className="text-xs text-slate-500 max-w-xs mx-auto leading-relaxed">
-            Your listing “<strong className="text-slate-800">{listing.title}</strong>” has been recorded and is {listing.status === 'active' ? 'now live on the marketplace.' : 'currently under review by our team.'}
+            Your listing “<strong className="text-slate-800">{listing.title}</strong>” has been recorded and is {listing.status !== 'pending' ? 'now live on the marketplace.' : 'currently under review by our team.'}
           </p>
         </div>
 
@@ -73,7 +73,7 @@ export const SubmissionSuccessModal: React.FC<SubmissionSuccessModalProps> = ({
           </div>
           <div className="flex justify-between text-slate-600">
             <span>Current Status:</span>
-            {listing.status === 'active' ? (
+            {listing.status !== 'pending' ? (
               <span className="font-bold text-emerald-700">✅ Active & Live</span>
             ) : (
               <span className="font-bold text-amber-700">⏳ Pending Review</span>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, useRef, Suspense } from 'react';
 import { ShieldCheck } from 'lucide-react';
 import { Header } from './components/Header';
 import { BottomNavigation } from './components/BottomNavigation';
@@ -112,6 +112,17 @@ export default function App() {
   });
   const [reviewsTargetListingId, setReviewsTargetListingId] = useState<string | null>(null);
   const [previousRoute, setPreviousRoute] = useState<AppRoute>('/');
+  const navigationHistoryRef = useRef<string[]>([window.location.pathname + window.location.search]);
+
+  const isAuthRoutePath = useCallback((path: string) => {
+    return (
+      path.startsWith('/login') ||
+      path.startsWith('/register') ||
+      path.startsWith('/forgot-password') ||
+      path.startsWith('/reset-password') ||
+      path.startsWith('/complete-profile')
+    );
+  }, []);
   const [reportTargetListing, setReportTargetListing] = useState<ReportListingTarget | null>(null);
   const [profileCompletionReturn, setProfileCompletionReturn] = useState<AppRoute>('/');
   const [pendingProtectedAction, setPendingProtectedAction] = useState<PendingProtectedAction | null>(null);
@@ -438,26 +449,91 @@ export default function App() {
       if (resolved.canonicalPath) window.history.replaceState({}, '', resolved.canonicalPath);
       setSelectedListingId(resolved.listingId || '');
       setCurrentRoute(resolved.route);
+      const fullUrl = window.location.pathname + window.location.search;
+      if (navigationHistoryRef.current[navigationHistoryRef.current.length - 1] !== fullUrl) {
+        navigationHistoryRef.current.push(fullUrl);
+      }
     };
 
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
-  const navigateDirect = (fullRoute: string) => {
+  const navigateDirect = (fullRoute: string, options?: { isBackAction?: boolean; replace?: boolean }) => {
     const [path] = fullRoute.split('?');
     const route = path as AppRoute;
     
     if (currentRoute !== route && !['/rental-detail', '/job-detail', '/service-detail'].includes(currentRoute) && !currentRoute.startsWith('/rentals/') && !currentRoute.startsWith('/jobs/') && !currentRoute.startsWith('/services/')) {
       setPreviousRoute(currentRoute);
     }
+
+    // Synchronize navigation history stack
+    if (options?.isBackAction) {
+      while (
+        navigationHistoryRef.current.length > 1 &&
+        navigationHistoryRef.current[navigationHistoryRef.current.length - 1] === fullRoute
+      ) {
+        navigationHistoryRef.current.pop();
+      }
+    } else if (options?.replace) {
+      if (navigationHistoryRef.current.length > 0) {
+        navigationHistoryRef.current[navigationHistoryRef.current.length - 1] = fullRoute;
+      } else {
+        navigationHistoryRef.current.push(fullRoute);
+      }
+    } else {
+      const top = navigationHistoryRef.current[navigationHistoryRef.current.length - 1];
+      if (top !== fullRoute) {
+        if (!isAuthRoutePath(path)) {
+          while (
+            navigationHistoryRef.current.length > 0 &&
+            isAuthRoutePath(navigationHistoryRef.current[navigationHistoryRef.current.length - 1].split('?')[0])
+          ) {
+            navigationHistoryRef.current.pop();
+          }
+        }
+        navigationHistoryRef.current.push(fullRoute);
+      }
+    }
+
     setCurrentRoute(route);
     
     const currentUrl = window.location.pathname + window.location.search;
     if (currentUrl !== fullRoute) {
-      window.history.pushState({}, '', fullRoute);
+      if (options?.replace) {
+        window.history.replaceState({}, '', fullRoute);
+      } else {
+        window.history.pushState({}, '', fullRoute);
+      }
     }
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleBack = () => {
+    const currentFullUrl = window.location.pathname + window.location.search;
+
+    // Remove top entries matching current URL or current route
+    while (
+      navigationHistoryRef.current.length > 0 &&
+      (navigationHistoryRef.current[navigationHistoryRef.current.length - 1] === currentFullUrl ||
+        navigationHistoryRef.current[navigationHistoryRef.current.length - 1].split('?')[0] === currentRoute)
+    ) {
+      navigationHistoryRef.current.pop();
+    }
+
+    // Purge trailing auth routes when popping back
+    while (
+      navigationHistoryRef.current.length > 0 &&
+      isAuthRoutePath(navigationHistoryRef.current[navigationHistoryRef.current.length - 1].split('?')[0])
+    ) {
+      navigationHistoryRef.current.pop();
+    }
+
+    const previousTarget = navigationHistoryRef.current.length > 0
+      ? navigationHistoryRef.current[navigationHistoryRef.current.length - 1]
+      : '/';
+
+    navigateDirect(previousTarget, { isBackAction: true });
   };
 
   const requestProtectedAction = (request: ProtectedActionRequest) => {
@@ -533,33 +609,19 @@ export default function App() {
   ) => {
     const normHint = moduleHint?.toLowerCase();
     let canonicalPath = `/rentals/${id}`;
-    let targetRoute: AppRoute = `/rentals/${id}` as AppRoute;
 
     if (normHint?.includes('job') || id.includes('job')) {
-      targetRoute = `/jobs/${id}` as AppRoute;
       canonicalPath = `/jobs/${id}`;
     } else if (normHint?.includes('serv') || id.includes('srv') || id.includes('service')) {
-      targetRoute = `/services/${id}` as AppRoute;
       canonicalPath = `/services/${id}`;
     }
 
     setSelectedListingId(id);
-    setPreviousRoute(currentRoute);
-
-    if (window.location.pathname !== canonicalPath) {
-      window.history.pushState({ id }, '', canonicalPath);
-    }
-
-    setCurrentRoute(targetRoute);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    navigateDirect(canonicalPath);
   };
 
   const handleBackFromDetail = () => {
-    if (previousRoute && previousRoute !== currentRoute) {
-      handleNavigate(previousRoute);
-    } else {
-      handleNavigate('/');
-    }
+    handleBack();
   };
 
   const handleToggleSave = async (listingId: string): Promise<boolean> => {
@@ -903,13 +965,7 @@ export default function App() {
         return (
           <NotificationsPage
             notifications={notifications}
-            onBack={() => {
-              if (previousRoute && previousRoute !== '/notifications') {
-                handleNavigate(previousRoute);
-              } else {
-                handleNavigate('/');
-              }
-            }}
+            onBack={handleBack}
             onNavigate={handleNavigate}
             onOpenListingDetail={handleOpenListingDetail}
             onSelectConversation={handleSelectConversation}
@@ -1195,32 +1251,27 @@ export default function App() {
         );
       case '/profile/edit':
         if (!userProfile) {
-          return <LoginPage onNavigate={handleNavigate} returnUrl="/profile/edit" />;
+          return <LoginPage onNavigate={handleNavigate} onBack={handleBack} returnUrl="/profile/edit" />;
         }
         return (
           <EditProfilePage
             profile={userProfile}
             unreadNotificationsCount={unreadNotificationsCount}
             onSaveProfile={handleSaveProfile}
-            onBack={() => {
-              if (previousRoute && previousRoute !== '/profile/edit') {
-                handleNavigate(previousRoute);
-              } else {
-                handleNavigate('/profile');
-              }
-            }}
+            onBack={handleBack}
             onNavigate={handleNavigate}
           />
         );
       case '/my-listings':
         if (!userProfile) {
-          return <LoginPage onNavigate={handleNavigate} returnUrl="/my-listings" />;
+          return <LoginPage onNavigate={handleNavigate} onBack={handleBack} returnUrl="/my-listings" />;
         }
         return (
           <MyListingsPage
             listings={userListings}
             initialModuleFilter={myListingsInitialModule}
             onNavigate={handleNavigate}
+            onBack={handleBack}
             onOpenListingDetail={handleOpenListingDetail}
             onDeleteListing={handleDeleteUserListing}
             onUpdateListing={handleUpdateUserListing}
@@ -1232,6 +1283,7 @@ export default function App() {
         return (
           <LoginPage
             onNavigate={handleNavigate}
+            onBack={handleBack}
             returnUrl={previousRoute && !['/login', '/register', '/forgot-password', '/user-agreement', '/privacy-policy'].includes(previousRoute) ? previousRoute : '/'}
           />
         );
@@ -1239,6 +1291,7 @@ export default function App() {
         return (
           <RegisterPage
             onNavigate={handleNavigate}
+            onBack={handleBack}
             returnUrl={previousRoute && !['/login', '/register', '/forgot-password', '/user-agreement', '/privacy-policy'].includes(previousRoute) ? previousRoute : '/'}
             onOpenUserAgreement={() => setIsUserAgreementOpen(true)}
             onOpenPrivacyPolicy={() => setIsPrivacyPolicyOpen(true)}
@@ -1248,18 +1301,21 @@ export default function App() {
         return (
           <ForgotPasswordPage
             onNavigate={handleNavigate}
+            onBack={handleBack}
           />
         );
       case '/reset-password':
         return (
           <ResetPasswordPage
             onNavigate={handleNavigate}
+            onBack={handleBack}
           />
         );
       case '/user-agreement':
         return (
           <UserAgreementPage
             onNavigate={handleNavigate}
+            onBack={handleBack}
             userProfile={userProfile}
             onAgreeAndContinue={async () => {
               const refreshed = await AuthService.refreshProfile();
@@ -1273,24 +1329,28 @@ export default function App() {
         return (
           <PrivacyPolicyPage
             onNavigate={handleNavigate}
+            onBack={handleBack}
           />
         );
       case '/safety':
         return (
           <SafetyCenterPage
             onNavigate={handleNavigate}
+            onBack={handleBack}
           />
         );
       case '/help':
         return (
           <HelpCenterPage
             onNavigate={handleNavigate}
+            onBack={handleBack}
           />
         );
       case '/report-listing':
         return (
           <ReportListingPage
             onNavigate={handleNavigate}
+            onBack={handleBack}
             targetListing={reportTargetListing}
           />
         );
@@ -1298,6 +1358,7 @@ export default function App() {
         return (
           <ReviewsPage
             onNavigate={handleNavigate}
+            onBack={handleBack}
             targetListingId={reviewsTargetListingId}
             onOpenListingDetail={handleOpenListingDetail}
           />

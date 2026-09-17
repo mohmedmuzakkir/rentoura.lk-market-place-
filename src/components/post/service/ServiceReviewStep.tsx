@@ -38,7 +38,7 @@ export const ServiceReviewStep: React.FC<ServiceReviewStepProps> = ({
         </div>
         <h2 className="text-lg sm:text-xl font-extrabold text-slate-900">Review & Final Submission</h2>
         <p className="text-xs sm:text-sm text-slate-500 mt-1">
-          Review your service listing summary below before submitting for moderation approval.
+          Review your service listing summary below before publishing on RENTOURA.LK.
         </p>
       </div>
 
@@ -224,7 +224,7 @@ export const ServiceReviewStep: React.FC<ServiceReviewStepProps> = ({
             className="mt-0.5 rounded text-amber-500 focus:ring-amber-500"
           />
           <span className="text-xs text-slate-600 leading-relaxed">
-            I confirm that all service details, prices, experience and qualifications provided in this listing are accurate and genuine. I agree to <strong className="text-slate-800">RENTOURA.LK Terms of Service</strong> and understand my listing will be reviewed by moderation.
+            I confirm that all service details, prices, experience and qualifications provided in this listing are accurate and genuine. I agree to <strong className="text-slate-800">RENTOURA.LK Terms of Service</strong> and understand my listing will go live immediately and must adhere to platform standards.
           </span>
         </label>
       </div>
@@ -243,11 +243,11 @@ export const ServiceReviewStep: React.FC<ServiceReviewStepProps> = ({
         {isSubmitting ? (
           <>
             <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-            Submitting Service Listing for Review...
+            Publishing Service Listing...
           </>
         ) : (
           <>
-            <Send className="w-4 h-4" /> SUBMIT FOR REVIEW
+            <Send className="w-4 h-4" /> PUBLISH SERVICE LISTING
           </>
         )}
       </button>

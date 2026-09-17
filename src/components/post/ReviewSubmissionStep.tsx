@@ -27,13 +27,13 @@ export const ReviewSubmissionStep: React.FC<ReviewSubmissionStepProps> = ({
 
   return (
     <div className="space-y-4 text-left">
-      {/* Moderation Guarantee Card */}
-      <div className="bg-amber-50/80 border border-amber-200/90 rounded-2xl p-4 flex items-start gap-3">
-        <Clock className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-        <div className="text-xs text-amber-900 leading-relaxed">
-          <p className="font-bold">Moderation & Quality Verification</p>
-          <p className="text-amber-800/90 mt-0.5">
-            Your listing will be submitted for review (Status: <strong>Pending</strong>) to protect against spam. It will appear in your <strong>My Listings</strong> page immediately and go live after review.
+      {/* Instant Publishing & Quality Standards Card */}
+      <div className="bg-emerald-50/80 border border-emerald-200/90 rounded-2xl p-4 flex items-start gap-3">
+        <ShieldCheck className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
+        <div className="text-xs text-emerald-900 leading-relaxed">
+          <p className="font-bold">Instant Publishing & Quality Standards</p>
+          <p className="text-emerald-800/90 mt-0.5">
+            Your listing will go live immediately (Status: <strong>Active & Live</strong>) across RENTOURA.LK. It will appear on Home, module pages, and your <strong>My Listings</strong> page right away.
           </p>
         </div>
       </div>
@@ -162,12 +162,12 @@ export const ReviewSubmissionStep: React.FC<ReviewSubmissionStepProps> = ({
           {isSubmitting ? (
             <div className="flex items-center gap-2">
               <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              <span>Submitting for Review...</span>
+              <span>Publishing Listing...</span>
             </div>
           ) : (
             <div className="flex items-center gap-2">
               <CheckCircle2 className="w-5 h-5 stroke-[2.5]" />
-              <span>Submit Listing for Review</span>
+              <span>Publish Listing Now</span>
             </div>
           )}
         </button>

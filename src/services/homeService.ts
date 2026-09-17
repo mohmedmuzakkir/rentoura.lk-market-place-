@@ -283,10 +283,6 @@ export class HomeService {
         query = query.eq('module', targetModule);
       }
 
-      if (userId) {
-        query = query.neq('owner_id', userId);
-      }
-
       const fromIndex = (page - 1) * limit;
       const toIndex = fromIndex + limit - 1;
 
