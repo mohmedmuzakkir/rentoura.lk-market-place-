@@ -12,6 +12,7 @@ import {
   Smile,
   Mic,
   Send,
+  Check,
   CheckCheck,
   ExternalLink,
   ShieldAlert,
@@ -20,7 +21,9 @@ import {
   Sparkles,
   Paperclip,
   Image as ImageIcon,
-  Loader2
+  Loader2,
+  Briefcase,
+  FileText
 } from 'lucide-react';
 import { RentouraLogo } from '../components/RentouraLogo';
 import { AppRoute } from '../types';
@@ -98,6 +101,13 @@ export const ChatPage: React.FC<ChatPageProps> = ({
   useEffect(() => {
     scrollToBottom();
   }, [conversation.messages, isTyping]);
+
+  // Mark conversation as read on enter and when messages change
+  useEffect(() => {
+    if (conversation?.id) {
+      MessagingService.markAsRead(conversation.id);
+    }
+  }, [conversation?.id, conversation.messages?.length]);
 
   const handleSend = () => {
     if (!inputText.trim()) return;
@@ -191,7 +201,7 @@ export const ChatPage: React.FC<ChatPageProps> = ({
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
@@ -274,6 +284,29 @@ export const ChatPage: React.FC<ChatPageProps> = ({
 
       {/* Main Container */}
       <main className="max-w-4xl w-full mx-auto flex-1 flex flex-col px-3 sm:px-4 py-3 space-y-3">
+        {/* Official Job Application Banner */}
+        {(conversation.isJobApplication || conversation.type === 'job_application' || conversation.listing?.badge === 'APPLICATION') && (
+          <div className="bg-emerald-950 text-white border-2 border-emerald-500/60 rounded-2xl p-3.5 shadow-md flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center shrink-0">
+                <Briefcase className="w-5 h-5" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-black uppercase tracking-wider text-emerald-400">
+                    Official Job Application Thread
+                  </span>
+                  <span className="px-2 py-0.5 rounded bg-emerald-700 text-white text-[9.5px] font-bold uppercase">
+                    Verified Application
+                  </span>
+                </div>
+                <p className="text-xs text-slate-200 mt-0.5 truncate">
+                  This message thread originated from an official job application submission.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
         {/* User & Listing Context Card matching Image 3 Hero Banner */}
         <div className="bg-gradient-to-br from-[#041C43] to-[#0A2E6E] text-white rounded-2xl p-3.5 sm:p-4 shadow-md space-y-3.5">
           {/* Top Row: User details & Call button */}
@@ -291,26 +324,23 @@ export const ChatPage: React.FC<ChatPageProps> = ({
                     {conversation.participant.avatarInitials || conversation.participant.name.charAt(0)}
                   </div>
                 )}
-                {conversation.participant.isOnline && (
-                  <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-emerald-500 rounded-full border-2 border-[#041C43]" />
-                )}
               </div>
 
               <div className="min-w-0">
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1.5 flex-wrap">
                   <h2 className="font-bold text-white text-base font-heading truncate">
                     {conversation.participant.name}
                   </h2>
-                  {conversation.participant.verified && (
+                  {(conversation.participant.isStaff || conversation.participant.isVerifiedAdmin || ['admin', 'super_admin', 'moderator'].includes(conversation.participant.role || '')) ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#1464F4] text-white text-[10.5px] font-black uppercase tracking-wider shrink-0 shadow-xs border border-blue-400/30">
+                      <ShieldCheck className="w-3.5 h-3.5 text-white" />
+                      Verified Admin
+                    </span>
+                  ) : conversation.participant.verified ? (
                     <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-                  )}
+                  ) : null}
                 </div>
                 <div className="flex items-center gap-2 text-[11px] text-slate-300 font-medium mt-0.5">
-                  <span className="flex items-center gap-1 text-emerald-400 font-semibold">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    Online
-                  </span>
-                  <span>•</span>
                   <span className="truncate">{conversation.participant.memberSince || 'Member'}</span>
                 </div>
                 {conversation.participant.location && (
@@ -435,7 +465,48 @@ export const ChatPage: React.FC<ChatPageProps> = ({
 
             {filteredMessages.map((msg) => {
               const isMe = msg.sender === 'me';
-              const isImageMsg = msg.type === 'image' || (typeof msg.text === 'string' && (msg.text.startsWith('http://') || msg.text.startsWith('https://')) && (msg.text.includes('.png') || msg.text.includes('.jpg') || msg.text.includes('.jpeg') || msg.text.includes('.webp') || msg.text.includes('token=') || msg.text.includes('supabase')));
+              const isJobAppMsg = msg.type === 'job_application' || (typeof msg.text === 'string' && (msg.text.startsWith('📋 JOB APPLICATION') || msg.text.startsWith('📄 JOB APPLICATION')));
+              const isImageMsg = !isJobAppMsg && (msg.type === 'image' || (typeof msg.text === 'string' && (msg.text.startsWith('http://') || msg.text.startsWith('https://')) && (msg.text.includes('.png') || msg.text.includes('.jpg') || msg.text.includes('.jpeg') || msg.text.includes('.webp') || msg.text.includes('token=') || msg.text.includes('supabase'))));
+
+              if (isJobAppMsg) {
+                return (
+                  <div key={msg.id} className="flex justify-center my-3">
+                    <div className="w-full max-w-lg bg-gradient-to-br from-emerald-50 to-emerald-100/60 border-2 border-emerald-600/40 rounded-2xl p-4 text-slate-900 shadow-sm space-y-3">
+                      <div className="flex items-center justify-between border-b border-emerald-200 pb-2.5">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-lg bg-[#065F46] text-white flex items-center justify-center">
+                            <Briefcase className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <span className="text-xs font-black uppercase tracking-wider text-[#065F46] block">
+                              Job Application Submitted
+                            </span>
+                            <span className="text-[10px] text-emerald-800 font-semibold">
+                              Formal Candidate Submission
+                            </span>
+                          </div>
+                        </div>
+                        <span className="px-2.5 py-1 bg-[#065F46] text-white text-[10px] font-black rounded-lg uppercase tracking-wider shadow-2xs">
+                          APPLICATION
+                        </span>
+                      </div>
+
+                      <div className="bg-white/90 rounded-xl p-3 border border-emerald-200/80 text-xs font-medium text-slate-800 leading-relaxed whitespace-pre-wrap break-words shadow-2xs">
+                        {msg.text}
+                      </div>
+
+                      <div className="flex items-center justify-between text-[10.5px] text-emerald-800/80 font-bold pt-0.5">
+                        <span className="flex items-center gap-1">
+                          <FileText className="w-3.5 h-3.5 text-[#08A34F]" />
+                          Rentoura Verified Submission
+                        </span>
+                        <span>{msg.time}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+
               return (
                 <div
                   key={msg.id}
@@ -463,6 +534,12 @@ export const ChatPage: React.FC<ChatPageProps> = ({
                         : 'bg-slate-100/90 border border-slate-200/70 text-slate-900 rounded-bl-xs'
                       }`}
                   >
+                    {(msg.isStaffSender || (!isMe && (conversation.participant.isStaff || conversation.participant.isVerifiedAdmin))) && (
+                      <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#1464F4] text-white text-[9.5px] font-black uppercase tracking-wider mb-1.5 shadow-2xs">
+                        <ShieldCheck className="w-3 h-3 text-white" />
+                        <span>Verified Admin</span>
+                      </div>
+                    )}
                     {isImageMsg ? (
                       <div className="mt-0.5 space-y-1">
                         <img
@@ -481,7 +558,13 @@ export const ChatPage: React.FC<ChatPageProps> = ({
                         }`}
                     >
                       <span>{msg.time}</span>
-                      {isMe && <CheckCheck className="w-3.5 h-3.5 text-[#1464F4]" />}
+                      {isMe && (
+                        msg.isRead ? (
+                          <CheckCheck className="w-3.5 h-3.5 text-[#1464F4]" aria-label="Read" />
+                        ) : (
+                          <Check className="w-3.5 h-3.5 text-slate-400" aria-label="Sent" />
+                        )
+                      )}
                     </div>
                   </div>
                 </div>

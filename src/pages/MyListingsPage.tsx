@@ -16,6 +16,7 @@ import { EmptyMyListingsState } from '../components/my-listings/EmptyMyListingsS
 interface MyListingsPageProps {
   listings: UserListingItem[];
   onNavigate: (route: AppRoute) => void;
+  onBack?: () => void;
   onOpenListingDetail: (listingId: string, module?: 'rentals' | 'jobs' | 'services') => void;
   onDeleteListing: (listingId: string) => void;
   onUpdateListing: (updated: UserListingItem) => void;
@@ -28,6 +29,7 @@ interface MyListingsPageProps {
 export const MyListingsPage: React.FC<MyListingsPageProps> = ({
   listings,
   onNavigate,
+  onBack,
   onOpenListingDetail,
   onDeleteListing,
   onUpdateListing,
@@ -175,7 +177,7 @@ export const MyListingsPage: React.FC<MyListingsPageProps> = ({
 
       {/* Top Header with Back, Centered Logo, Search, and Notification Bell */}
       <MyListingsHeader
-        onBack={() => onNavigate('/profile')}
+        onBack={onBack ? onBack : () => onNavigate('/profile')}
         onNavigate={onNavigate}
         isSearchOpen={isSearchOpen}
         onToggleSearch={() => setIsSearchOpen(!isSearchOpen)}

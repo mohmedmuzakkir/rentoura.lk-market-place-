@@ -1,5 +1,5 @@
 import React from 'react';
-import { Phone, MessageCircle, Send, Heart, Bookmark, Check } from 'lucide-react';
+import { Phone, MessageCircle, MessageSquare, Send, Heart, Bookmark, Check } from 'lucide-react';
 import { ListingModule } from '../../types/listingDetailsTypes';
 
 interface StickyActionBarProps {
@@ -96,27 +96,37 @@ export const StickyActionBar: React.FC<StickyActionBarProps> = ({
     );
   }
 
-  // ---------------- JOB ACTIONS (Image 2) ----------------
+  // ---------------- JOB ACTIONS ----------------
   if (module === 'jobs') {
     return (
       <div className="bg-white border-t border-slate-100 p-2.5 shadow-lg">
-        <div className="grid grid-cols-4 gap-2 max-w-lg mx-auto">
+        <div className="grid grid-cols-5 gap-1.5 max-w-lg mx-auto">
           {/* Apply Now */}
           <button
-            onClick={onApplyNow || onSendMessage}
-            className="col-span-1 flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl bg-[#08A34F] text-white font-bold text-xs hover:bg-emerald-700 transition-all tap-bounce shadow-xs"
+            onClick={onApplyNow}
+            disabled={!onApplyNow}
+            className="col-span-1 flex items-center justify-center gap-1 py-2.5 px-1 rounded-xl bg-[#08A34F] text-white font-bold text-[11px] hover:bg-emerald-700 transition-all tap-bounce shadow-xs disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Send className="w-3.5 h-3.5" />
-            <span className="truncate">Apply Now</span>
+            <Send className="w-3 h-3 shrink-0" />
+            <span className="truncate">Apply</span>
           </button>
 
-          {/* Apply via WhatsApp */}
+          {/* Message Employer */}
+          <button
+            onClick={onSendMessage}
+            className="col-span-1 flex items-center justify-center gap-1 py-2.5 px-1 rounded-xl bg-[#1464F4] text-white font-bold text-[11px] hover:bg-blue-700 transition-all tap-bounce shadow-xs"
+          >
+            <MessageSquare className="w-3 h-3 shrink-0" />
+            <span className="truncate">Message</span>
+          </button>
+
+          {/* WhatsApp */}
           <button
             onClick={onWhatsApp}
             disabled={(!whatsappNumber && !phone) || !onWhatsApp}
-            className="col-span-1 flex items-center justify-center gap-1.5 py-2.5 px-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-[#08A34F] font-bold text-[11px] hover:bg-emerald-100 transition-all tap-bounce disabled:opacity-50"
+            className="col-span-1 flex items-center justify-center gap-1 py-2.5 px-1 rounded-xl bg-emerald-50 border border-emerald-200 text-[#08A34F] font-bold text-[11px] hover:bg-emerald-100 transition-all tap-bounce disabled:opacity-50"
           >
-            <MessageCircle className="w-3.5 h-3.5 fill-[#08A34F]" />
+            <MessageCircle className="w-3 h-3 fill-[#08A34F] shrink-0" />
             <span className="truncate">WhatsApp</span>
           </button>
 
@@ -124,22 +134,22 @@ export const StickyActionBar: React.FC<StickyActionBarProps> = ({
           <button
             onClick={onCall}
             disabled={!phone || !onCall}
-            className="col-span-1 flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 font-bold text-xs hover:bg-slate-100 transition-all tap-bounce disabled:opacity-50"
+            className="col-span-1 flex items-center justify-center gap-1 py-2.5 px-1 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 font-bold text-[11px] hover:bg-slate-100 transition-all tap-bounce disabled:opacity-50"
           >
-            <Phone className="w-3.5 h-3.5 text-slate-700" />
+            <Phone className="w-3 h-3 text-slate-700 shrink-0" />
             <span className="truncate">Call HR</span>
           </button>
 
           {/* Save Job */}
           <button
             onClick={onToggleSave}
-            className={`col-span-1 flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl border text-xs font-bold transition-all tap-bounce ${
+            className={`col-span-1 flex items-center justify-center gap-1 py-2.5 px-1 rounded-xl border text-[11px] font-bold transition-all tap-bounce ${
               isSaved 
                 ? 'bg-rose-50 border-rose-200 text-rose-600' 
                 : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
             }`}
           >
-            <Bookmark className={`w-3.5 h-3.5 ${isSaved ? 'fill-rose-500 text-rose-500' : ''}`} />
+            <Bookmark className={`w-3 h-3 shrink-0 ${isSaved ? 'fill-rose-500 text-rose-500' : ''}`} />
             <span className="truncate">{isSaved ? 'Saved' : 'Save'}</span>
           </button>
         </div>

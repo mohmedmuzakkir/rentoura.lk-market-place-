@@ -8,6 +8,7 @@ import { SafetyFirstCard } from '../components/listing-details/SafetyFirstCard';
 import { ReportModal } from '../components/listing-details/ReportModal';
 import { StickyActionBar } from '../components/listing-details/StickyActionBar';
 import { ServiceInquiryModal } from '../components/listing-details/ServiceInquiryModal';
+import { RecommendedListings } from '../components/listing-details/RecommendedListings';
 import { ServiceListingDetail } from '../types/listingDetailsTypes';
 import { ListingDetailService } from '../services/listingDetailService';
 import { ProtectedActionRequest } from '../services/protectedActionService';
@@ -181,6 +182,15 @@ export const ServiceDetailPage: React.FC<ServiceDetailPageProps> = ({
           onOpenReport={() => setIsReportModalOpen(true)}
         />
       </main>
+
+      {/* Recommended Listings Section */}
+      <RecommendedListings
+        currentListingId={detail.id}
+        module="services"
+        categoryId={(detail as any).category_id || (detail as any).categoryId || null}
+        themeColor="#FF650A"
+        onNavigate={onNavigate}
+      />
 
       {/* Sticky Bottom Action Bar (WhatsApp, Call Now, Message) */}
       <div className="w-full max-w-2xl mx-auto mt-6 mb-20 px-4">

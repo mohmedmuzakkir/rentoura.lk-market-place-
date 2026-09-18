@@ -36,6 +36,7 @@ import { supabase } from '../lib/supabase';
 
 interface SafetyCenterPageProps {
   onNavigate: (route: AppRoute) => void;
+  onBack?: () => void;
   selectedLanguage?: 'English' | 'Sinhala' | 'Tamil';
   onLanguageChange?: (lang: 'English' | 'Sinhala' | 'Tamil') => void;
   initialTopic?: string;
@@ -43,6 +44,7 @@ interface SafetyCenterPageProps {
 
 export const SafetyCenterPage: React.FC<SafetyCenterPageProps> = ({
   onNavigate,
+  onBack,
   selectedLanguage = 'English',
   onLanguageChange,
   initialTopic
@@ -227,7 +229,7 @@ export const SafetyCenterPage: React.FC<SafetyCenterPageProps> = ({
         <div className="w-full max-w-5xl mx-auto flex items-center justify-between">
           <button
             type="button"
-            onClick={() => onNavigate('/')}
+            onClick={onBack ? onBack : () => onNavigate('/')}
             className="w-10 h-10 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center transition-all tap-bounce"
             aria-label="Go Back"
           >

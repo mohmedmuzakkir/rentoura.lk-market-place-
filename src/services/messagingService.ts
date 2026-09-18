@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { Conversation, ChatMessage, ConversationModule, ConversationParticipant, ConversationListing } from '../types/messagesTypes';
+import { formatListingDate } from '../utils/dateUtils';
 
 export class MessagingService {
   /**
@@ -27,11 +28,28 @@ export class MessagingService {
       const conversationIds = myPartRows.map(p => p.conversation_id);
 
       // 2. Fetch conversations details
-      const { data: convRows, error: convErr } = await supabase
+      let convRows: any[] | null = null;
+      let convErr: any = null;
+
+      // Try fetching with type column
+      const resWithType = await supabase
         .from('conversations')
-        .select('id, listing_id, created_by, last_message_at, status, created_at')
+        .select('id, listing_id, created_by, last_message_at, status, created_at, type')
         .in('id', conversationIds)
         .order('last_message_at', { ascending: false });
+
+      if (!resWithType.error) {
+        convRows = resWithType.data;
+      } else {
+        // Fallback if type column does not exist yet
+        const resFallback = await supabase
+          .from('conversations')
+          .select('id, listing_id, created_by, last_message_at, status, created_at')
+          .in('id', conversationIds)
+          .order('last_message_at', { ascending: false });
+        convRows = resFallback.data;
+        convErr = resFallback.error;
+      }
 
       if (convErr || !convRows) {
         return [];
@@ -47,9 +65,13 @@ export class MessagingService {
         // Fetch other participant(s)
         const { data: otherPartRows } = await supabase
           .from('conversation_participants')
-          .select('user_id, role')
+          .select('user_id, role, last_read_at')
           .eq('conversation_id', conv.id)
           .neq('user_id', currentUserId);
+
+        const otherLastReadAt = otherPartRows && otherPartRows[0]?.last_read_at
+          ? new Date(otherPartRows[0].last_read_at).getTime()
+          : 0;
 
         let participant: ConversationParticipant = {
           id: 'system',
@@ -62,18 +84,23 @@ export class MessagingService {
           const otherUserId = otherPartRows[0].user_id;
           const { data: prof } = await supabase
             .from('profiles')
-            .select('id, full_name, avatar_url, phone_normalized, created_at')
+            .select('id, full_name, avatar_url, phone_normalized, created_at, role')
             .eq('id', otherUserId)
             .maybeSingle();
 
           if (prof) {
+            const isStaff = Boolean(prof.role && ['admin', 'super_admin', 'moderator'].includes(prof.role));
             participant = {
               id: prof.id,
               name: prof.full_name || 'RENTOURA User',
               avatarUrl: prof.avatar_url || undefined,
               memberSince: prof.created_at ? `Member since ${new Date(prof.created_at).getFullYear()}` : 'Member',
               phone: prof.phone_normalized || undefined,
-              isOnline: false
+              isOnline: false,
+              role: prof.role || 'user',
+              isStaff,
+              isVerifiedAdmin: isStaff,
+              verified: isStaff
             };
           }
         }
@@ -81,9 +108,9 @@ export class MessagingService {
         // Fetch listing information if present
         let listing: ConversationListing = {
           id: conv.listing_id || 'system',
-          title: 'Direct Marketplace Message',
-          badge: 'CHAT',
-          badgeColor: '#64748B',
+          title: participant.isStaff ? 'Official Admin Communication' : 'Direct Marketplace Message',
+          badge: participant.isStaff ? 'VERIFIED ADMIN' : 'CHAT',
+          badgeColor: participant.isStaff ? '#1464F4' : '#64748B',
           module: 'system'
         };
 
@@ -142,25 +169,68 @@ export class MessagingService {
         }
 
         // Fetch messages for this conversation
-        const { data: msgRows } = await supabase
+        let msgRows: any[] | null = null;
+        const resWithRead = await supabase
           .from('messages')
-          .select('id, sender_id, body, type, created_at')
+          .select('id, sender_id, body, type, created_at, is_read, read_at')
           .eq('conversation_id', conv.id)
           .order('created_at', { ascending: true });
+
+        if (!resWithRead.error) {
+          msgRows = resWithRead.data;
+        } else {
+          const resFallback = await supabase
+            .from('messages')
+            .select('id, sender_id, body, type, created_at')
+            .eq('conversation_id', conv.id)
+            .order('created_at', { ascending: true });
+          msgRows = resFallback.data;
+        }
+
+        const senderIds = [...new Set((msgRows || []).map(m => m.sender_id).filter(Boolean))];
+        const { data: senderProfiles } = senderIds.length > 0
+          ? await supabase.from('profiles').select('id, role').in('id', senderIds)
+          : { data: [] };
+        const senderRoleMap = new Map((senderProfiles || []).map(p => [p.id, p.role as string]));
 
         const formattedMessages: ChatMessage[] = (msgRows || []).map(m => {
           const isMe = m.sender_id === currentUserId;
           const msgDate = new Date(m.created_at);
+          const msgTime = msgDate.getTime();
+          const sRole = senderRoleMap.get(m.sender_id) || 'user';
+          const isStaffSender = Boolean(sRole && ['admin', 'super_admin', 'moderator'].includes(sRole));
+
+          const isReadByRecipient = Boolean(
+            m.is_read || (otherLastReadAt > 0 && msgTime <= otherLastReadAt)
+          );
+          const isReadByMe = Boolean(
+            m.is_read || (lastReadAt > 0 && msgTime <= lastReadAt)
+          );
+
           return {
             id: m.id,
             sender: isMe ? 'me' : 'them',
             text: m.body,
             time: msgDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            timestamp: msgDate.getTime(),
+            timestamp: msgTime,
             type: (m.type as any) || 'text',
-            isRead: new Date(m.created_at).getTime() <= lastReadAt
+            isRead: isMe ? isReadByRecipient : isReadByMe,
+            senderId: m.sender_id,
+            senderRole: sRole as any,
+            isStaffSender
           };
         });
+
+        const hasAppMessage = (msgRows || []).some(m => 
+          m.type === 'job_application' || 
+          (m.body && (m.body.startsWith('📋 JOB APPLICATION') || m.body.startsWith('📄 JOB APPLICATION')))
+        );
+        const isJobApplication = conv.type === 'job_application' || hasAppMessage;
+
+        if (isJobApplication && listing) {
+          listing.badge = 'APPLICATION';
+          listing.badgeColor = '#065F46';
+        }
 
         // Compute unread count
         let unreadCount = 0;
@@ -178,6 +248,8 @@ export class MessagingService {
 
         results.push({
           id: conv.id,
+          type: isJobApplication ? 'job_application' : 'chat',
+          isJobApplication,
           module: listing.module || 'system',
           participant,
           listing,
@@ -199,22 +271,18 @@ export class MessagingService {
   }
 
   /**
-   * Get or Create a conversation for a listing + recipient
+   * Find an existing conversation ID for a listing + recipient pair without creating a new one.
    */
-  static async getOrCreateConversation(
-    listingId: string,
+  static async findExistingConversation(
+    listingId: string | null,
     recipientUserId: string
   ): Promise<string | null> {
     try {
       const { data: authData } = await supabase.auth.getUser();
       const currentUserId = authData?.user?.id;
 
-      if (!currentUserId) {
-        throw new Error('User must be logged in to send messages.');
-      }
-
-      if (currentUserId === recipientUserId) {
-        throw new Error('You cannot message your own listing.');
+      if (!currentUserId || currentUserId === recipientUserId) {
+        return null;
       }
 
       // Check existing conversation
@@ -233,43 +301,126 @@ export class MessagingService {
           .in('conversation_id', myConvIds);
 
         if (existingParts && existingParts.length > 0) {
-          // Check if one matches listingId
           const matchConvIds = existingParts.map(p => p.conversation_id);
-          const { data: matchingConvs } = await supabase
+          let query = supabase
             .from('conversations')
             .select('id')
-            .in('id', matchConvIds)
-            .eq('listing_id', listingId)
-            .limit(1);
+            .in('id', matchConvIds);
+
+          if (listingId) {
+            query = query.eq('listing_id', listingId);
+          } else {
+            query = query.is('listing_id', null);
+          }
+
+          const { data: matchingConvs } = await query.limit(1);
 
           if (matchingConvs && matchingConvs.length > 0) {
             return matchingConvs[0].id;
           }
         }
       }
+      return null;
+    } catch (err) {
+      console.warn('[MessagingService] Error finding existing conversation:', err);
+      return null;
+    }
+  }
+
+  /**
+   * Get or Create a conversation for a listing (or direct system chat if null) + recipient
+   */
+  static async getOrCreateConversation(
+    listingId: string | null,
+    recipientUserId: string,
+    type: 'chat' | 'job_application' = 'chat'
+  ): Promise<string | null> {
+    try {
+      const { data: authData } = await supabase.auth.getUser();
+      const currentUserId = authData?.user?.id;
+
+      if (!currentUserId) {
+        throw new Error('User must be logged in to send messages.');
+      }
+
+      if (currentUserId === recipientUserId) {
+        throw new Error('You cannot message yourself.');
+      }
+
+      // Check existing conversation
+      const existingId = await MessagingService.findExistingConversation(listingId, recipientUserId);
+      if (existingId) {
+        if (type === 'job_application') {
+          try {
+            await supabase.from('conversations').update({ type: 'job_application' }).eq('id', existingId);
+          } catch {}
+        }
+        return existingId;
+      }
 
       // Create new conversation
-      const { data: newConv, error: createErr } = await supabase
-        .from('conversations')
-        .insert({
-          listing_id: listingId,
-          created_by: currentUserId,
-          last_message_at: new Date().toISOString()
-        })
-        .select('id')
-        .single();
+      let newConvId: string | null = null;
+      let createErr: any = null;
 
-      if (createErr || !newConv) {
-        throw new Error(createErr?.message || 'Failed to create conversation');
+      const payload: any = {
+        listing_id: listingId || null,
+        created_by: currentUserId,
+        last_message_at: new Date().toISOString(),
+        type
+      };
+
+      try {
+        const { data, error } = await supabase
+          .from('conversations')
+          .insert(payload)
+          .select('id')
+          .single();
+
+        if (!error && data) {
+          newConvId = data.id;
+        } else {
+          createErr = error;
+        }
+      } catch {
+        createErr = true;
       }
+
+      if (!newConvId) {
+        // Fallback without type column if schema migration not yet applied
+        const { data, error } = await supabase
+          .from('conversations')
+          .insert({
+            listing_id: listingId || null,
+            created_by: currentUserId,
+            last_message_at: new Date().toISOString()
+          })
+          .select('id')
+          .single();
+
+        if (error || !data) {
+          throw new Error(error?.message || createErr?.message || 'Failed to create conversation');
+        }
+        newConvId = data.id;
+      }
+
+      // Fetch user profile roles for participant insertion
+      const { data: myProfile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', currentUserId)
+        .maybeSingle();
+
+      const myRole = myProfile?.role && ['admin', 'super_admin', 'moderator'].includes(myProfile.role)
+        ? myProfile.role
+        : 'inquirer';
 
       // Insert participants
       await supabase.from('conversation_participants').insert([
-        { conversation_id: newConv.id, user_id: currentUserId, role: 'inquirer' },
-        { conversation_id: newConv.id, user_id: recipientUserId, role: 'owner' }
+        { conversation_id: newConvId, user_id: currentUserId, role: myRole },
+        { conversation_id: newConvId, user_id: recipientUserId, role: 'owner' }
       ]);
 
-      return newConv.id;
+      return newConvId;
     } catch (err: any) {
       console.warn('[MessagingService] Error in getOrCreateConversation:', err.message || err);
       throw err;
@@ -282,7 +433,7 @@ export class MessagingService {
   static async sendMessage(
     conversationId: string,
     body: string,
-    type: 'text' | 'location' | 'contact' | 'image' | 'file' = 'text'
+    type: 'text' | 'location' | 'contact' | 'image' | 'file' | 'job_application' = 'text'
   ): Promise<ChatMessage | null> {
     try {
       const { data: authData } = await supabase.auth.getUser();
@@ -322,6 +473,15 @@ export class MessagingService {
         .eq('conversation_id', conversationId)
         .eq('user_id', currentUserId);
 
+      const { data: myProfile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', currentUserId)
+        .maybeSingle();
+
+      const sRole = myProfile?.role || 'user';
+      const isStaffSender = Boolean(sRole && ['admin', 'super_admin', 'moderator'].includes(sRole));
+
       const msgDate = new Date(newMsg.created_at);
       return {
         id: newMsg.id,
@@ -330,7 +490,10 @@ export class MessagingService {
         time: msgDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         timestamp: msgDate.getTime(),
         type: (newMsg.type as any) || 'text',
-        isRead: true
+        isRead: false,
+        senderId: currentUserId,
+        senderRole: sRole as any,
+        isStaffSender
       };
     } catch (err: any) {
       console.warn('[MessagingService] Error sending message:', err.message || err);
@@ -383,6 +546,10 @@ export class MessagingService {
     conversationId: string,
     onNewMessage: () => void
   ) {
+    if (!conversationId || conversationId.startsWith('draft:')) {
+      return () => {};
+    }
+
     const channel = supabase
       .channel(`chat_${conversationId}`)
       .on(
@@ -412,6 +579,10 @@ export class MessagingService {
     currentUserId: string,
     onTypingStatusChange: (isTyping: boolean) => void
   ) {
+    if (!conversationId || conversationId.startsWith('draft:')) {
+      return () => {};
+    }
+
     const channel = supabase.channel(`typing_${conversationId}`);
     
     channel
@@ -431,6 +602,8 @@ export class MessagingService {
    * Broadcast typing status for a conversation
    */
   static async broadcastTyping(conversationId: string, isTyping: boolean) {
+    if (!conversationId || conversationId.startsWith('draft:')) return;
+
     try {
       const { data: authData } = await supabase.auth.getUser();
       const currentUserId = authData?.user?.id;
@@ -451,16 +624,31 @@ export class MessagingService {
    * Mark conversation as read for current user
    */
   static async markAsRead(conversationId: string): Promise<boolean> {
+    if (!conversationId || conversationId.startsWith('draft:')) return true;
+
     try {
       const { data: authData } = await supabase.auth.getUser();
       const currentUserId = authData?.user?.id;
       if (!currentUserId) return false;
 
+      const nowIso = new Date().toISOString();
+
       await supabase
         .from('conversation_participants')
-        .update({ last_read_at: new Date().toISOString() })
+        .update({ last_read_at: nowIso })
         .eq('conversation_id', conversationId)
         .eq('user_id', currentUserId);
+
+      try {
+        await supabase
+          .from('messages')
+          .update({ is_read: true, read_at: nowIso })
+          .eq('conversation_id', conversationId)
+          .neq('sender_id', currentUserId)
+          .eq('is_read', false);
+      } catch {
+        // Fallback if is_read column not yet available
+      }
 
       return true;
     } catch (err) {
@@ -543,6 +731,6 @@ export class MessagingService {
     if (hours < 24) return `${hours}h ago`;
     const days = Math.floor(hours / 24);
     if (days < 7) return `${days}d ago`;
-    return new Date(dateStr).toLocaleDateString();
+    return formatListingDate(dateStr);
   }
 }

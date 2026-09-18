@@ -16,6 +16,7 @@ import {
   Star
 } from 'lucide-react';
 import { ServiceListingDetail } from '../../types/listingDetailsTypes';
+import { DynamicAttributeGrid } from './DynamicAttributeGrid';
 import { SearchService } from '../../services/searchService';
 
 interface ServiceContentSectionsProps {
@@ -48,6 +49,11 @@ export const ServiceContentSections: React.FC<ServiceContentSectionsProps> = ({
 
   return (
     <div className="space-y-4">
+      {/* Category-Specific Service Attributes */}
+      {service.attributes && service.attributes.length > 0 && (
+        <DynamicAttributeGrid attributes={service.attributes} themeColor="#FF650A" />
+      )}
+
       {/* Primary Service Details Header Card */}
       <div className="bg-white rounded-3xl border border-orange-100 p-4 shadow-xs space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">

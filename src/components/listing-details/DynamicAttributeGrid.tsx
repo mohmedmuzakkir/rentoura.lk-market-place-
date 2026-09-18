@@ -18,34 +18,35 @@ import { ListingAttribute } from '../../types/listingDetailsTypes';
 
 interface DynamicAttributeGridProps {
   attributes: ListingAttribute[];
+  themeColor?: string;
 }
 
-export const DynamicAttributeGrid: React.FC<DynamicAttributeGridProps> = ({ attributes = [] }) => {
+export const DynamicAttributeGrid: React.FC<DynamicAttributeGridProps> = ({ attributes = [], themeColor = '#1464F4' }) => {
   if (!attributes || attributes.length === 0) return null;
 
   const renderIcon = (iconName?: string) => {
     switch (iconName?.toLowerCase()) {
       case 'calendar':
-        return <Calendar className="w-3.5 h-3.5 text-[#1464F4]" />;
+        return <Calendar className="w-3.5 h-3.5 shrink-0" style={{ color: themeColor }} />;
       case 'fuel':
-        return <Fuel className="w-3.5 h-3.5 text-[#1464F4]" />;
+        return <Fuel className="w-3.5 h-3.5 shrink-0" style={{ color: themeColor }} />;
       case 'gauge':
       case 'speed':
-        return <Gauge className="w-3.5 h-3.5 text-[#1464F4]" />;
+        return <Gauge className="w-3.5 h-3.5 shrink-0" style={{ color: themeColor }} />;
       case 'users':
       case 'user':
-        return <Users className="w-3.5 h-3.5 text-[#1464F4]" />;
+        return <Users className="w-3.5 h-3.5 shrink-0" style={{ color: themeColor }} />;
       case 'palette':
       case 'color':
-        return <Palette className="w-3.5 h-3.5 text-[#1464F4]" />;
+        return <Palette className="w-3.5 h-3.5 shrink-0" style={{ color: themeColor }} />;
       case 'car':
-        return <Car className="w-3.5 h-3.5 text-[#1464F4]" />;
+        return <Car className="w-3.5 h-3.5 shrink-0" style={{ color: themeColor }} />;
       case 'home':
-        return <Home className="w-3.5 h-3.5 text-[#1464F4]" />;
+        return <Home className="w-3.5 h-3.5 shrink-0" style={{ color: themeColor }} />;
       case 'zap':
-        return <Zap className="w-3.5 h-3.5 text-[#1464F4]" />;
+        return <Zap className="w-3.5 h-3.5 shrink-0" style={{ color: themeColor }} />;
       default:
-        return <Tag className="w-3.5 h-3.5 text-[#1464F4]" />;
+        return <Tag className="w-3.5 h-3.5 shrink-0" style={{ color: themeColor }} />;
     }
   };
 

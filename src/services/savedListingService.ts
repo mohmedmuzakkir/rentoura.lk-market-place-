@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { formatListingDate } from '../utils/dateUtils';
 import { 
   SavedRentalItem, 
   SavedJobItem, 
@@ -310,7 +311,7 @@ export class SavedListingService {
             jobType: modData.employment_type || modData.job_type || 'Full Time',
             salary: priceStr,
             salaryPeriod: periodStr,
-            postedTime: item.published_at ? new Date(item.published_at).toLocaleDateString() : 'Saved',
+            postedTime: item.published_at ? formatListingDate(item.published_at) : 'Saved',
             isSaved: true
           });
         } else if (rawMod.startsWith('serv')) {

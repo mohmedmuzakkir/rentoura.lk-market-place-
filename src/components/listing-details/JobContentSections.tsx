@@ -15,6 +15,7 @@ import {
   ChevronUp
 } from 'lucide-react';
 import { JobListingDetail } from '../../types/listingDetailsTypes';
+import { DynamicAttributeGrid } from './DynamicAttributeGrid';
 
 interface JobContentSectionsProps {
   job: JobListingDetail;
@@ -31,6 +32,11 @@ export const JobContentSections: React.FC<JobContentSectionsProps> = ({ job, onO
 
   return (
     <div className="space-y-4">
+      {/* Category-Specific Job Attributes */}
+      {job.attributes && job.attributes.length > 0 && (
+        <DynamicAttributeGrid attributes={job.attributes} themeColor="#08A34F" />
+      )}
+
       {/* 2-Column Grid for Job Description & Job Highlights (Reference Image 2) */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Job Description Card */}

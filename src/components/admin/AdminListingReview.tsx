@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { AlertCircle, AlertTriangle, ArrowLeft, CheckCircle2, ChevronLeft, ChevronRight, FileText, History, Image as ImageIcon, Loader2, MapPin, Shield, User } from 'lucide-react';
+import { AlertCircle, AlertTriangle, ArrowLeft, CheckCircle2, ChevronLeft, ChevronRight, Edit3, FileText, History, Image as ImageIcon, Loader2, MapPin, Shield, User } from 'lucide-react';
 import { AdminReviewListing, AdminService, ModerationAction } from '../../services/adminService';
 import { StaffAccount } from '../../types/adminTypes';
 import { SearchService } from '../../services/searchService';
+import { AdminListingEditModal } from './AdminListingEditModal';
 
 interface Props { listingId: string; staff: StaffAccount; onBackToQueue: () => void; onNavigateToListing: (id: string) => void; onOpenReports: () => void; onRefresh: () => void; }
 const date = (v: string | null) => v ? new Intl.DateTimeFormat('en-LK', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(v)) : 'Not recorded';
@@ -18,6 +19,7 @@ export const AdminListingReview: React.FC<Props> = ({ listingId, staff: _staff, 
   const [decision, setDecision] = useState<ModerationAction | null>(null);
   const [reason, setReason] = useState('');
   const [processing, setProcessing] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true); setError(null); setPhoto(0);
@@ -65,8 +67,20 @@ export const AdminListingReview: React.FC<Props> = ({ listingId, staff: _staff, 
         <button onClick={onOpenReports} className="w-full bg-white border border-rose-200 rounded-3xl p-5 text-left hover:bg-rose-50"><span className="flex gap-2 font-black text-rose-700"><AlertTriangle/>Reports ({listing.reports.length})</span><span className="text-xs text-slate-500">Open Admin Reports for full context</span></button>
       </aside>
     </div>
-    <div className="fixed bottom-0 left-0 right-0 z-30 bg-white/95 border-t p-3"><div className="max-w-7xl mx-auto flex flex-col sm:flex-row justify-end gap-2"><button disabled={listing.status !== 'pending'} onClick={() => {setDecision('request_changes');setReason('');}} className="px-4 py-3 rounded-xl bg-amber-50 text-amber-800 font-bold disabled:opacity-40">Request changes</button><button disabled={listing.status !== 'pending'} onClick={() => {setDecision('reject');setReason('');}} className="px-4 py-3 rounded-xl bg-rose-50 text-rose-700 font-bold disabled:opacity-40">Reject</button><button disabled={listing.status !== 'pending'} onClick={() => setDecision('approve')} className="px-5 py-3 rounded-xl bg-emerald-600 text-white font-bold disabled:opacity-40"><CheckCircle2 className="inline w-4 h-4"/> Approve & publish</button></div></div>
+    <div className="fixed bottom-0 left-0 right-0 z-30 bg-white/95 border-t p-3"><div className="max-w-7xl mx-auto flex flex-col sm:flex-row justify-end gap-2"><button onClick={() => setIsEditing(true)} className="px-4 py-3 rounded-xl bg-blue-50 text-blue-800 font-bold hover:bg-blue-100 transition-colors flex items-center justify-center gap-1.5"><Edit3 className="w-4 h-4 text-blue-600" /> Edit Content</button><button disabled={listing.status !== 'pending'} onClick={() => {setDecision('request_changes');setReason('');}} className="px-4 py-3 rounded-xl bg-amber-50 text-amber-800 font-bold disabled:opacity-40">Request changes</button><button disabled={listing.status !== 'pending'} onClick={() => {setDecision('reject');setReason('');}} className="px-4 py-3 rounded-xl bg-rose-50 text-rose-700 font-bold disabled:opacity-40">Reject</button><button disabled={listing.status !== 'pending'} onClick={() => setDecision('approve')} className="px-5 py-3 rounded-xl bg-emerald-600 text-white font-bold disabled:opacity-40"><CheckCircle2 className="inline w-4 h-4"/> Approve & publish</button></div></div>
     {decision && <div className="fixed inset-0 z-50 bg-[#041C43]/70 p-4 grid place-items-center"><div className="bg-white rounded-3xl p-6 w-full max-w-lg"><h2 className="text-xl font-black">{decision === 'approve' ? 'Approve this listing?' : decision === 'reject' ? 'Reject this listing' : 'Request listing changes'}</h2><p className="text-sm text-slate-600 mt-2">This secure action is audited and guarded against moderator races.</p>{decision !== 'approve' && <textarea autoFocus value={reason} onChange={e => setReason(e.target.value)} rows={5} placeholder="Enter clear, actionable instructions…" className="w-full mt-4 border rounded-xl p-3"/>}<div className="flex justify-end gap-2 mt-5"><button disabled={processing} onClick={() => setDecision(null)} className="px-4 py-2 border rounded-xl">Cancel</button><button disabled={processing || (decision !== 'approve' && !reason.trim())} onClick={() => void submit()} className="px-5 py-2 bg-[#1464F4] text-white font-bold rounded-xl disabled:opacity-40">{processing ? 'Saving…' : 'Confirm decision'}</button></div></div></div>}
+    {isEditing && (
+      <AdminListingEditModal
+        listing={listing}
+        staff={_staff}
+        onClose={() => setIsEditing(false)}
+        onSaved={() => {
+          setIsEditing(false);
+          void load();
+          onRefresh();
+        }}
+      />
+    )}
   </div>;
 };
 

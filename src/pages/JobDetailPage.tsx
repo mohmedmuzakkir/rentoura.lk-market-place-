@@ -7,6 +7,7 @@ import { SafetyFirstCard } from '../components/listing-details/SafetyFirstCard';
 import { ReportModal } from '../components/listing-details/ReportModal';
 import { StickyActionBar } from '../components/listing-details/StickyActionBar';
 import { JobApplicationModal } from '../components/listing-details/JobApplicationModal';
+import { RecommendedListings } from '../components/listing-details/RecommendedListings';
 import { JobListingDetail } from '../types/listingDetailsTypes';
 import { ListingDetailService } from '../services/listingDetailService';
 import { ProtectedActionRequest } from '../services/protectedActionService';
@@ -190,6 +191,15 @@ export const JobDetailPage: React.FC<JobDetailPageProps> = ({
           onOpenReport={() => setIsReportModalOpen(true)}
         />
       </main>
+
+      {/* Recommended Listings Section */}
+      <RecommendedListings
+        currentListingId={detail.id}
+        module="jobs"
+        categoryId={(detail as any).category_id || (detail as any).categoryId || null}
+        themeColor="#08A34F"
+        onNavigate={onNavigate}
+      />
 
       {/* Sticky Bottom Action Bar */}
       <div className="w-full max-w-2xl mx-auto mt-6 mb-20 px-4">

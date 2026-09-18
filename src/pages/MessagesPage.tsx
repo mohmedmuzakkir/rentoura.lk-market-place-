@@ -70,9 +70,17 @@ export const MessagesPage: React.FC<MessagesPageProps> = ({
   const jobsCount = conversations.filter(c => c.module === 'jobs').length;
   const servicesCount = conversations.filter(c => c.module === 'services').length;
   const systemCount = conversations.filter(c => c.module === 'system').length;
-  const onlineCount = conversations.filter(c => c.participant.isOnline).length;
 
-  const renderModuleBadge = (module: ConversationModule, badgeText: string, badgeColor: string) => {
+  const renderModuleBadge = (module: ConversationModule, badgeText: string, badgeColor: string, isJobApp?: boolean) => {
+    if (isJobApp || badgeText === 'APPLICATION') {
+      return (
+        <span className="px-2 py-0.5 rounded-md text-[9.5px] font-black uppercase text-white tracking-wider shrink-0 bg-[#065F46] border border-emerald-700 flex items-center gap-1 shadow-2xs">
+          <Briefcase className="w-2.5 h-2.5" />
+          JOB APPLICATION
+        </span>
+      );
+    }
+
     let bg = '#1464F4';
     if (module === 'jobs') bg = '#08A34F';
     if (module === 'services') bg = '#FF650A';
@@ -184,10 +192,6 @@ export const MessagesPage: React.FC<MessagesPageProps> = ({
               <MessageSquare className="w-3.5 h-3.5" />
               <span>{totalCount} Active</span>
             </div>
-            <div className="px-3 py-1.5 rounded-xl bg-emerald-50/80 border border-emerald-100 text-xs font-bold text-[#08A34F] flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-[#08A34F] animate-pulse" />
-              <span>{onlineCount} Online</span>
-            </div>
           </div>
         </div>
 
@@ -287,70 +291,87 @@ export const MessagesPage: React.FC<MessagesPageProps> = ({
               </p>
             </div>
           ) : (
-            filteredConversations.map((conv) => (
-              <div
-                key={conv.id}
-                onClick={() => onSelectConversation(conv.id)}
-                className="group p-3.5 hover:bg-blue-50/40 transition-colors cursor-pointer flex items-center gap-3.5 tap-bounce"
-              >
-                {/* User Avatar with Online status dot */}
-                <div className="relative shrink-0">
-                  {conv.participant.avatarUrl ? (
-                    <img
-                      src={conv.participant.avatarUrl}
-                      alt={conv.participant.name}
-                      className="w-12 h-12 rounded-full object-cover border border-slate-200/80 shadow-2xs"
-                    />
-                  ) : (
-                    <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-[#1464F4] to-[#00D2FF] text-white flex items-center justify-center font-bold text-sm shadow-2xs">
-                      {conv.participant.avatarInitials || conv.participant.name.charAt(0)}
+            filteredConversations.map((conv) => {
+              const isApp = Boolean(conv.isJobApplication || conv.type === 'job_application' || conv.listing?.badge === 'APPLICATION');
+              return (
+                <div
+                  key={conv.id}
+                  onClick={() => onSelectConversation(conv.id)}
+                  className={`group p-3.5 transition-colors cursor-pointer flex items-center gap-3.5 tap-bounce ${
+                    isApp
+                      ? 'bg-emerald-50/50 hover:bg-emerald-100/60 border-l-4 border-l-[#08A34F]'
+                      : 'hover:bg-blue-50/40'
+                  }`}
+                >
+                  {/* User Avatar with Online status dot */}
+                  <div className="relative shrink-0">
+                    {conv.participant.avatarUrl ? (
+                      <img
+                        src={conv.participant.avatarUrl}
+                        alt={conv.participant.name}
+                        className="w-12 h-12 rounded-full object-cover border border-slate-200/80 shadow-2xs"
+                      />
+                    ) : (
+                      <div className={`w-12 h-12 rounded-full text-white flex items-center justify-center font-bold text-sm shadow-2xs ${
+                        isApp ? 'bg-gradient-to-tr from-[#08A34F] to-emerald-400' : 'bg-gradient-to-tr from-[#1464F4] to-[#00D2FF]'
+                      }`}>
+                        {conv.participant.avatarInitials || conv.participant.name.charAt(0)}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Body Details */}
+                  <div className="flex-1 min-w-0">
+                    {/* Row 1: Name and Timestamp */}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 truncate">
+                        <h3 className="font-bold text-slate-900 text-sm font-heading truncate group-hover:text-[#1464F4] transition-colors">
+                          {conv.participant.name}
+                        </h3>
+                        {isApp && (
+                          <span className="px-1.5 py-0.2 rounded bg-emerald-100 text-[#08A34F] text-[10px] font-black uppercase border border-emerald-200 shrink-0">
+                            Applicant
+                          </span>
+                        )}
+                        {(conv.participant.isStaff || conv.participant.isVerifiedAdmin || ['admin', 'super_admin', 'moderator'].includes(conv.participant.role || '')) ? (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-[#1464F4] text-white text-[9.5px] font-black uppercase tracking-wider shrink-0 shadow-2xs">
+                            <ShieldCheck className="w-3 h-3 text-white" />
+                            Verified Admin
+                          </span>
+                        ) : conv.participant.verified ? (
+                          <ShieldCheck className="w-3.5 h-3.5 text-[#1464F4] shrink-0" />
+                        ) : null}
+                      </div>
+                      <span className="text-[11px] text-slate-400 font-medium shrink-0">
+                        {conv.lastMessageTime}
+                      </span>
+                    </div>
+
+                    {/* Row 2: Module Badge & Listing Context Title */}
+                    <div className="flex items-center gap-1.5 mt-1 truncate">
+                      {renderModuleBadge(conv.module, conv.listing.badge, conv.listing.badgeColor, isApp)}
+                      <span className="text-xs font-semibold text-slate-800 truncate">
+                        {conv.listing.title}
+                      </span>
+                    </div>
+
+                    {/* Row 3: Last Message snippet */}
+                    <p className="text-xs text-slate-500 font-medium truncate mt-1">
+                      {conv.lastMessage}
+                    </p>
+                  </div>
+
+                  {/* Right side: Unread count badge */}
+                  {conv.unreadCount > 0 && (
+                    <div className={`w-5 h-5 rounded-full text-white text-[10.5px] font-extrabold flex items-center justify-center shrink-0 shadow-xs ${
+                      isApp ? 'bg-[#08A34F]' : 'bg-[#1464F4]'
+                    }`}>
+                      {conv.unreadCount}
                     </div>
                   )}
-
-                  {conv.participant.isOnline && (
-                    <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-emerald-500 rounded-full border-2 border-white shadow-xs" />
-                  )}
                 </div>
-
-                {/* Body Details */}
-                <div className="flex-1 min-w-0">
-                  {/* Row 1: Name and Timestamp */}
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5 truncate">
-                      <h3 className="font-bold text-slate-900 text-sm font-heading truncate group-hover:text-[#1464F4] transition-colors">
-                        {conv.participant.name}
-                      </h3>
-                      {conv.participant.verified && (
-                        <ShieldCheck className="w-3.5 h-3.5 text-[#1464F4] shrink-0" />
-                      )}
-                    </div>
-                    <span className="text-[11px] text-slate-400 font-medium shrink-0">
-                      {conv.lastMessageTime}
-                    </span>
-                  </div>
-
-                  {/* Row 2: Module Badge & Listing Context Title */}
-                  <div className="flex items-center gap-1.5 mt-1 truncate">
-                    {renderModuleBadge(conv.module, conv.listing.badge, conv.listing.badgeColor)}
-                    <span className="text-xs font-semibold text-slate-800 truncate">
-                      {conv.listing.title}
-                    </span>
-                  </div>
-
-                  {/* Row 3: Last Message snippet */}
-                  <p className="text-xs text-slate-500 font-medium truncate mt-1">
-                    {conv.lastMessage}
-                  </p>
-                </div>
-
-                {/* Right side: Unread count badge */}
-                {conv.unreadCount > 0 && (
-                  <div className="w-5 h-5 rounded-full bg-[#1464F4] text-white text-[10.5px] font-extrabold flex items-center justify-center shrink-0 shadow-xs">
-                    {conv.unreadCount}
-                  </div>
-                )}
-              </div>
-            ))
+              );
+            })
           )}
         </div>
 

@@ -458,7 +458,7 @@ export const ServicePostFlow: React.FC<ServicePostFlowProps> = ({
               disabled={isSubmitting}
               className="px-6 py-2.5 rounded-xl text-xs font-extrabold text-white transition-all shadow-md flex items-center gap-2 bg-[#FF650A] hover:bg-amber-600"
             >
-              {isSubmitting ? 'Submitting...' : 'SUBMIT FOR REVIEW'}
+              {isSubmitting ? 'Publishing...' : 'PUBLISH SERVICE NOW'}
             </button>
           )}
         </div>

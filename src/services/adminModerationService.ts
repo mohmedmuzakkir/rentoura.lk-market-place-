@@ -2,7 +2,7 @@ import { supabase } from '../lib/supabase';
 
 export type ReportStatus = 'submitted' | 'under_review' | 'resolved' | 'dismissed';
 export type ReviewStatus = 'pending_moderation' | 'published' | 'removed';
-export interface AdminReport { id:string;reporterId:string|null;reporterName:string;targetType:string;targetId:string|null;targetModule:string;targetTitle:string;targetSnapshot:string;reasonCode:string;reasonLabel:string;details:string;status:ReportStatus;assignedTo:string|null;resolutionOutcome:string|null;userFacingMessage:string|null;createdAt:string;updatedAt:string;notes:{id:string;note:string;actorId:string;createdAt:string}[];history:{id:string;action:string;details:string;actorName:string;createdAt:string}[] }
+export interface AdminReport { id:string;reporterId:string|null;reporterName:string;targetType:string;targetId:string|null;listingId?:string|null;targetUserId?:string|null;targetModule:string;targetTitle:string;targetSnapshot:string;reasonCode:string;reasonLabel:string;details:string;status:ReportStatus;assignedTo:string|null;resolutionOutcome:string|null;userFacingMessage:string|null;createdAt:string;updatedAt:string;notes:{id:string;note:string;actorId:string;createdAt:string}[];history:{id:string;action:string;details:string;actorName:string;createdAt:string}[] }
 export interface AdminReview { id:string;listingId:string;authorId:string;authorName:string;listingTitle:string;module:string;rating:number;body:string;status:ReviewStatus;moderationReason:string|null;createdAt:string }
 export interface PageResult<T> { rows:T[];total:number;counts:Record<string,number>;error?:string }
 export type ListingModerationAction = 'approve' | 'reject' | 'request_changes';
@@ -16,7 +16,102 @@ type DbRow=Record<string,unknown>;
 const clean=(value:string)=>value.replace(/[,%().]/g,' ').trim();
 const tally=(rows:{status:string}[])=>rows.reduce<Record<string,number>>((result,row)=>{result.total=(result.total||0)+1;result[row.status]=(result[row.status]||0)+1;return result},{});
 
+export interface AdminEditListingPayload {
+  listingId: string;
+  title: string;
+  shortSummary?: string | null;
+  description?: string | null;
+  price?: number | null;
+  pricingPeriod?: string | null;
+  categoryId?: string | null;
+  provinceId?: string | null;
+  exactAddress?: string | null;
+  status?: string | null;
+  moduleData?: Record<string, unknown> | null;
+  reason?: string | null;
+}
+
 export class AdminModerationService {
+  static async adminEditListing(payload: AdminEditListingPayload): Promise<void> {
+    if (!payload.title?.trim()) throw new Error('Listing title is required.');
+
+    try {
+      const { error } = await supabase.rpc('admin_edit_listing', {
+        p_listing_id: payload.listingId,
+        p_title: payload.title.trim(),
+        p_short_summary: payload.shortSummary?.trim() || null,
+        p_description: payload.description?.trim() || null,
+        p_price: payload.price ?? null,
+        p_pricing_period: payload.pricingPeriod?.trim() || null,
+        p_category_id: payload.categoryId || null,
+        p_province_id: payload.provinceId || null,
+        p_exact_address: payload.exactAddress?.trim() || null,
+        p_status: payload.status || null,
+        p_module_data: payload.moduleData || null,
+        p_reason: payload.reason?.trim() || null
+      });
+
+      if (!error) return;
+
+      const errMs = (error.message || '').toLowerCase();
+      if (!errMs.includes('schema cache') && !errMs.includes('could not find the function')) {
+        throw new Error(error.message);
+      }
+    } catch (e: any) {
+      if (e.message && !e.message.toLowerCase().includes('schema cache') && !e.message.toLowerCase().includes('could not find the function')) {
+        throw e;
+      }
+    }
+
+    // Direct RLS update fallback if PostgREST schema cache has not reloaded
+    const updateFields: Record<string, any> = {
+      title: payload.title.trim(),
+      updated_at: new Date().toISOString()
+    };
+
+    if (payload.shortSummary !== undefined) updateFields.short_summary = payload.shortSummary?.trim() || null;
+    if (payload.description !== undefined) updateFields.description = payload.description?.trim() || null;
+    if (payload.price !== undefined) updateFields.price = payload.price;
+    if (payload.pricingPeriod !== undefined) updateFields.pricing_period = payload.pricingPeriod?.trim() || null;
+    if (payload.categoryId) updateFields.category_id = payload.categoryId;
+    if (payload.provinceId) updateFields.province_id = payload.provinceId;
+    if (payload.exactAddress !== undefined) updateFields.exact_address = payload.exactAddress?.trim() || null;
+    if (payload.status) updateFields.status = payload.status;
+    if (payload.moduleData) updateFields.module_data = payload.moduleData;
+
+    const { error: updateErr } = await supabase
+      .from('listings')
+      .update(updateFields)
+      .eq('id', payload.listingId);
+
+    if (updateErr) throw new Error(updateErr.message);
+
+    try {
+      const { data: authUser } = await supabase.auth.getUser();
+      if (authUser?.user?.id) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('id, full_name, email, role')
+          .eq('id', authUser.user.id)
+          .single();
+
+        if (profile) {
+          await supabase.from('audit_logs').insert({
+            actor_id: profile.id,
+            actor_name: profile.full_name || profile.email || 'Staff member',
+            actor_role: profile.role || 'staff',
+            action: 'LISTING_ADMIN_EDIT',
+            target_type: 'listing',
+            target_id: payload.listingId,
+            target_title: payload.title.trim(),
+            details: payload.reason?.trim() || 'Admin direct listing edit'
+          });
+        }
+      }
+    } catch {
+      // Audit log silent error handling
+    }
+  }
   static async getPendingQueue(filters:ModerationQueueFilters={}):Promise<ModerationQueuePage>{
     const{data,error}=await supabase.rpc('admin_moderation_queue',{p_module:filters.module||null,p_category_id:filters.categoryId||null,p_province_id:filters.provinceId||null,p_submitted_from:filters.submittedFrom||null,p_submitted_to:filters.submittedTo||null,p_reported:filters.reported??null,p_search:filters.search||null,p_cursor_at:filters.cursorAt||null,p_cursor_id:filters.cursorId||null,p_limit:filters.limit||25});
     if(error)throw new Error(error.message);const result=(data||{})as Record<string,unknown>;const raw=(result.rows||[])as DbRow[];const pageSize=Number(result.page_size||filters.limit||25);
@@ -96,7 +191,7 @@ export class AdminModerationService {
       userIds.length?supabase.from('profiles').select('id,full_name,account_status').in('id',userIds):Promise.resolve({data:[]}),supabase.from('reports').select('status')]);
     const map=(rows:DbRow[]|null)=>new Map((rows||[]).map(row=>[row.id as string,row]));const profiles=map(profileRes.data),listings=map(listingRes.data),reviews=map(reviewRes.data),targets=map(targetRes.data),notes=noteRes.data||[],history=historyRes.data||[];
     return{total:count||0,counts:tally((statusRes.data||[])as{status:string}[]),rows:raw.map(row=>{const listing=listings.get(row.listing_id as string),review=reviews.get(row.review_id as string),targetUser=targets.get(row.target_user_id as string);const targetId=(row.listing_id||row.review_id||row.target_user_id||row.message_id||null)as string|null;return{
-      id:row.id as string,reporterId:row.reporter_id as string|null,reporterName:row.reporter_id?(profiles.get(row.reporter_id as string)?.full_name as string||'Reporter'):'Anonymous reporter',targetType:row.target_type as string,targetId,targetModule:(row.target_module as string)||'general',targetTitle:(listing?.title as string)||(row.target_title as string)||'Reported target',
+      id:row.id as string,reporterId:row.reporter_id as string|null,reporterName:row.reporter_id?(profiles.get(row.reporter_id as string)?.full_name as string||'Reporter'):'Anonymous reporter',targetType:row.target_type as string,targetId,listingId:(row.listing_id as string)||null,targetUserId:(row.target_user_id as string)||(review?.author_id as string)||null,targetModule:(row.target_module as string)||'general',targetTitle:(listing?.title as string)||(row.target_title as string)||'Reported target',
       targetSnapshot:listing?`${listing.title} · ${listing.module} · ${listing.status}`:review?`${review.rating}/5 · ${review.status} · ${review.body}`:targetUser?`${targetUser.full_name||'User'} · ${targetUser.account_status}`:targetId?'Live target details unavailable':'Target unavailable',reasonCode:row.reason_code as string,reasonLabel:row.reason_label as string,details:(row.details as string)||'',status:row.status as ReportStatus,assignedTo:row.assigned_to as string|null,resolutionOutcome:row.resolution_outcome as string|null,userFacingMessage:row.user_facing_message as string|null,createdAt:row.created_at as string,updatedAt:row.updated_at as string,
       notes:notes.filter(note=>note.report_id===row.id).map(note=>({id:note.id,note:note.note,actorId:note.actor_id,createdAt:note.created_at})),history:history.filter(item=>item.target_id===row.id).map(item=>({id:item.id,action:item.action,details:item.details||'',actorName:item.actor_name,createdAt:item.created_at}))}})};
   }

@@ -3,6 +3,7 @@ import { JobHeroSlide } from '../data/jobHeroSlidesData';
 import { JobItem, CompanyPartner } from '../types';
 import { LocationValueModel } from './locationService';
 import { SearchService } from './searchService';
+import { formatListingDate } from '../utils/dateUtils';
 
 export interface JobFeedParams {
   searchQuery?: string;
@@ -271,7 +272,15 @@ export class JobService {
         return { items: [], totalCount: count || 0, hasMore: false };
       }
 
-      const logoPaths = data.map((row: any) => row.company_logo_url);
+      const logoPaths = data.map((row: any) => 
+        row.company_logo_url ||
+        row.logo_url ||
+        row.module_data?.company_logo_url ||
+        row.module_data?.logoUrl ||
+        row.module_data?.form_values?.logoUrl ||
+        row.module_data?.form_values?.companyLogo ||
+        null
+      );
       const urlMap = await JobService.resolveMediaUrlsBatch(logoPaths, 3600);
 
       const mappedItems: JobItem[] = data.map((row: any) => {
@@ -290,7 +299,13 @@ export class JobService {
         }
 
         const period = row.pricing_period ? `/ ${row.pricing_period}` : (row.salary_type ? `/ ${row.salary_type}` : '/ Month');
-        const logoUrl = row.company_logo_url ? (urlMap.get(row.company_logo_url) || SearchService.NEUTRAL_PLACEHOLDER) : undefined;
+        const logoPath = row.company_logo_url ||
+                         row.logo_url ||
+                         row.module_data?.company_logo_url ||
+                         row.module_data?.logoUrl ||
+                         row.module_data?.form_values?.logoUrl ||
+                         row.module_data?.form_values?.companyLogo;
+        const logoUrl = logoPath ? (urlMap.get(logoPath) || (logoPath.startsWith('http') ? logoPath : SearchService.NEUTRAL_PLACEHOLDER)) : undefined;
 
         let tagsArr: string[] = [];
         if (row.skills_text) {
@@ -307,7 +322,7 @@ export class JobService {
           if (diffDays === 0) timeLabel = 'Today';
           else if (diffDays === 1) timeLabel = 'Yesterday';
           else if (diffDays < 7) timeLabel = `${diffDays} days ago`;
-          else timeLabel = date.toLocaleDateString();
+          else timeLabel = formatListingDate(date);
         }
 
         return {

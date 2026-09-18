@@ -20,12 +20,14 @@ import { AppRoute } from '../types';
 
 interface ForgotPasswordPageProps {
   onNavigate: (route: AppRoute) => void;
+  onBack?: () => void;
   selectedLanguage?: 'English' | 'Sinhala' | 'Tamil';
   onLanguageChange?: (lang: 'English' | 'Sinhala' | 'Tamil') => void;
 }
 
 export const ForgotPasswordPage: React.FC<ForgotPasswordPageProps> = ({
   onNavigate,
+  onBack,
   selectedLanguage = 'English',
   onLanguageChange
 }) => {
@@ -123,7 +125,7 @@ export const ForgotPasswordPage: React.FC<ForgotPasswordPageProps> = ({
       <div className="w-full max-w-5xl mx-auto px-4 pt-4 sm:pt-6 flex items-center justify-between z-10">
         <button
           type="button"
-          onClick={() => onNavigate('/login')}
+          onClick={onBack ? onBack : () => onNavigate('/login')}
           className="w-10 h-10 rounded-2xl bg-white border border-slate-200/80 hover:bg-slate-100 text-slate-700 flex items-center justify-center shadow-sm transition-all tap-bounce"
           aria-label="Back to Login"
         >

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { formatListingDate } from '../../utils/dateUtils';
 import { 
   ShieldCheck, 
   UserPlus, 
@@ -382,7 +383,7 @@ export const AdminStaffView: React.FC<AdminStaffViewProps> = ({ currentStaff, on
                     </td>
 
                     <td className="py-3.5 px-4 text-slate-500">
-                      {new Date(member.createdAt).toLocaleDateString()}
+                      {formatListingDate(member.createdAt)}
                     </td>
 
                     <td className="py-3.5 px-4 text-right">

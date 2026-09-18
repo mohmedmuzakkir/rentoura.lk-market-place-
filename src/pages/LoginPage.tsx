@@ -24,6 +24,7 @@ import { featureFlags } from '../config/features';
 
 interface LoginPageProps {
   onNavigate: (route: AppRoute) => void;
+  onBack?: () => void;
   returnUrl?: AppRoute;
   selectedLanguage?: 'English' | 'Sinhala' | 'Tamil';
   onLanguageChange?: (lang: 'English' | 'Sinhala' | 'Tamil') => void;
@@ -40,6 +41,7 @@ export function sanitizeReturnUrl(url?: string): AppRoute {
 
 export const LoginPage: React.FC<LoginPageProps> = ({
   onNavigate,
+  onBack,
   returnUrl,
   selectedLanguage = 'English',
   onLanguageChange
@@ -200,7 +202,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       {/* Top Header */}
       <header className="relative z-20 w-full max-w-5xl mx-auto px-4 sm:px-6 pt-4 sm:pt-6 pb-2 flex items-center justify-between">
         <button
-          onClick={() => onNavigate(returnUrl || '/')}
+          onClick={onBack ? onBack : () => onNavigate(returnUrl || '/')}
           className="w-10 h-10 rounded-2xl bg-white/80 backdrop-blur-md shadow-sm border border-slate-200/80 flex items-center justify-center text-slate-700 hover:bg-slate-100 hover:text-slate-900 transition-all tap-bounce"
           aria-label="Go Back"
         >

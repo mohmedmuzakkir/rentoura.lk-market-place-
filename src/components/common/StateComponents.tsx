@@ -570,19 +570,13 @@ interface ErrorBoundaryState {
   error?: Error;
 }
 
-export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  props: ErrorBoundaryProps;
+export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
   state: ErrorBoundaryState = {
     hasError: false
   };
 
   constructor(props: ErrorBoundaryProps) {
     super(props);
-    this.props = props;
-  }
-
-  setState(newState: Partial<ErrorBoundaryState>) {
-    this.state = { ...this.state, ...newState };
   }
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
@@ -594,6 +588,11 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 
   handleRetry = () => {
+    const isChunkError = this.state.error?.message?.includes('dynamically imported module') || this.state.error?.message?.includes('import');
+    if (isChunkError) {
+      window.location.reload();
+      return;
+    }
     this.setState({ hasError: false, error: undefined });
   };
 
@@ -602,14 +601,19 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       if (this.props.fallback) {
         return this.props.fallback;
       }
+      const isChunkError = this.state.error?.message?.includes('dynamically imported module') || this.state.error?.message?.includes('import');
       return (
-        <div className="p-8 max-w-lg mx-auto my-12">
+        <div className="p-8 max-w-lg mx-auto my-12 text-center">
           <ErrorState
             variant="something_went_wrong"
-            title="Application Error"
-            description="A rendering error occurred in this section. Click below to recover."
+            title={isChunkError ? "Module Load Error" : "Application Error"}
+            description={
+              isChunkError
+                ? "A page component failed to load due to a network or deployment update. Click below to reload."
+                : "A rendering error occurred in this section. Click below to recover."
+            }
             onRetry={this.handleRetry}
-            retryLabel="Reload Component"
+            retryLabel={isChunkError ? "Reload Page" : "Reload Component"}
           />
         </div>
       );

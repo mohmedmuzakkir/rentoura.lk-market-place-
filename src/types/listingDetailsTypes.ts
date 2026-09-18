@@ -12,6 +12,7 @@ export interface ListingPricing {
   activePeriod?: RentalPeriodUnit;
   isNegotiable?: boolean;
   rates: RentalRate[];
+  deposit?: string;
 }
 
 export interface ListingAttribute {
@@ -161,6 +162,7 @@ export interface JobListingDetail {
   description?: string;
   ownerId?: string;
   contact?: ListingContact;
+  attributes?: ListingAttribute[];
 }
 
 export interface ServicePackage {
@@ -232,6 +234,7 @@ export interface ServiceListingDetail {
   description?: string;
   ownerId?: string;
   contact?: ListingContact;
+  attributes?: ListingAttribute[];
 }
 
 export type AnyListingDetail = RentalListingDetail | JobListingDetail | ServiceListingDetail;

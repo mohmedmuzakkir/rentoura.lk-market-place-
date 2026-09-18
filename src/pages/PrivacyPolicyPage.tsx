@@ -19,12 +19,14 @@ import { AppRoute } from '../types';
 
 interface PrivacyPolicyPageProps {
   onNavigate: (route: AppRoute) => void;
+  onBack?: () => void;
   selectedLanguage?: 'English' | 'Sinhala' | 'Tamil';
   onLanguageChange?: (lang: 'English' | 'Sinhala' | 'Tamil') => void;
 }
 
 export const PrivacyPolicyPage: React.FC<PrivacyPolicyPageProps> = ({
   onNavigate,
+  onBack,
   selectedLanguage = 'English',
   onLanguageChange
 }) => {
@@ -48,7 +50,7 @@ export const PrivacyPolicyPage: React.FC<PrivacyPolicyPageProps> = ({
         <div className="w-full max-w-5xl mx-auto flex items-center justify-between">
           <button
             type="button"
-            onClick={() => onNavigate('/')}
+            onClick={onBack ? onBack : () => onNavigate('/')}
             className="w-10 h-10 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center transition-all tap-bounce"
             aria-label="Go Back"
           >

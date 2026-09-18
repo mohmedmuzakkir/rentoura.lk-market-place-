@@ -183,9 +183,13 @@ export class HomeService {
       const rawPaths: (string | null | undefined)[] = data.map((row: any) => {
         if (row.listing_media && row.listing_media.length > 0) {
           const sorted = [...row.listing_media].sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0));
-          return sorted[0]?.storage_path;
+          if (sorted[0]?.storage_path) return sorted[0].storage_path;
         }
-        return null;
+        return row.module_data?.company_logo_url ||
+               row.module_data?.logoUrl ||
+               row.module_data?.form_values?.logoUrl ||
+               row.module_data?.form_values?.companyLogo ||
+               null;
       });
 
       const urlMap = await this.resolveSignedMediaUrlsBatch(rawPaths, 3600);
@@ -196,10 +200,22 @@ export class HomeService {
         const badgeColor = normMod === 'RENTAL' ? '#1464F4' : (normMod === 'JOB' ? '#08A34F' : '#FF650A');
         
         let coverImg = SearchService.NEUTRAL_PLACEHOLDER;
+        let storagePath: string | null = null;
         if (row.listing_media && row.listing_media.length > 0) {
           const sorted = [...row.listing_media].sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0));
-          const storagePath = sorted[0]?.storage_path;
-          if (storagePath) {
+          storagePath = sorted[0]?.storage_path || null;
+        }
+        if (!storagePath) {
+          storagePath = row.module_data?.company_logo_url ||
+                        row.module_data?.logoUrl ||
+                        row.module_data?.form_values?.logoUrl ||
+                        row.module_data?.form_values?.companyLogo ||
+                        null;
+        }
+        if (storagePath) {
+          if (storagePath.startsWith('http://') || storagePath.startsWith('https://') || storagePath.startsWith('data:')) {
+            coverImg = storagePath;
+          } else {
             coverImg = urlMap.get(storagePath) || SearchService.NEUTRAL_PLACEHOLDER;
           }
         }
@@ -301,9 +317,13 @@ export class HomeService {
       const rawPaths: (string | null | undefined)[] = data.map((row: any) => {
         if (row.listing_media && row.listing_media.length > 0) {
           const sortedMedia = [...row.listing_media].sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0));
-          return sortedMedia[0]?.storage_path;
+          if (sortedMedia[0]?.storage_path) return sortedMedia[0].storage_path;
         }
-        return null;
+        return row.module_data?.company_logo_url ||
+               row.module_data?.logoUrl ||
+               row.module_data?.form_values?.logoUrl ||
+               row.module_data?.form_values?.companyLogo ||
+               null;
       });
 
       const urlMap = await this.resolveSignedMediaUrlsBatch(rawPaths, 3600);
@@ -346,10 +366,22 @@ export class HomeService {
         }
 
         let coverUrl = SearchService.NEUTRAL_PLACEHOLDER;
+        let storagePath: string | null = null;
         if (row.listing_media && row.listing_media.length > 0) {
           const sortedMedia = [...row.listing_media].sort((a: any, b: any) => (a.position ?? 0) - (b.position ?? 0));
-          const storagePath = sortedMedia[0]?.storage_path;
-          if (storagePath) {
+          storagePath = sortedMedia[0]?.storage_path || null;
+        }
+        if (!storagePath) {
+          storagePath = row.module_data?.company_logo_url ||
+                        row.module_data?.logoUrl ||
+                        row.module_data?.form_values?.logoUrl ||
+                        row.module_data?.form_values?.companyLogo ||
+                        null;
+        }
+        if (storagePath) {
+          if (storagePath.startsWith('http://') || storagePath.startsWith('https://') || storagePath.startsWith('data:')) {
+            coverUrl = storagePath;
+          } else {
             coverUrl = urlMap.get(storagePath) || SearchService.NEUTRAL_PLACEHOLDER;
           }
         }

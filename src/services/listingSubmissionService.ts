@@ -156,6 +156,7 @@ export class ListingSubmissionService {
       delete cleanFormValues.restoredImageMetadata;
       delete cleanFormValues.imagesNeedReselection;
       if (typeof cleanFormValues.logoUrl === 'string' && cleanFormValues.logoUrl.startsWith('blob:')) cleanFormValues.logoUrl = '';
+      const logoPathValue = cleanFormValues.logoUrl || cleanFormValues.companyLogo || undefined;
       const moduleData = {
         rates: draft.pricing ? { [draft.pricing.ratePeriod]: draft.pricing.rate } : undefined,
         salary_min: draft.formValues.minSalary || draft.formValues.fixedSalary || undefined,
@@ -164,6 +165,9 @@ export class ListingSubmissionService {
         starting_price: draft.formValues.startingPrice || draft.formValues.price || undefined,
         pricing_type: draft.formValues.pricingModel || undefined,
         condition: draft.condition || draft.formValues.condition || undefined,
+        company_name: cleanFormValues.companyName || cleanFormValues.employerName || undefined,
+        company_logo_url: logoPathValue,
+        logoUrl: logoPathValue,
         contact_preferences: draft.contactPreferences,
         rules: draft.rules,
         form_values: cleanFormValues,
@@ -241,10 +245,29 @@ export class ListingSubmissionService {
         if (logoError || !storedLogo?.path) throw new Error(logoError?.message || 'The company logo upload failed.');
         uploadedPaths.push(storedLogo.path);
         cleanFormValues.logoUrl = storedLogo.path;
+        const updatedModuleData = {
+          ...moduleData,
+          company_logo_url: storedLogo.path,
+          logoUrl: storedLogo.path,
+          form_values: cleanFormValues
+        };
         const { error: updateError } = await supabase.from('listings').update({
-          module_data: { ...moduleData, form_values: cleanFormValues },
+          module_data: updatedModuleData,
         }).eq('id', listingId).eq('owner_id', ownerId);
         if (updateError) throw new Error(updateError.message);
+
+        // Also record in listing_media table so media queries pick it up automatically
+        await supabase.from('listing_media').insert({
+          listing_id: listingId,
+          storage_path: storedLogo.path,
+          media_type: 'image',
+          position: 0,
+          is_cover: true,
+          width: processedLogo.width,
+          height: processedLogo.height,
+          file_size: processedLogo.size,
+          mime_type: processedLogo.mimeType,
+        });
       }
 
       const result: UserListingItem = {

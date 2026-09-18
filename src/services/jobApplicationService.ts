@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { MessagingService } from './messagingService';
 
 export interface JobApplicationInput { 
   jobId:string;
@@ -58,7 +59,40 @@ export class JobApplicationService {
         resume_url:resumeUrl,
         status:'submitted'
       });
-      if(error)return{success:false,error:error.code==='23505'?'You have already applied for this position.':error.message}; return{success:true};
+      if(error) {
+        if (error.code === '23505') return { success: false, error: 'You have already applied for this position.' };
+        return { success: false, error: error.message };
+      }
+
+      // Create tagged conversation and initial application message for the employer
+      if (job?.owner_id) {
+        try {
+          const convId = await MessagingService.getOrCreateConversation(input.jobId, job.owner_id, 'job_application');
+          if (convId) {
+            let appMsgBody = `📋 JOB APPLICATION SUBMITTED\n` +
+              `Position: ${input.jobTitle}\n` +
+              `Company: ${input.companyName}\n` +
+              `Applicant: ${input.applicantName}\n` +
+              `Phone: ${input.applicantPhone}\n` +
+              `Email: ${input.applicantEmail}`;
+            if (input.coverNote?.trim()) {
+              appMsgBody += `\n\nCover Note:\n${input.coverNote.trim()}`;
+            }
+            if (input.portfolioLink?.trim()) {
+              appMsgBody += `\n\nPortfolio: ${input.portfolioLink.trim()}`;
+            }
+            if (resumeUrl) {
+              appMsgBody += `\n\nResume Attached: ${resumeUrl}`;
+            }
+
+            await MessagingService.sendMessage(convId, appMsgBody, 'job_application');
+          }
+        } catch (msgErr) {
+          console.warn('[JobApplicationService] Could not auto-post messaging thread:', msgErr);
+        }
+      }
+
+      return{success:true};
     }catch(error){return{success:false,error:error instanceof Error?error.message:'Failed to submit application.'}}
   }
 }

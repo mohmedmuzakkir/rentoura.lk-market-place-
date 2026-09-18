@@ -18,12 +18,14 @@ import {
   Building2,
   Calendar,
   Phone,
-  Eye
+  Eye,
+  Edit3
 } from 'lucide-react';
 import { UserListingItem } from '../../types/profileTypes';
 import { StaffAccount } from '../../types/adminTypes';
 import { AdminService } from '../../services/adminService';
 import { SearchService } from '../../services/searchService';
+import { AdminListingEditModal } from './AdminListingEditModal';
 
 interface ListingModerationModalProps {
   listing: UserListingItem;
@@ -45,6 +47,7 @@ export const ListingModerationModal: React.FC<ListingModerationModalProps> = ({
   const [processing, setProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
 
   const handleApprove = async () => {
     setProcessing(true);
@@ -396,6 +399,15 @@ export const ListingModerationModal: React.FC<ListingModerationModalProps> = ({
             <div className="flex items-center gap-2">
               <button
                 type="button"
+                onClick={() => setIsEditing(true)}
+                className="px-4 py-2.5 rounded-2xl bg-blue-50 border border-blue-200 hover:bg-blue-100 text-blue-800 font-bold text-xs flex items-center gap-1.5 transition-all"
+              >
+                <Edit3 className="w-4 h-4 text-blue-600" />
+                <span>Edit Content</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={() => { setRequestChangesMode(true); setReasonInput(''); }}
                 className="px-4 py-2.5 rounded-2xl bg-amber-50 border border-amber-200 hover:bg-amber-100 text-amber-800 font-bold text-xs flex items-center gap-1.5 transition-all"
               >
@@ -425,6 +437,19 @@ export const ListingModerationModal: React.FC<ListingModerationModalProps> = ({
           </div>
         )}
       </div>
+
+      {isEditing && (
+        <AdminListingEditModal
+          listing={listing}
+          staff={staff}
+          onClose={() => setIsEditing(false)}
+          onSaved={() => {
+            setIsEditing(false);
+            setSuccessMessage('Listing updated directly.');
+            onActionCompleted();
+          }}
+        />
+      )}
     </div>
   );
 };

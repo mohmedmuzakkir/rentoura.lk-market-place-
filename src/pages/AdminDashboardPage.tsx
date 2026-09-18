@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { formatListingDate } from '../utils/dateUtils';
 import {
   LayoutDashboard,
   ShoppingBag,
@@ -129,7 +130,7 @@ export const AdminDashboardPage: React.FC<AdminDashboardPageProps> = ({
       ]);
       setLiveMetrics(metrics);
       setKpiMetrics({ totalListings: metrics.totalListings, activeListings: metrics.activeListings, pendingListings: metrics.pendingListings, rejectedListings: metrics.rejectedListings, reportedListings: metrics.reportedListings, totalUsers: metrics.totalUsers, rentalsCount: metrics.rentalsCount, jobsCount: metrics.jobsCount, servicesCount: metrics.servicesCount });
-      setListings(globalListings.rows.map(row => ({ id: row.id, ownerId: row.ownerId, module: `${row.module}s` as UserListingItem['module'], title: row.title, status: row.status as UserListingItem['status'], imageUrl: '', location: row.provinceName, price: row.price === null ? 'Not specified' : row.price.toLocaleString(), pricePeriod: row.pricingPeriod, category: row.categoryName, postedDate: row.submittedAt, createdAt: row.createdAt, updatedAt: row.updatedAt, description: row.description })));
+      setListings(globalListings.rows.map(row => ({ id: row.id, ownerId: row.ownerId, module: `${row.module}s` as UserListingItem['module'], title: row.title, status: row.status as UserListingItem['status'], imageUrl: '', location: row.provinceName, price: row.price === null ? 'Not specified' : row.price.toLocaleString(), pricePeriod: row.pricingPeriod, category: row.categoryName, postedDate: formatListingDate(row.submittedAt), createdAt: row.createdAt, updatedAt: row.updatedAt, description: row.description })));
       setReports(reportPage.rows as unknown as ListingReport[]);
       if (staff.role === 'SUPER_ADMIN') {
         const events = await AdminModerationService.getModerationAudit();

@@ -1,6 +1,7 @@
 import { UserProfile, UserListingItem, UserReviewItem, UserReportItem, UserListingStatus } from '../types/profileTypes';
 import { supabase } from '../lib/supabase';
 import { SearchService } from './searchService';
+import { formatListingDate } from '../utils/dateUtils';
 
 const PROFILE_STORAGE_KEY = 'rentoura_user_profile';
 
@@ -140,13 +141,7 @@ export class ProfileService {
         // Date formatting
         let postedDate = '';
         if (row.created_at) {
-          try {
-            postedDate = new Date(row.created_at).toLocaleDateString('en-GB', {
-              day: 'numeric',
-              month: 'short',
-              year: 'numeric'
-            });
-          } catch (e) {}
+          postedDate = formatListingDate(row.created_at);
         }
 
         // Extract tags / description / notes from row or row.module_data
@@ -434,7 +429,7 @@ export class ProfileService {
         reviewerAvatar: r.author_avatar || '',
         rating: Number(r.rating ?? r.overall_rating ?? 0),
         comment: r.body || r.comment || '',
-        date: r.created_at ? new Date(r.created_at).toLocaleDateString() : '',
+        date: formatListingDate(r.created_at),
         listingTitle: r.target_title || r.listing_title || 'Listing',
         module: r.target_module || 'rentals'
       }));
@@ -465,7 +460,7 @@ export class ProfileService {
         targetListingId: rep.target_id || '',
         reason: rep.reason_label || rep.reason_code || rep.reason || 'Safety Flag',
         status: rep.status === 'resolved' ? 'Resolved' : (rep.status === 'dismissed' ? 'Dismissed' : 'Pending Review'),
-        submittedDate: rep.created_at ? new Date(rep.created_at).toLocaleDateString() : '',
+        submittedDate: formatListingDate(rep.created_at),
         resolutionNote: rep.status_note || rep.user_facing_message || undefined
       }));
     } catch (e) {

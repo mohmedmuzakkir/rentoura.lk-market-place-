@@ -44,7 +44,10 @@ export const JobHeroAndSalary: React.FC<JobHeroAndSalaryProps> = ({
     if (job.salary.type === 'fixed' && job.salary.min) {
       return `Rs. ${job.salary.min.toLocaleString()}`;
     }
-    if (job.salary.type === 'negotiable') {
+    if (job.salary.min) {
+      return `Rs. ${job.salary.min.toLocaleString()}`;
+    }
+    if (job.salary.type === 'negotiable' || job.salary.isNegotiable) {
       return 'Salary Negotiable';
     }
     return 'Salary not disclosed';

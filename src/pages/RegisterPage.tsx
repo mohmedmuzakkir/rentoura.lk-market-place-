@@ -33,6 +33,7 @@ import { featureFlags } from '../config/features';
 
 interface RegisterPageProps {
   onNavigate: (route: AppRoute) => void;
+  onBack?: () => void;
   returnUrl?: AppRoute;
   selectedLanguage?: 'English' | 'Sinhala' | 'Tamil';
   onLanguageChange?: (lang: 'English' | 'Sinhala' | 'Tamil') => void;
@@ -44,6 +45,7 @@ const DRAFT_KEY = 'rentoura_register_draft';
 
 export const RegisterPage: React.FC<RegisterPageProps> = ({
   onNavigate,
+  onBack,
   returnUrl,
   selectedLanguage = 'English',
   onLanguageChange,
@@ -291,8 +293,8 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
       } else {
         setSuccessMsg(`Account created successfully! Welcome to Rentoura, ${res.profile?.fullName || trimmedName}.`);
         setTimeout(() => {
-          // Redirect to dashboard (my-listings) after successful registration
-          onNavigate('/my-listings');
+          // Redirect to returnUrl or dashboard (my-listings) after successful registration
+          onNavigate(returnUrl || '/my-listings');
         }, 1000);
       }
     } catch (err: any) {
@@ -384,7 +386,7 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
             <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-100">
               <button
                 type="button"
-                onClick={() => onNavigate(returnUrl || '/login')}
+                onClick={onBack ? onBack : () => onNavigate(returnUrl || '/')}
                 className="w-9 h-9 rounded-2xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-600 transition-all tap-bounce"
                 aria-label="Go Back"
               >

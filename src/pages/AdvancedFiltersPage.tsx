@@ -47,6 +47,7 @@ import { SearchService } from '../services/searchService';
 
 interface AdvancedFiltersPageProps {
   onNavigate: (route: AppRoute) => void;
+  onBack?: () => void;
   savedCount?: number;
   initialFilterState?: AdvancedFilterState;
   onApplyFilters: (filters: AdvancedFilterState) => void;
@@ -54,6 +55,7 @@ interface AdvancedFiltersPageProps {
 
 export const AdvancedFiltersPage: React.FC<AdvancedFiltersPageProps> = ({
   onNavigate,
+  onBack,
   savedCount = 0,
   initialFilterState = INITIAL_ADVANCED_FILTER_STATE,
   onApplyFilters
@@ -215,7 +217,7 @@ export const AdvancedFiltersPage: React.FC<AdvancedFiltersPageProps> = ({
         <div className="px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button
-              onClick={() => onNavigate('/search')}
+              onClick={onBack ? onBack : () => onNavigate('/search')}
               className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-700 transition-colors cursor-pointer"
               title="Back"
               aria-label="Back to search results"

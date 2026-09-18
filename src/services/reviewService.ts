@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { CanonicalReview, ReviewFilterParams, ReviewSummary, ReviewModule } from '../types/reviewTypes';
 import { NotificationService } from './notificationService';
+import { formatListingDate } from '../utils/dateUtils';
 
 let inMemoryReviewsCache: CanonicalReview[] = [];
 
@@ -10,11 +11,7 @@ export class ReviewService {
    */
   private static formatReviewRow(row: any): CanonicalReview {
     const createdDate = new Date(row.created_at || Date.now());
-    const dateStr = createdDate.toLocaleDateString('en-US', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric'
-    });
+    const dateStr = formatListingDate(createdDate);
 
     const listing = row.listings || {};
     const profile = row.profiles || {};
@@ -55,12 +52,12 @@ export class ReviewService {
       ownerReply: row.owner_reply ? {
         authorName: 'Listing Owner',
         body: row.owner_reply,
-        createdAt: row.owner_reply_at ? new Date(row.owner_reply_at).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' }) : ''
+        createdAt: row.owner_reply_at ? formatListingDate(row.owner_reply_at) : ''
       } : undefined,
       status: (row.status || 'published') as any,
       createdAt: dateStr,
       timestamp: createdDate.getTime(),
-      updatedAt: row.updated_at ? new Date(row.updated_at).toLocaleDateString() : undefined,
+      updatedAt: row.updated_at ? formatListingDate(row.updated_at) : undefined,
       locationName: 'Sri Lanka'
     };
   }

@@ -33,44 +33,66 @@ import { ProfileService } from './services/profileService';
 import { ErrorBoundary, OfflineState, Page404 } from './components/common/StateComponents';
 import { Footer } from './components/Footer';
 import { isStaffRoute, resolveRoute } from './routing/routes';
+import { supabase } from './lib/supabase';
 import { normalizeProtectedAction, PendingProtectedAction, ProtectedActionRequest } from './services/protectedActionService';
 
 import { isSuperAdmin, isAdmin, isModerator, isStaff } from './utils/roleUtils';
 
-// Lazy-loaded page components for Route-Level Code Splitting (TASK 1)
-const HomePage = React.lazy(() => import('./pages/HomePage').then(m => ({ default: m.HomePage })));
-const RentalsPage = React.lazy(() => import('./pages/RentalsPage').then(m => ({ default: m.RentalsPage })));
-const JobsPage = React.lazy(() => import('./pages/JobsPage').then(m => ({ default: m.JobsPage })));
-const ServicesPage = React.lazy(() => import('./pages/ServicesPage').then(m => ({ default: m.ServicesPage })));
-const SavedPage = React.lazy(() => import('./pages/SavedPage').then(m => ({ default: m.SavedPage })));
-const PostPage = React.lazy(() => import('./pages/PostPage').then(m => ({ default: m.PostPage })));
-const MessagesPage = React.lazy(() => import('./pages/MessagesPage').then(m => ({ default: m.MessagesPage })));
-const ChatPage = React.lazy(() => import('./pages/ChatPage').then(m => ({ default: m.ChatPage })));
-const ProfileOverviewPage = React.lazy(() => import('./pages/ProfileOverviewPage').then(m => ({ default: m.ProfileOverviewPage })));
-const EditProfilePage = React.lazy(() => import('./pages/EditProfilePage').then(m => ({ default: m.EditProfilePage })));
-const MyListingsPage = React.lazy(() => import('./pages/MyListingsPage').then(m => ({ default: m.MyListingsPage })));
-const SearchResultsPage = React.lazy(() => import('./pages/SearchResultsPage').then(m => ({ default: m.SearchResultsPage })));
-const LocationSelectorPage = React.lazy(() => import('./pages/LocationSelectorPage').then(m => ({ default: m.LocationSelectorPage })));
-const CategorySelectorPage = React.lazy(() => import('./pages/CategorySelectorPage').then(m => ({ default: m.CategorySelectorPage })));
-const AdvancedFiltersPage = React.lazy(() => import('./pages/AdvancedFiltersPage').then(m => ({ default: m.AdvancedFiltersPage })));
-const RentalDetailPage = React.lazy(() => import('./pages/RentalDetailPage').then(m => ({ default: m.RentalDetailPage })));
-const JobDetailPage = React.lazy(() => import('./pages/JobDetailPage').then(m => ({ default: m.JobDetailPage })));
-const ServiceDetailPage = React.lazy(() => import('./pages/ServiceDetailPage').then(m => ({ default: m.ServiceDetailPage })));
-const NotificationsPage = React.lazy(() => import('./pages/NotificationsPage').then(m => ({ default: m.NotificationsPage })));
-const LoginPage = React.lazy(() => import('./pages/LoginPage').then(m => ({ default: m.LoginPage })));
-const RegisterPage = React.lazy(() => import('./pages/RegisterPage').then(m => ({ default: m.RegisterPage })));
-const ForgotPasswordPage = React.lazy(() => import('./pages/ForgotPasswordPage').then(m => ({ default: m.ForgotPasswordPage })));
-const ResetPasswordPage = React.lazy(() => import('./pages/ResetPasswordPage').then(m => ({ default: m.ResetPasswordPage })));
-const UserAgreementPage = React.lazy(() => import('./pages/UserAgreementPage').then(m => ({ default: m.UserAgreementPage })));
-const CompleteProfilePage = React.lazy(() => import('./pages/CompleteProfilePage').then(m => ({ default: m.CompleteProfilePage })));
-const PrivacyPolicyPage = React.lazy(() => import('./pages/PrivacyPolicyPage').then(m => ({ default: m.PrivacyPolicyPage })));
-const SafetyCenterPage = React.lazy(() => import('./pages/SafetyCenterPage').then(m => ({ default: m.SafetyCenterPage })));
-const HelpCenterPage = React.lazy(() => import('./pages/HelpCenterPage').then(m => ({ default: m.HelpCenterPage })));
-const ReportListingPage = React.lazy(() => import('./pages/ReportListingPage').then(m => ({ default: m.ReportListingPage })));
-const ReviewsPage = React.lazy(() => import('./pages/ReviewsPage').then(m => ({ default: m.ReviewsPage })));
-const AdminDashboardPage = React.lazy(() => import('./pages/AdminDashboardPage').then(m => ({ default: m.AdminDashboardPage })));
-const StaffRoute = React.lazy(() => import('./components/admin/StaffRoute').then(m => ({ default: m.StaffRoute })));
-const PostFlowContainer = React.lazy(() => import('./components/post/PostFlowContainer').then(m => ({ default: m.PostFlowContainer })));
+// Resilient lazy-loading with automatic retry for dynamic import network glitches
+function lazyWithRetry<T extends React.ComponentType<any>>(
+  componentImport: () => Promise<{ default: T }>
+) {
+  return React.lazy(async () => {
+    const isReloaded = sessionStorage.getItem('chunk_reload_retry');
+    try {
+      const component = await componentImport();
+      sessionStorage.removeItem('chunk_reload_retry');
+      return component;
+    } catch (error) {
+      if (!isReloaded) {
+        sessionStorage.setItem('chunk_reload_retry', 'true');
+        window.location.reload();
+        return new Promise<{ default: T }>(() => {});
+      }
+      throw error;
+    }
+  });
+}
+
+// Lazy-loaded page components for Route-Level Code Splitting
+const HomePage = lazyWithRetry(() => import('./pages/HomePage').then(m => ({ default: m.HomePage })));
+const RentalsPage = lazyWithRetry(() => import('./pages/RentalsPage').then(m => ({ default: m.RentalsPage })));
+const JobsPage = lazyWithRetry(() => import('./pages/JobsPage').then(m => ({ default: m.JobsPage })));
+const ServicesPage = lazyWithRetry(() => import('./pages/ServicesPage').then(m => ({ default: m.ServicesPage })));
+const SavedPage = lazyWithRetry(() => import('./pages/SavedPage').then(m => ({ default: m.SavedPage })));
+const PostPage = lazyWithRetry(() => import('./pages/PostPage').then(m => ({ default: m.PostPage })));
+const MessagesPage = lazyWithRetry(() => import('./pages/MessagesPage').then(m => ({ default: m.MessagesPage })));
+const ChatPage = lazyWithRetry(() => import('./pages/ChatPage').then(m => ({ default: m.ChatPage })));
+const ProfileOverviewPage = lazyWithRetry(() => import('./pages/ProfileOverviewPage').then(m => ({ default: m.ProfileOverviewPage })));
+const EditProfilePage = lazyWithRetry(() => import('./pages/EditProfilePage').then(m => ({ default: m.EditProfilePage })));
+const MyListingsPage = lazyWithRetry(() => import('./pages/MyListingsPage').then(m => ({ default: m.MyListingsPage })));
+const SearchResultsPage = lazyWithRetry(() => import('./pages/SearchResultsPage').then(m => ({ default: m.SearchResultsPage })));
+const LocationSelectorPage = lazyWithRetry(() => import('./pages/LocationSelectorPage').then(m => ({ default: m.LocationSelectorPage })));
+const CategorySelectorPage = lazyWithRetry(() => import('./pages/CategorySelectorPage').then(m => ({ default: m.CategorySelectorPage })));
+const AdvancedFiltersPage = lazyWithRetry(() => import('./pages/AdvancedFiltersPage').then(m => ({ default: m.AdvancedFiltersPage })));
+const RentalDetailPage = lazyWithRetry(() => import('./pages/RentalDetailPage').then(m => ({ default: m.RentalDetailPage })));
+const JobDetailPage = lazyWithRetry(() => import('./pages/JobDetailPage').then(m => ({ default: m.JobDetailPage })));
+const ServiceDetailPage = lazyWithRetry(() => import('./pages/ServiceDetailPage').then(m => ({ default: m.ServiceDetailPage })));
+const NotificationsPage = lazyWithRetry(() => import('./pages/NotificationsPage').then(m => ({ default: m.NotificationsPage })));
+const LoginPage = lazyWithRetry(() => import('./pages/LoginPage').then(m => ({ default: m.LoginPage })));
+const RegisterPage = lazyWithRetry(() => import('./pages/RegisterPage').then(m => ({ default: m.RegisterPage })));
+const ForgotPasswordPage = lazyWithRetry(() => import('./pages/ForgotPasswordPage').then(m => ({ default: m.ForgotPasswordPage })));
+const ResetPasswordPage = lazyWithRetry(() => import('./pages/ResetPasswordPage').then(m => ({ default: m.ResetPasswordPage })));
+const UserAgreementPage = lazyWithRetry(() => import('./pages/UserAgreementPage').then(m => ({ default: m.UserAgreementPage })));
+const CompleteProfilePage = lazyWithRetry(() => import('./pages/CompleteProfilePage').then(m => ({ default: m.CompleteProfilePage })));
+const PrivacyPolicyPage = lazyWithRetry(() => import('./pages/PrivacyPolicyPage').then(m => ({ default: m.PrivacyPolicyPage })));
+const SafetyCenterPage = lazyWithRetry(() => import('./pages/SafetyCenterPage').then(m => ({ default: m.SafetyCenterPage })));
+const HelpCenterPage = lazyWithRetry(() => import('./pages/HelpCenterPage').then(m => ({ default: m.HelpCenterPage })));
+const ReportListingPage = lazyWithRetry(() => import('./pages/ReportListingPage').then(m => ({ default: m.ReportListingPage })));
+const ReviewsPage = lazyWithRetry(() => import('./pages/ReviewsPage').then(m => ({ default: m.ReviewsPage })));
+const AdminDashboardPage = lazyWithRetry(() => import('./pages/AdminDashboardPage').then(m => ({ default: m.AdminDashboardPage })));
+const StaffRoute = lazyWithRetry(() => import('./components/admin/StaffRoute').then(m => ({ default: m.StaffRoute })));
+const PostFlowContainer = lazyWithRetry(() => import('./components/post/PostFlowContainer').then(m => ({ default: m.PostFlowContainer })));
 
 const PageLoadingFallback = () => (
   <div className="min-h-[60vh] flex flex-col items-center justify-center p-6 text-center">
@@ -195,6 +217,7 @@ export default function App() {
 
   // Messaging / Conversations State (backed by real Supabase messaging tables)
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [draftConversation, setDraftConversation] = useState<Conversation | null>(null);
 
   const loadConversations = React.useCallback(async () => {
     if (userProfile) {
@@ -658,7 +681,34 @@ export default function App() {
     text: string, 
     type: 'text' | 'location' | 'contact' = 'text'
   ) => {
-    const createdMsg = await MessagingService.sendMessage(convId, text, type);
+    let targetConvId = convId;
+
+    if (convId.startsWith('draft:') || draftConversation?.id === convId) {
+      const draft = draftConversation || conversations.find(c => c.id === convId);
+      if (!draft) return;
+
+      try {
+        const realConvId = await MessagingService.getOrCreateConversation(
+          draft.listing.id,
+          draft.participant.id,
+          draft.type || 'chat'
+        );
+
+        if (!realConvId) {
+          alert('Failed to start conversation. Please try again.');
+          return;
+        }
+
+        targetConvId = realConvId;
+        setActiveConversationId(realConvId);
+        setDraftConversation(null);
+      } catch (err: any) {
+        alert(err.message || 'Failed to start conversation.');
+        return;
+      }
+    }
+
+    const createdMsg = await MessagingService.sendMessage(targetConvId, text, type);
     if (createdMsg) {
       const updatedList = await MessagingService.getConversations();
       setConversations(updatedList);
@@ -710,7 +760,7 @@ export default function App() {
       }
     }
 
-    if (targetOwnerId && targetOwnerId === userProfile.id) {
+    if (targetOwnerId && targetOwnerId === userProfile?.id) {
       alert('You cannot send messages to your own listing.');
       return;
     }
@@ -721,14 +771,67 @@ export default function App() {
     }
 
     try {
-      const convId = await MessagingService.getOrCreateConversation(listingInfo.id, targetOwnerId);
-      if (convId) {
+      // 1. Check if conversation already exists in DB
+      const existingConvId = await MessagingService.findExistingConversation(listingInfo.id, targetOwnerId);
+      if (existingConvId) {
         const freshList = await MessagingService.getConversations();
         setConversations(freshList);
-        setActiveConversationId(convId);
-        window.history.pushState({}, '', `/chat?conversation=${convId}`);
+        setDraftConversation(null);
+        setActiveConversationId(existingConvId);
+        window.history.pushState({}, '', `/chat?conversation=${existingConvId}`);
         handleNavigate('/chat');
+        return;
       }
+
+      // 2. Otherwise create a draft conversation (NO DB creation yet!)
+      let ownerName = 'Listing Owner';
+      let ownerAvatar: string | undefined = undefined;
+      let ownerPhone: string | undefined = undefined;
+
+      const { data: prof } = await supabase
+        .from('profiles')
+        .select('full_name, avatar_url, phone_normalized, phone')
+        .eq('id', targetOwnerId)
+        .maybeSingle();
+
+      if (prof) {
+        ownerName = prof.full_name || 'Listing Owner';
+        ownerAvatar = prof.avatar_url || undefined;
+        ownerPhone = prof.phone_normalized || prof.phone || undefined;
+      }
+
+      const draftId = `draft:${listingInfo.id}:${targetOwnerId}`;
+      const draftConv: Conversation = {
+        id: draftId,
+        module: listingInfo.module || 'rentals',
+        badgeText: (listingInfo.module || 'rentals').toUpperCase(),
+        badgeColor: '#1464F4',
+        participant: {
+          id: targetOwnerId,
+          name: ownerName,
+          avatarUrl: ownerAvatar,
+          phone: ownerPhone,
+          memberSince: 'Member'
+        },
+        listing: {
+          id: listingInfo.id,
+          title: listingInfo.title || 'Listing',
+          price: listingInfo.price || 'Contact for price',
+          location: listingInfo.location || 'Sri Lanka',
+          imageUrl: listingInfo.imageUrl || '',
+          module: listingInfo.module || 'rentals'
+        },
+        lastMessage: '',
+        lastMessageTime: 'Just now',
+        lastMessageTimestamp: Date.now(),
+        unreadCount: 0,
+        messages: []
+      };
+
+      setDraftConversation(draftConv);
+      setActiveConversationId(draftId);
+      window.history.pushState({}, '', `/chat?conversation=${draftId}`);
+      handleNavigate('/chat');
     } catch (err: any) {
       alert(err.message || 'Could not start conversation');
     }
@@ -804,7 +907,9 @@ export default function App() {
 
   const unreadMessagesCount = conversations.reduce((sum, c) => sum + (c.unreadCount || 0), 0);
   const unreadNotificationsCount = NotificationService.getUnreadCount(notifications);
-  const activeConversation = conversations.find(c => c.id === activeConversationId) || conversations[0];
+  const activeConversation = (draftConversation && draftConversation.id === activeConversationId)
+    ? draftConversation
+    : (conversations.find(c => c.id === activeConversationId) || conversations[0]);
 
   const handleAdminLogout = async () => {
     await AdminService.logoutStaff();
@@ -982,6 +1087,7 @@ export default function App() {
         return (
           <AdvancedFiltersPage
             onNavigate={handleNavigate}
+            onBack={handleBack}
             savedCount={savedListings.length}
             initialFilterState={advancedFilterState}
             onApplyFilters={(newAdvFilters) => {
@@ -1003,6 +1109,7 @@ export default function App() {
         return (
           <SearchResultsPage
             onNavigate={handleNavigate}
+            onBack={handleBack}
             savedListings={savedListings}
             onToggleSave={handleToggleSave}
             selectedLocation={filterState.selectedLocation}
@@ -1243,6 +1350,7 @@ export default function App() {
             reviews={userReviews}
             reports={userReports}
             onNavigate={handleNavigate}
+            onBack={handleBack}
             onOpenListingDetail={handleOpenListingDetail}
             onDeleteListing={handleDeleteUserListing}
             onUpdateListing={handleUpdateUserListing}

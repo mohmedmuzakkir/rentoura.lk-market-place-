@@ -204,12 +204,28 @@ export class SearchService {
       const rawResults: any[] = Array.isArray(resObj?.results) ? resObj.results : [];
 
       // Resolve cover signed URLs in ONE batched request
-      const coverPaths = rawResults.map(item => item.cover_storage_path || (Array.isArray(item.media_urls) && item.media_urls[0]) || null);
+      const coverPaths = rawResults.map(item =>
+        item.cover_storage_path ||
+        (Array.isArray(item.media_urls) && item.media_urls[0]) ||
+        item.company_logo_url ||
+        item.module_data?.company_logo_url ||
+        item.module_data?.logoUrl ||
+        item.module_data?.form_values?.logoUrl ||
+        item.module_data?.form_values?.companyLogo ||
+        null
+      );
       const urlMap = await SearchService.resolveCoverUrlsBatch(coverPaths, 3600);
 
       const processedResults = rawResults.map((item) => {
-        const coverPath = item.cover_storage_path || (Array.isArray(item.media_urls) && item.media_urls[0]) || null;
-        const coverUrl = coverPath ? (urlMap.get(coverPath) || SearchService.NEUTRAL_PLACEHOLDER) : SearchService.NEUTRAL_PLACEHOLDER;
+        const coverPath = item.cover_storage_path ||
+                          (Array.isArray(item.media_urls) && item.media_urls[0]) ||
+                          item.company_logo_url ||
+                          item.module_data?.company_logo_url ||
+                          item.module_data?.logoUrl ||
+                          item.module_data?.form_values?.logoUrl ||
+                          item.module_data?.form_values?.companyLogo ||
+                          null;
+        const coverUrl = coverPath ? (urlMap.get(coverPath) || (coverPath.startsWith('http') ? coverPath : SearchService.NEUTRAL_PLACEHOLDER)) : SearchService.NEUTRAL_PLACEHOLDER;
         return {
           ...item,
           cover_url: coverUrl
@@ -380,12 +396,28 @@ export class SearchService {
       const totalSelected = activeCount || viewData.length;
 
       // Resolve cover signed URLs in ONE batched request
-      const coverPaths = viewData.map((item: any) => item.cover_storage_path || (Array.isArray(item.media_urls) && item.media_urls[0]) || null);
+      const coverPaths = viewData.map((item: any) =>
+        item.cover_storage_path ||
+        (Array.isArray(item.media_urls) && item.media_urls[0]) ||
+        item.company_logo_url ||
+        item.module_data?.company_logo_url ||
+        item.module_data?.logoUrl ||
+        item.module_data?.form_values?.logoUrl ||
+        item.module_data?.form_values?.companyLogo ||
+        null
+      );
       const urlMap = await SearchService.resolveCoverUrlsBatch(coverPaths, 3600);
 
       const processedResults = viewData.map((item: any) => {
-        const coverPath = item.cover_storage_path || (Array.isArray(item.media_urls) && item.media_urls[0]) || null;
-        const coverUrl = coverPath ? (urlMap.get(coverPath) || SearchService.NEUTRAL_PLACEHOLDER) : SearchService.NEUTRAL_PLACEHOLDER;
+        const coverPath = item.cover_storage_path ||
+                          (Array.isArray(item.media_urls) && item.media_urls[0]) ||
+                          item.company_logo_url ||
+                          item.module_data?.company_logo_url ||
+                          item.module_data?.logoUrl ||
+                          item.module_data?.form_values?.logoUrl ||
+                          item.module_data?.form_values?.companyLogo ||
+                          null;
+        const coverUrl = coverPath ? (urlMap.get(coverPath) || (coverPath.startsWith('http') ? coverPath : SearchService.NEUTRAL_PLACEHOLDER)) : SearchService.NEUTRAL_PLACEHOLDER;
         return {
           ...item,
           cover_url: coverUrl

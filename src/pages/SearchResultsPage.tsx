@@ -40,6 +40,7 @@ export interface SearchState {
 
 interface SearchResultsPageProps {
   onNavigate: (route: AppRoute) => void;
+  onBack?: () => void;
   savedListings: string[];
   onToggleSave: (id: string) => void;
   selectedLocation?: string;
@@ -124,6 +125,7 @@ function updateUrlSearchParams(state: SearchState) {
 
 export const SearchResultsPage: React.FC<SearchResultsPageProps> = ({
   onNavigate,
+  onBack,
   savedListings,
   onToggleSave,
   selectedLocation,
@@ -377,7 +379,7 @@ export const SearchResultsPage: React.FC<SearchResultsPageProps> = ({
       <div className="sticky top-0 z-30 bg-white/95 backdrop-blur-md px-4 pt-3 pb-3 border-b border-slate-100 flex items-center justify-between shadow-2xs">
         <button
           type="button"
-          onClick={() => onNavigate('/')}
+          onClick={onBack ? onBack : () => onNavigate('/')}
           className="w-9 h-9 -ml-1 flex items-center justify-center text-slate-800 hover:text-black rounded-full active:bg-slate-100 transition-colors cursor-pointer"
           aria-label="Back to home"
         >

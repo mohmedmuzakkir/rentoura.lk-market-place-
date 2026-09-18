@@ -7,6 +7,7 @@ interface RentalPriceCardProps {
   activePeriod: RentalPeriodUnit;
   onPeriodChange: (period: RentalPeriodUnit) => void;
   isNegotiable?: boolean;
+  deposit?: string;
 }
 
 export const RentalPriceCard: React.FC<RentalPriceCardProps> = ({
@@ -17,16 +18,30 @@ export const RentalPriceCard: React.FC<RentalPriceCardProps> = ({
 }) => {
   const currentRate = rates.find(r => r.unit === activePeriod) || rates[0];
 
+  const formatRatePrice = (rate?: RentalRate): string => {
+    if (!rate) return 'Price on request';
+    if (typeof rate.price === 'number' && rate.price > 0) {
+      return `Rs. ${rate.price.toLocaleString()}`;
+    }
+    if (rate.label && rate.label !== 'Standard Rate') {
+      return rate.label;
+    }
+    return 'Price on request';
+  };
+
+  const currentPriceText = formatRatePrice(currentRate);
+  const displayPeriod = currentRate?.unit || activePeriod || 'Period';
+
   return (
     <div className="bg-white rounded-3xl border border-slate-100 p-4 shadow-xs space-y-3">
       {/* Price Header */}
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div className="flex items-baseline gap-1.5">
           <span className="text-2xl sm:text-3xl font-black text-[#1464F4] tracking-tight">
-            {currentRate ? currentRate.label : 'Price on request'}
+            {currentPriceText}
           </span>
           <span className="text-xs font-bold text-slate-500">
-            / {activePeriod || 'Period'}
+            / {displayPeriod}
           </span>
         </div>
 
@@ -47,6 +62,7 @@ export const RentalPriceCard: React.FC<RentalPriceCardProps> = ({
           <div className="flex flex-wrap gap-1.5">
             {rates.map((rate) => {
               const isSelected = rate.unit === activePeriod;
+              const rateText = formatRatePrice(rate);
               return (
                 <button
                   key={rate.unit}
@@ -58,7 +74,7 @@ export const RentalPriceCard: React.FC<RentalPriceCardProps> = ({
                   }`}
                 >
                   <span>{rate.unit}</span>
-                  <span className="opacity-75 text-[10px] ml-1">({rate.label})</span>
+                  <span className="opacity-75 text-[10px] ml-1">({rateText})</span>
                 </button>
               );
             })}

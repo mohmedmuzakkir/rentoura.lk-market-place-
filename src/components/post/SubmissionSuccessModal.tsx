@@ -58,7 +58,7 @@ export const SubmissionSuccessModal: React.FC<SubmissionSuccessModalProps> = ({
             {listing.status !== 'pending' ? 'Live & Published' : 'Pending Moderation Review'}
           </span>
           <h2 className="text-xl font-extrabold text-slate-900 font-heading">
-            Listing Submitted Successfully!
+            {listing.status !== 'pending' ? 'Listing Published Successfully!' : 'Listing Submitted Successfully!'}
           </h2>
           <p className="text-xs text-slate-500 max-w-xs mx-auto leading-relaxed">
             Your listing “<strong className="text-slate-800">{listing.title}</strong>” has been recorded and is {listing.status !== 'pending' ? 'now live on the marketplace.' : 'currently under review by our team.'}

@@ -19,6 +19,7 @@ import { LocationMapCard } from '../components/listing-details/LocationMapCard';
 import { SafetyFirstCard } from '../components/listing-details/SafetyFirstCard';
 import { ReportModal } from '../components/listing-details/ReportModal';
 import { StickyActionBar } from '../components/listing-details/StickyActionBar';
+import { RecommendedListings } from '../components/listing-details/RecommendedListings';
 import { RentalListingDetail, RentalPeriodUnit } from '../types/listingDetailsTypes';
 import { ListingDetailService } from '../services/listingDetailService';
 import { ProtectedActionRequest } from '../services/protectedActionService';
@@ -319,6 +320,15 @@ export const RentalDetailPage: React.FC<RentalDetailPageProps> = ({
           </div>
         </div>
       </main>
+
+      {/* Recommended Listings Section */}
+      <RecommendedListings
+        currentListingId={detail.id}
+        module="rentals"
+        categoryId={(detail as any).category_id || (detail as any).categoryId || null}
+        themeColor="#1464F4"
+        onNavigate={onNavigate}
+      />
 
       {/* Sticky Bottom Action Bar for Mobile */}
       <div className="w-full max-w-2xl mx-auto mt-6 mb-20 px-4">

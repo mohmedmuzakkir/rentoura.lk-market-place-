@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ChevronLeft, ChevronRight, ExternalLink, Flag, Search, Send, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ExternalLink, Flag, MessageSquare, Search, Send, ShieldCheck, X } from 'lucide-react';
 import { AdminModerationService, AdminReport } from '../../services/adminModerationService';
+import { MessagingService } from '../../services/messagingService';
 import { StaffAccount } from '../../types/adminTypes';
+import { formatListingDate } from '../../utils/dateUtils';
 
 interface Props { staff: StaffAccount; onRefresh: () => void; onNavigateToTarget?: (type: string, id: string) => void }
 const statuses = ['total', 'submitted', 'under_review', 'resolved', 'dismissed'];
@@ -12,19 +14,57 @@ export const AdminReportsView: React.FC<Props> = ({ staff, onRefresh, onNavigate
   const [error, setError] = useState(''), [notice, setNotice] = useState(''), [page, setPage] = useState(1), [search, setSearch] = useState('');
   const [status, setStatus] = useState('all'), [target, setTarget] = useState('all'), [module, setModule] = useState('all'), [reason, setReason] = useState('all'), [assignee, setAssignee] = useState('all');
   const [dateFrom, setDateFrom] = useState(''), [dateTo, setDateTo] = useState(''), [note, setNote] = useState(''), [outcome, setOutcome] = useState(''), [userMessage, setUserMessage] = useState(''), [linked, setLinked] = useState('');
+  const [directMsgUser, setDirectMsgUser] = useState<{ id: string; name: string; roleLabel: string } | null>(null);
+  const [directMsgText, setDirectMsgText] = useState('');
+
   const pageSize = 10;
   const load = useCallback(async () => { setLoading(true); const result = await AdminModerationService.reports({ search, status, targetType: target, module, reason, assignee, dateFrom, dateTo, page, pageSize }); setRows(result.rows); setTotal(result.total); setCounts(result.counts); setError(result.error || ''); setLoading(false); }, [search, status, target, module, reason, assignee, dateFrom, dateTo, page]);
   useEffect(() => { void load(); return AdminModerationService.subscribe(() => void load()); }, [load]);
+
   const act = async (action: string, values: { note?: string; assignee?: string; outcome?: string; userMessage?: string; linkedAction?: string } = {}) => {
     if (!selected) return;
     if ((action === 'resolve' || action === 'dismiss') && (!note.trim() || !outcome.trim())) { setError('Resolution note and outcome are required.'); return; }
     setBusy(true); setError(''); setNotice('');
-    try { await AdminModerationService.moderateReport(selected.id, action, values); setNotice('Report updated and recorded in the audit log.'); setNote(''); setOutcome(''); setUserMessage(''); setLinked(''); await load(); onRefresh(); }
+    try {
+      if (values.userMessage?.trim() && selected.reporterId) {
+        try {
+          const convId = await MessagingService.getOrCreateConversation(selected.listingId || null, selected.reporterId);
+          if (convId) {
+            await MessagingService.sendMessage(convId, values.userMessage.trim());
+          }
+        } catch (msgErr) {
+          console.warn('[AdminReportsView] Could not send direct chat message:', msgErr);
+        }
+      }
+
+      await AdminModerationService.moderateReport(selected.id, action, values);
+      setNotice('Report updated, real message dispatched if provided, and audit recorded.');
+      setNote(''); setOutcome(''); setUserMessage(''); setLinked(''); await load(); onRefresh();
+    }
     catch (cause) { setError(cause instanceof Error ? cause.message : 'Report action failed.'); }
     finally { setBusy(false); }
   };
+
+  const sendDirectMessage = async () => {
+    if (!directMsgUser || !directMsgText.trim()) return;
+    setBusy(true); setError(''); setNotice('');
+    try {
+      const convId = await MessagingService.getOrCreateConversation(selected?.listingId || null, directMsgUser.id);
+      if (!convId) throw new Error('Could not create conversation with user.');
+      const sent = await MessagingService.sendMessage(convId, directMsgText.trim());
+      if (!sent) throw new Error('Failed to send message.');
+      setNotice(`Direct Verified Admin message sent to ${directMsgUser.name}!`);
+      setDirectMsgText('');
+      setDirectMsgUser(null);
+    } catch (err: any) {
+      setError(err.message || 'Failed to send direct message');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return <section className="space-y-5 pb-24">
-    <header><h1 className="flex items-center gap-2 text-2xl font-black text-[#041C43]"><Flag className="text-[#1464F4]" />Reports moderation</h1><p className="text-sm text-slate-500">Live user reports, assignments, private notes, target state and audit history.</p></header>
+    <header><h1 className="flex items-center gap-2 text-2xl font-black text-[#041C43]"><Flag className="text-[#1464F4]" />Reports moderation</h1><p className="text-sm text-slate-500">Live user reports, assignments, private notes, target state, official messaging and audit history.</p></header>
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">{statuses.map(item => <button key={item} onClick={() => { setStatus(item === 'total' ? 'all' : item); setPage(1); }} className="rounded-2xl border bg-white p-4 text-left"><p className="text-xs font-bold uppercase text-slate-500">{item.replaceAll('_', ' ')}</p><p className="text-2xl font-black text-[#041C43]">{counts[item] || 0}</p></button>)}</div>
     <div className="grid gap-2 rounded-2xl border bg-white p-3 sm:grid-cols-2 lg:grid-cols-4">
       <label className="relative sm:col-span-2"><Search className="absolute left-3 top-3 text-slate-400" size={17} /><input value={search} onChange={event => { setSearch(event.target.value); setPage(1); }} placeholder="Search target, reason or details" className="w-full rounded-xl border py-2.5 pl-10 pr-3 text-sm" /></label>
@@ -36,16 +76,75 @@ export const AdminReportsView: React.FC<Props> = ({ staff, onRefresh, onNavigate
       <div className="flex gap-2"><input aria-label="From date" type="date" value={dateFrom} onChange={event => setDateFrom(event.target.value)} className="min-w-0 flex-1 rounded-xl border p-2 text-xs" /><input aria-label="To date" type="date" value={dateTo} onChange={event => setDateTo(event.target.value)} className="min-w-0 flex-1 rounded-xl border p-2 text-xs" /></div>
     </div>
     {error && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}{notice && <p className="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-700">{notice}</p>}
-    <div className="rounded-2xl border bg-white">{loading ? <p className="p-8 text-center text-sm text-slate-500">Loading live reports…</p> : rows.length ? rows.map(report => <button key={report.id} onClick={() => setSelected(report)} className="grid w-full gap-2 border-b p-4 text-left sm:grid-cols-[1fr_130px_130px]"><span className="min-w-0"><b className="block truncate text-[#041C43]">{report.targetTitle}</b><small className="block truncate text-slate-500">{report.reporterName} · {report.reasonLabel} · {report.targetType}/{report.targetModule}</small></span><span className="text-xs font-bold text-slate-600">{report.status.replaceAll('_', ' ')}</span><span className="text-xs text-slate-500">{new Date(report.createdAt).toLocaleDateString()}</span></button>) : <p className="p-8 text-center text-sm text-slate-500">No reports match these filters.</p>}</div>
+    <div className="rounded-2xl border bg-white">{loading ? <p className="p-8 text-center text-sm text-slate-500">Loading live reports…</p> : rows.length ? rows.map(report => <button key={report.id} onClick={() => { setSelected(report); setDirectMsgUser(null); }} className="grid w-full gap-2 border-b p-4 text-left sm:grid-cols-[1fr_130px_130px]"><span className="min-w-0"><b className="block truncate text-[#041C43]">{report.targetTitle}</b><small className="block truncate text-slate-500">{report.reporterName} · {report.reasonLabel} · {report.targetType}/{report.targetModule}</small></span><span className="text-xs font-bold text-slate-600">{report.status.replaceAll('_', ' ')}</span><span className="text-xs text-slate-500">{formatListingDate(report.createdAt)}</span></button>) : <p className="p-8 text-center text-sm text-slate-500">No reports match these filters.</p>}</div>
     <div className="flex items-center justify-between"><p className="text-xs text-slate-500">{total} matching reports</p><div className="flex items-center gap-2"><button aria-label="Previous page" disabled={page === 1} onClick={() => setPage(value => value - 1)} className="rounded-lg border p-2 disabled:opacity-30"><ChevronLeft /></button><span className="text-sm">{page} / {Math.max(1, Math.ceil(total / pageSize))}</span><button aria-label="Next page" disabled={page * pageSize >= total} onClick={() => setPage(value => value + 1)} className="rounded-lg border p-2 disabled:opacity-30"><ChevronRight /></button></div></div>
     {selected && <div className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-950/50 sm:items-center sm:p-4"><div className="max-h-[92vh] w-full overflow-y-auto rounded-t-3xl bg-white p-5 sm:max-w-2xl sm:rounded-3xl">
-      <div className="flex justify-between gap-3"><div className="min-w-0"><h2 className="truncate text-xl font-black">{selected.targetTitle}</h2><p className="break-all text-xs text-slate-500">Report {selected.id}</p></div><button aria-label="Close report" onClick={() => setSelected(null)}><X /></button></div>
+      <div className="flex justify-between gap-3"><div className="min-w-0"><h2 className="truncate text-xl font-black">{selected.targetTitle}</h2><p className="break-all text-xs text-slate-500">Report {selected.id} · Reporter: {selected.reporterName}</p></div><button aria-label="Close report" onClick={() => { setSelected(null); setDirectMsgUser(null); }}><X /></button></div>
       <h3 className="mt-4 font-black">Live target snapshot</h3><p className="mt-2 rounded-xl bg-blue-50 p-4 text-sm">{selected.targetSnapshot}</p><p className="mt-3 rounded-xl bg-slate-50 p-4 text-sm">{selected.details || 'No additional details supplied.'}</p>
       <div className="mt-3 flex flex-wrap gap-2"><button disabled={busy} onClick={() => void act('assign', { assignee: staff.id })} className="rounded-xl bg-blue-50 px-3 py-2 text-sm font-bold text-[#1464F4]">Assign to me</button><button disabled={busy} onClick={() => void act('under_review', { note: note || 'Under active staff review' })} className="rounded-xl bg-amber-50 px-3 py-2 text-sm font-bold text-amber-700">Under review</button>{selected.targetId && <button onClick={() => onNavigateToTarget?.(selected.targetType, selected.targetId!)} className="rounded-xl border px-3 py-2 text-sm font-bold">Open target <ExternalLink className="inline" size={14} /></button>}</div>
+
+      <div className="mt-4 rounded-2xl border border-blue-100 bg-blue-50/50 p-4 space-y-3">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <span className="text-xs font-bold text-[#041C43]">Direct Official Messaging</span>
+          <span className="text-[10.5px] font-medium text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+            <ShieldCheck size={12} /> Messages arrive with Verified Admin badge
+          </span>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {selected.reporterId && (
+            <button
+              disabled={busy}
+              onClick={() => setDirectMsgUser({ id: selected.reporterId!, name: selected.reporterName, roleLabel: 'Reporter' })}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-[#1464F4] px-3 py-2 text-xs font-bold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50"
+            >
+              <MessageSquare size={14} /> Message Reporter ({selected.reporterName})
+            </button>
+          )}
+          {selected.targetUserId && (
+            <button
+              disabled={busy}
+              onClick={() => setDirectMsgUser({ id: selected.targetUserId!, name: selected.targetTitle || 'Target User', roleLabel: 'Target User' })}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-[#041C43] px-3 py-2 text-xs font-bold text-white shadow-xs hover:bg-slate-800 disabled:opacity-50"
+            >
+              <MessageSquare size={14} /> Message Target User
+            </button>
+          )}
+        </div>
+
+        {directMsgUser && (
+          <div className="mt-3 rounded-2xl border border-blue-200 bg-white p-4 shadow-sm space-y-3">
+            <div className="flex justify-between items-center">
+              <p className="text-xs font-bold text-[#041C43] flex items-center gap-1.5">
+                <MessageSquare size={14} className="text-[#1464F4]" />
+                Send Official Admin Message to <u>{directMsgUser.name}</u> ({directMsgUser.roleLabel})
+              </p>
+              <button onClick={() => setDirectMsgUser(null)} className="text-slate-400 hover:text-slate-600"><X size={16} /></button>
+            </div>
+            <textarea
+              value={directMsgText}
+              onChange={e => setDirectMsgText(e.target.value)}
+              placeholder={`Type message to send directly to ${directMsgUser.name}...`}
+              rows={3}
+              className="w-full rounded-xl border p-3 text-xs focus:ring-2 focus:ring-[#1464F4] focus:outline-hidden"
+            />
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setDirectMsgUser(null)} className="rounded-xl border px-3 py-1.5 text-xs font-bold text-slate-600">Cancel</button>
+              <button
+                disabled={busy || !directMsgText.trim()}
+                onClick={() => void sendDirectMessage()}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-[#1464F4] px-4 py-1.5 text-xs font-bold text-white disabled:opacity-50"
+              >
+                <Send size={13} /> Send Official Message
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
       <h3 className="mt-5 font-black">Private staff notes</h3>{selected.notes.length ? selected.notes.map(item => <p key={item.id} className="mt-2 rounded-xl border p-3 text-sm">{item.note}<small className="block text-slate-400">{new Date(item.createdAt).toLocaleString()}</small></p>) : <p className="mt-2 text-sm text-slate-500">No internal notes.</p>}
       <div className="mt-3 flex gap-2"><input value={note} onChange={event => setNote(event.target.value)} placeholder="Required resolution or internal note" className="min-w-0 flex-1 rounded-xl border p-3 text-sm" /><button aria-label="Add private note" disabled={busy || !note.trim()} onClick={() => void act('note', { note })} className="rounded-xl bg-[#041C43] px-4 text-white"><Send size={17} /></button></div>
       <h3 className="mt-5 font-black">Audit history</h3>{selected.history.length ? selected.history.map(item => <div key={item.id} className="mt-2 rounded-xl border p-3 text-sm"><b>{item.action.replaceAll('_', ' ')}</b><p>{item.details}</p><small className="text-slate-400">{item.actorName} · {new Date(item.createdAt).toLocaleString()}</small></div>) : <p className="mt-2 text-sm text-slate-500">No moderation actions recorded yet.</p>}
-      <div className="mt-5 grid gap-3 sm:grid-cols-2"><input value={outcome} onChange={event => setOutcome(event.target.value)} placeholder="Resolution outcome (required)" className="rounded-xl border p-3 text-sm" /><input value={userMessage} onChange={event => setUserMessage(event.target.value)} placeholder="User-facing message" className="rounded-xl border p-3 text-sm" /><select value={linked} onChange={event => setLinked(event.target.value)} className="rounded-xl border p-3 text-sm sm:col-span-2"><option value="">No linked target action</option>{selected.targetType === 'listing' && <option value="remove_listing">Pause listing</option>}{selected.targetType === 'review' && <option value="remove_review">Remove review</option>}{selected.targetType === 'user' && <option value="restrict_user">Restrict user (Admin only)</option>}</select></div>
+      <div className="mt-5 grid gap-3 sm:grid-cols-2"><input value={outcome} onChange={event => setOutcome(event.target.value)} placeholder="Resolution outcome (required)" className="rounded-xl border p-3 text-sm" /><input value={userMessage} onChange={event => setUserMessage(event.target.value)} placeholder="User-facing real chat message (optional)" className="rounded-xl border p-3 text-sm" /><select value={linked} onChange={event => setLinked(event.target.value)} className="rounded-xl border p-3 text-sm sm:col-span-2"><option value="">No linked target action</option>{selected.targetType === 'listing' && <option value="remove_listing">Pause listing</option>}{selected.targetType === 'review' && <option value="remove_review">Remove review</option>}{selected.targetType === 'user' && <option value="restrict_user">Restrict user (Admin only)</option>}</select></div>
       <div className="mt-4 flex gap-3"><button disabled={busy} onClick={() => void act('dismiss', { note, outcome, userMessage, linkedAction: linked })} className="flex-1 rounded-xl border p-3 font-bold">Dismiss</button><button disabled={busy} onClick={() => void act('resolve', { note, outcome, userMessage, linkedAction: linked })} className="flex-1 rounded-xl bg-[#1464F4] p-3 font-bold text-white">Resolve</button></div>
     </div></div>}
   </section>;

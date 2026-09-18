@@ -62,6 +62,18 @@ export const MediaGallery: React.FC<MediaGalleryProps> = ({
           onClick={() => setIsLightboxOpen(true)}
         />
 
+        {/* Central Watermark Overlay */}
+        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none opacity-60 z-10">
+          <img
+            src="/brand/rentoura-official-icon-512.png"
+            alt=""
+            className="w-16 h-16 sm:w-24 sm:h-24 object-contain filter drop-shadow-[0_2px_6px_rgba(0,0,0,0.6)]"
+          />
+          <span className="mt-1 font-heading font-black text-white text-sm sm:text-xl tracking-wider drop-shadow-[0_2px_6px_rgba(0,0,0,0.85)] uppercase">
+            RENTOURA<span className="text-white">.LK</span>
+          </span>
+        </div>
+
         {/* Badge Overlay */}
         {badgeLabel && (
           <div
@@ -153,13 +165,24 @@ export const MediaGallery: React.FC<MediaGalleryProps> = ({
           </div>
 
           {/* Main Enlarged Image */}
-          <div className="relative max-w-4xl max-h-[75vh] flex items-center justify-center" onClick={e => e.stopPropagation()}>
+          <div className="relative max-w-4xl max-h-[75vh] flex items-center justify-center overflow-hidden" onClick={e => e.stopPropagation()}>
             <img
               src={validImages[currentIndex]}
               alt={`Full view ${currentIndex + 1}`}
               className="max-h-[75vh] max-w-full object-contain rounded-lg"
               referrerPolicy="no-referrer"
             />
+            {/* Lightbox Central Watermark Overlay */}
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none opacity-65 z-10">
+              <img
+                src="/brand/rentoura-official-icon-512.png"
+                alt=""
+                className="w-20 h-20 sm:w-28 sm:h-28 object-contain filter drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)]"
+              />
+              <span className="mt-1 font-heading font-black text-white text-lg sm:text-2xl tracking-wider drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)] uppercase">
+                RENTOURA<span className="text-white">.LK</span>
+              </span>
+            </div>
             {validImages.length > 1 && (
               <>
                 <button

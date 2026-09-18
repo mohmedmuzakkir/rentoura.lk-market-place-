@@ -341,7 +341,7 @@ export const HelpCenterPage: React.FC<HelpCenterPageProps> = ({
     },
     {
       q: 'How can I post a rental listing, job, or service?',
-      a: 'Tap the blue "+" button in the bottom navigation, select your module (Rental, Job, or Service), fill in accurate descriptions and prices, upload photos, and submit for moderation review.'
+      a: 'Tap the blue "+" button in the bottom navigation, select your module (Rental, Job, or Service), fill in accurate descriptions and prices, upload photos, and publish your listing immediately across Sri Lanka.'
     },
     {
       q: 'Is it safe to pay through RENTOURA.LK?',

@@ -20,6 +20,7 @@ interface ProfileOverviewPageProps {
   reviews: UserReviewItem[];
   reports: UserReportItem[];
   onNavigate: (route: AppRoute) => void;
+  onBack?: () => void;
   onOpenListingDetail?: (listingId: string, module: 'rentals' | 'jobs' | 'services') => void;
   onDeleteListing?: (listingId: string) => void;
   onUpdateListing?: (listing: UserListingItem) => void;
@@ -35,6 +36,7 @@ export const ProfileOverviewPage: React.FC<ProfileOverviewPageProps> = ({
   reviews,
   reports,
   onNavigate,
+  onBack,
   onOpenListingDetail,
   onDeleteListing,
   onUpdateListing,
@@ -53,6 +55,7 @@ export const ProfileOverviewPage: React.FC<ProfileOverviewPageProps> = ({
       {/* 1. Header with Notifications & Brand */}
       <ProfileHeader
         onNavigate={onNavigate}
+        onBack={onBack}
         unreadNotificationsCount={unreadNotificationsCount}
         unreadMessagesCount={unreadMessagesCount}
         onOpenSettingsModal={() => onNavigate('/profile/edit')}

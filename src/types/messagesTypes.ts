@@ -6,8 +6,11 @@ export interface ChatMessage {
   text: string;
   time: string;
   timestamp?: number;
-  type?: 'text' | 'location' | 'contact' | 'image' | 'file';
+  type?: 'text' | 'location' | 'contact' | 'image' | 'file' | 'job_application';
   isRead?: boolean;
+  senderId?: string;
+  senderRole?: string;
+  isStaffSender?: boolean;
 }
 
 export interface ConversationParticipant {
@@ -22,6 +25,9 @@ export interface ConversationParticipant {
   location?: string;
   role?: string;
   phone?: string;
+  isStaff?: boolean;
+  isVerifiedAdmin?: boolean;
+  avatarInitials?: string;
 }
 
 export interface ConversationListing {
@@ -37,6 +43,8 @@ export interface ConversationListing {
 
 export interface Conversation {
   id: string;
+  type?: 'chat' | 'job_application';
+  isJobApplication?: boolean;
   module: ConversationModule;
   badgeText?: string;
   badgeColor?: string;

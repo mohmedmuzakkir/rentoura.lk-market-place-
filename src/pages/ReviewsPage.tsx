@@ -29,6 +29,7 @@ import { supabase } from '../lib/supabase';
 
 interface ReviewsPageProps {
   onNavigate: (route: AppRoute) => void;
+  onBack?: () => void;
   targetListingId?: string | null;
   targetUserId?: string | null;
   targetModule?: ReviewModule | 'all';
@@ -37,6 +38,7 @@ interface ReviewsPageProps {
 
 export const ReviewsPage: React.FC<ReviewsPageProps> = ({
   onNavigate,
+  onBack,
   targetListingId = null,
   targetUserId = null,
   targetModule = 'all',
@@ -211,7 +213,7 @@ export const ReviewsPage: React.FC<ReviewsPageProps> = ({
         <div className="max-w-4xl mx-auto flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <button
-              onClick={() => onNavigate('/')}
+              onClick={onBack ? onBack : () => onNavigate('/')}
               className="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center transition-colors tap-bounce shrink-0"
               aria-label="Back"
             >

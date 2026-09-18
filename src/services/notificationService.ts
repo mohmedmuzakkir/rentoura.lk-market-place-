@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { AppNotification, NotificationCategory, NotificationPreferences } from '../types/notificationTypes';
+import { formatListingDate } from '../utils/dateUtils';
 const INITIAL_NOTIFICATION_PREFERENCES: NotificationPreferences = { messages: true, listingUpdates: true, jobUpdates: true, serviceUpdates: true, reviews: true, systemAnnouncements: true, promotions: false };
 
 export const NotificationService = {
@@ -515,6 +516,6 @@ export const NotificationService = {
     if (diffHours < 24) return `${diffHours} hrs ago`;
     if (diffDays === 1) return 'Yesterday';
     if (diffDays < 7) return `${diffDays} days ago`;
-    return date.toLocaleDateString();
+    return formatListingDate(date);
   }
 };

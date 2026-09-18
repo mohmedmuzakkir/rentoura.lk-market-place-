@@ -542,12 +542,12 @@ export const RentalPostFlow: React.FC<RentalPostFlowProps> = ({
               {isSubmitting ? (
                 <>
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  <span>Submitting...</span>
+                  <span>Publishing Listing...</span>
                 </>
               ) : (
                 <>
                   <CheckCircle2 className="w-4 h-4" />
-                  <span>SUBMIT FOR REVIEW</span>
+                  <span>PUBLISH LISTING NOW</span>
                 </>
               )}
             </button>
