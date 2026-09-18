@@ -137,7 +137,7 @@ export const ServiceDetailPage: React.FC<ServiceDetailPageProps> = ({
   }
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] pb-24 text-slate-900">
+    <div className="min-h-screen bg-[#F8FAFC] pb-12 text-slate-900">
       {/* Top Sticky Header */}
       <ListingHeader
         onBack={onBack}
@@ -156,6 +156,20 @@ export const ServiceDetailPage: React.FC<ServiceDetailPageProps> = ({
             images={detail.images && detail.images.length > 0 ? detail.images : ['https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=800&q=80']}
             badgeLabel="SERVICE"
             badgeBgColor="#FF650A"
+          />
+        </div>
+
+        {/* Action Buttons Section (Call / Chat / WhatsApp / Save in document flow) */}
+        <div>
+          <StickyActionBar
+            module="services"
+            phone={detail.contact?.phone}
+            whatsappNumber={detail.contact?.whatsappNumber}
+            isSaved={isSaved}
+            onToggleSave={onToggleSave}
+            onSendMessage={() => onProtectedAction({ type: 'inquiry', returnRoute: `/services/${detail.id}`, execute: () => setIsInquiryModalOpen(true) })}
+            onCall={detail.contact?.phone ? () => onProtectedAction({ type: 'call', returnRoute: `/services/${detail.id}`, execute: () => { window.location.href = `tel:${detail.contact.phone}`; } }) : undefined}
+            onWhatsApp={(detail.contact?.whatsappNumber || detail.contact?.phone) ? () => onProtectedAction({ type: 'whatsapp', returnRoute: `/services/${detail.id}`, execute: () => { const url = buildOwnerWhatsAppUrl(detail.contact?.whatsappNumber || detail.contact?.phone, detail.title); if (url) window.location.href = url; } }) : undefined}
           />
         </div>
 
@@ -191,20 +205,6 @@ export const ServiceDetailPage: React.FC<ServiceDetailPageProps> = ({
         themeColor="#FF650A"
         onNavigate={onNavigate}
       />
-
-      {/* Sticky Bottom Action Bar (WhatsApp, Call Now, Message) */}
-      <div className="w-full max-w-2xl mx-auto mt-6 mb-20 px-4">
-        <StickyActionBar
-          module="services"
-          phone={detail.contact?.phone}
-          whatsappNumber={detail.contact?.whatsappNumber}
-          isSaved={isSaved}
-          onToggleSave={onToggleSave}
-          onSendMessage={() => onProtectedAction({ type: 'inquiry', returnRoute: `/services/${detail.id}`, execute: () => setIsInquiryModalOpen(true) })}
-          onCall={detail.contact?.phone ? () => onProtectedAction({ type: 'call', returnRoute: `/services/${detail.id}`, execute: () => { window.location.href = `tel:${detail.contact.phone}`; } }) : undefined}
-          onWhatsApp={(detail.contact?.whatsappNumber || detail.contact?.phone) ? () => onProtectedAction({ type: 'whatsapp', returnRoute: `/services/${detail.id}`, execute: () => { const url = buildOwnerWhatsAppUrl(detail.contact?.whatsappNumber || detail.contact?.phone, detail.title); if (url) window.location.href = url; } }) : undefined}
-        />
-      </div>
 
       {/* Service Inquiry Modal */}
       <ServiceInquiryModal

@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Building2, LayoutGrid, List, PlusCircle } from 'lucide-react';
 import { AppRoute } from '../types';
+import { RentalService } from '../services/rentalService';
 import {
   MarketplaceHeroCarousel,
   MarketplaceHeroSlide,
@@ -29,7 +30,40 @@ export const RentalHeroCarousel: React.FC<RentalHeroCarouselProps> = ({
   onExploreRentals,
   onBrowseCategories,
 }) => {
-  const slides: MarketplaceHeroSlide[] = [
+  const [dbSlides, setDbSlides] = useState<MarketplaceHeroSlide[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    RentalService.getRentalHeroSlides().then((raw) => {
+      if (!active || !raw || raw.length === 0) return;
+      const mapped: MarketplaceHeroSlide[] = raw.map((s) => ({
+        id: s.id,
+        image: s.imageUrl,
+        alt: s.title || 'Rentals hero banner',
+        width: 1672,
+        height: 941,
+        imageFit: 'cover',
+        accentColor: '#1464F4',
+        glowColor: 'rgba(20, 100, 244, 0.42)',
+        primaryAction: {
+          label: s.ctaLabel || 'Explore Rentals',
+          icon: <Building2 className="h-4 w-4 shrink-0" />,
+          onClick: () => onNavigate((s.ctaRoute as AppRoute) || '/rentals'),
+        },
+        secondaryAction: {
+          label: 'Post a Rental',
+          icon: <PlusCircle className="h-4 w-4 shrink-0" />,
+          onClick: () => onNavigate('/post/rental'),
+        },
+      }));
+      setDbSlides(mapped);
+    });
+    return () => {
+      active = false;
+    };
+  }, [onNavigate]);
+
+  const defaultSlides: MarketplaceHeroSlide[] = [
     {
       id: 'explore',
       image: '/brand/rentals-hero/rentals-slide-1-explore.png',
@@ -85,6 +119,8 @@ export const RentalHeroCarousel: React.FC<RentalHeroCarouselProps> = ({
       },
     },
   ];
+
+  const slides = [...dbSlides, ...defaultSlides];
 
   return (
     <MarketplaceHeroCarousel

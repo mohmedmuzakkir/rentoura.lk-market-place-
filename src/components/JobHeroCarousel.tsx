@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Briefcase, LayoutGrid, List, PlusCircle } from 'lucide-react';
 import { AppRoute } from '../types';
+import { JobService } from '../services/jobService';
 import {
   MarketplaceHeroCarousel,
   MarketplaceHeroSlide,
@@ -29,7 +30,40 @@ export const JobHeroCarousel: React.FC<JobHeroCarouselProps> = ({
   onExploreJobs,
   onBrowseCategories,
 }) => {
-  const slides: MarketplaceHeroSlide[] = [
+  const [dbSlides, setDbSlides] = useState<MarketplaceHeroSlide[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    JobService.getJobHeroSlides().then((raw) => {
+      if (!active || !raw || raw.length === 0) return;
+      const mapped: MarketplaceHeroSlide[] = raw.map((s) => ({
+        id: s.id,
+        image: s.imageUrl,
+        alt: s.title || 'Jobs hero banner',
+        width: 1672,
+        height: 941,
+        imageFit: 'cover',
+        accentColor: '#08A34F',
+        glowColor: 'rgba(8, 163, 79, 0.4)',
+        primaryAction: {
+          label: s.ctaLabel || 'Explore Jobs',
+          icon: <Briefcase className="h-4 w-4 shrink-0" />,
+          onClick: () => onNavigate((s.ctaRoute as AppRoute) || '/jobs'),
+        },
+        secondaryAction: {
+          label: 'Post a Job',
+          icon: <PlusCircle className="h-4 w-4 shrink-0" />,
+          onClick: () => onNavigate('/post/job'),
+        },
+      }));
+      setDbSlides(mapped);
+    });
+    return () => {
+      active = false;
+    };
+  }, [onNavigate]);
+
+  const defaultSlides: MarketplaceHeroSlide[] = [
     {
       id: 'explore',
       image: '/brand/jobs-hero/jobs-slide-1-explore.png',
@@ -85,6 +119,8 @@ export const JobHeroCarousel: React.FC<JobHeroCarouselProps> = ({
       },
     },
   ];
+
+  const slides = [...dbSlides, ...defaultSlides];
 
   return (
     <MarketplaceHeroCarousel

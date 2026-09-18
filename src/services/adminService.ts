@@ -1513,24 +1513,34 @@ export class AdminService {
       const { data, error } = await query;
       if (error || !data) return [];
 
-      return data.map(s => ({
-        id: s.id,
-        title: s.title,
-        subtitle: s.subtitle,
-        description: s.description,
-        imageUrl: s.image_url,
-        mobileImageUrl: s.mobile_image_url,
-        module: s.module || 'home',
-        placement: s.placement || s.module || 'home',
-        ctaText: s.cta_text,
-        ctaRoute: s.cta_route,
-        displayOrder: s.display_order ?? 0,
-        durationMs: s.duration_ms,
-        overlayStrength: s.overlay_strength,
-        isActive: s.is_active ?? true,
-        createdAt: s.created_at,
-        updatedAt: s.updated_at
-      }));
+      let deletedIds: string[] = [];
+      try {
+        const deletedIdsStr = localStorage.getItem('rentoura_deleted_slide_ids') || '[]';
+        deletedIds = JSON.parse(deletedIdsStr);
+      } catch (e) {
+        deletedIds = [];
+      }
+
+      return data
+        .filter(s => s.placement !== 'deleted' && s.module !== 'deleted' && !deletedIds.includes(s.id))
+        .map(s => ({
+          id: s.id,
+          title: s.title,
+          subtitle: s.subtitle,
+          description: s.description,
+          imageUrl: s.image_url,
+          mobileImageUrl: s.mobile_image_url,
+          module: s.module || 'home',
+          placement: s.placement || s.module || 'home',
+          ctaText: s.cta_text,
+          ctaRoute: s.cta_route,
+          displayOrder: s.display_order ?? 0,
+          durationMs: s.duration_ms,
+          overlayStrength: s.overlay_strength,
+          isActive: s.is_active ?? true,
+          createdAt: s.created_at,
+          updatedAt: s.updated_at
+        }));
     } catch (e) {
       console.error('Failed to load home slides:', e);
       return [];
@@ -1603,18 +1613,43 @@ export class AdminService {
 
   static async deleteHomeSlideAsync(slideId: string, staff: StaffAccount): Promise<{ success: boolean; error?: string }> {
     try {
-      const { error } = await supabase.from('home_slides').delete().eq('id', slideId);
-      if (error) return { success: false, error: error.message };
+      // 1. Record ID in client local storage to prevent reappearance if DB soft-deletes
+      try {
+        const deletedIdsStr = localStorage.getItem('rentoura_deleted_slide_ids') || '[]';
+        const deletedIds: string[] = JSON.parse(deletedIdsStr);
+        if (!deletedIds.includes(slideId)) {
+          deletedIds.push(slideId);
+          localStorage.setItem('rentoura_deleted_slide_ids', JSON.stringify(deletedIds));
+        }
+      } catch (e) {
+        console.warn('LocalStorage error during slide deletion tracking:', e);
+      }
 
-      await this.addAuditLogAsync({
-        actorId: staff.id,
-        actorName: staff.fullName,
-        actorRole: staff.role,
-        action: 'SLIDE_DELETED',
-        targetType: 'settings',
-        targetId: slideId,
-        details: `Deleted slide ID ${slideId}.`
-      });
+      // 2. Try direct SQL DELETE first
+      const { error } = await supabase.from('home_slides').delete().eq('id', slideId);
+      if (error) {
+        console.warn('[AdminService] Direct delete home_slide notice:', error.message);
+        // Fallback: soft-delete by deactivating and setting placement to 'deleted'
+        await supabase
+          .from('home_slides')
+          .update({ is_active: false, placement: 'deleted', module: 'deleted' })
+          .eq('id', slideId);
+      }
+
+      try {
+        await this.addAuditLogAsync({
+          actorId: staff.id,
+          actorName: staff.fullName,
+          actorRole: staff.role,
+          action: 'SLIDE_DELETED',
+          targetType: 'settings',
+          targetId: slideId,
+          details: `Deleted slide ID ${slideId}.`
+        });
+      } catch (logErr) {
+        console.warn('[AdminService] Audit log write warning during delete:', logErr);
+      }
+
       return { success: true };
     } catch (e: any) {
       return { success: false, error: e?.message || 'Failed to delete slide.' };

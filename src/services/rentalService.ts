@@ -159,7 +159,7 @@ export class RentalService {
         .from('home_slides')
         .select('*')
         .eq('is_active', true)
-        .eq('placement', 'rentals')
+        .or('placement.eq.rentals,placement.eq.all,module.eq.rentals')
         .order('display_order', { ascending: true });
 
       if (error || !data || data.length === 0) {

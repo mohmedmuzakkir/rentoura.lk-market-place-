@@ -99,24 +99,20 @@ export const RecommendedListings: React.FC<RecommendedListingsProps> = ({
     ? 'services'
     : 'rentals';
 
-  // Section title based on current module
-  const sectionTitle = normalizedModule === 'jobs'
-    ? 'More Job Opportunities'
-    : normalizedModule === 'services'
-    ? 'More Services'
-    : 'More Rental Listings';
+  // Section title: "More Related Listings"
+  const sectionTitle = 'More Related Listings';
 
   // If loading or zero recommendations exist, fail gracefully without breaking the page layout
   if (loading) {
     return (
-      <section className="mt-10 mb-8 max-w-2xl mx-auto px-3 sm:px-4">
+      <section className="mt-10 mb-8 max-w-2xl lg:max-w-7xl mx-auto px-3 sm:px-4 lg:px-8">
         <div className="flex items-center justify-between mb-4">
           <div className="h-5 w-44 bg-slate-200/80 rounded-lg animate-pulse" />
           <div className="h-4 w-16 bg-slate-200/80 rounded-lg animate-pulse" />
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {[1, 2, 3].map(i => (
-            <div key={i} className="h-52 bg-slate-200/60 rounded-2xl animate-pulse" />
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
+          {[1, 2, 3, 4, 5].map(i => (
+            <div key={i} className="h-56 bg-slate-200/60 rounded-2xl animate-pulse" />
           ))}
         </div>
       </section>
@@ -129,16 +125,16 @@ export const RecommendedListings: React.FC<RecommendedListingsProps> = ({
   }
 
   return (
-    <section className="mt-10 mb-10 max-w-2xl mx-auto px-3 sm:px-4">
+    <section className="mt-10 mb-12 max-w-2xl lg:max-w-7xl mx-auto px-3 sm:px-4 lg:px-8">
       {/* Section Header */}
-      <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-200/80">
+      <div className="flex items-center justify-between mb-5 pb-3 border-b border-slate-200/80">
         <div>
-          <h2 className="text-base sm:text-lg font-bold text-slate-900 font-heading tracking-tight flex items-center gap-2">
+          <h2 className="text-base sm:text-lg lg:text-xl font-black text-slate-900 font-heading tracking-tight flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-amber-500 fill-amber-500 shrink-0" />
             <span>{sectionTitle}</span>
           </h2>
           <p className="text-[11px] sm:text-xs text-slate-500 font-medium mt-0.5">
-            Recommended listings in Sri Lanka
+            Recommended related listings in Sri Lanka
           </p>
         </div>
 
@@ -156,7 +152,7 @@ export const RecommendedListings: React.FC<RecommendedListingsProps> = ({
       </div>
 
       {/* Cards Grid / Scrollable Container */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4 lg:gap-5">
         {recommendations.map((item) => {
           const isSaved = savedIds.includes(item.id);
 

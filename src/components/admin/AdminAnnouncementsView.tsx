@@ -59,10 +59,8 @@ export const AdminAnnouncementsView: React.FC<AdminAnnouncementsViewProps> = ({ 
   };
 
   const handleDelete = async (id: string) => {
-    if (window.confirm('Delete this announcement?')) {
-      await AdminService.deleteAnnouncementAsync(id, staff);
-      await refreshAnnouncements();
-    }
+    await AdminService.deleteAnnouncementAsync(id, staff);
+    await refreshAnnouncements();
   };
 
   return (

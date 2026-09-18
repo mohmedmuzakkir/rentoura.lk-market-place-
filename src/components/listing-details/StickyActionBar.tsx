@@ -1,8 +1,8 @@
 import React from 'react';
-import { Phone, MessageCircle, MessageSquare, Send, Heart, Bookmark, Check } from 'lucide-react';
+import { Phone, MessageCircle, MessageSquare, Send, Heart, Bookmark } from 'lucide-react';
 import { ListingModule } from '../../types/listingDetailsTypes';
 
-interface StickyActionBarProps {
+export interface StickyActionBarProps {
   module: ListingModule;
   phone?: string;
   whatsappNumber?: string;
@@ -12,6 +12,7 @@ interface StickyActionBarProps {
   onApplyNow?: () => void;
   onCall?: () => void;
   onWhatsApp?: () => void;
+  className?: string;
 }
 
 export const StickyActionBar: React.FC<StickyActionBarProps> = ({
@@ -23,173 +24,185 @@ export const StickyActionBar: React.FC<StickyActionBarProps> = ({
   onSendMessage,
   onApplyNow,
   onCall,
-  onWhatsApp
+  onWhatsApp,
+  className = ''
 }) => {
-  // ---------------- RENTAL ACTIONS (Image 1) ----------------
+  // Container styling in normal document flow (no position fixed or sticky)
+  const containerClasses = `w-full bg-white rounded-3xl border border-slate-200/80 p-3.5 sm:p-5 shadow-xs my-4 ${className}`;
+
+  // ---------------- RENTALS ACTIONS ----------------
   if (module === 'rentals') {
     return (
-      <div className="bg-white border-t border-slate-100 p-2.5 shadow-lg">
-        <div className="grid grid-cols-4 gap-2 max-w-lg mx-auto">
+      <div className={containerClasses}>
+        <div className="grid grid-cols-4 gap-2 sm:gap-3">
           {/* Call */}
           <button
+            type="button"
             onClick={onCall}
             disabled={!phone || !onCall}
-            className="flex flex-col items-center justify-center p-2 rounded-xl bg-blue-50/70 border border-blue-200/80 text-[#1464F4] hover:bg-blue-100 transition-all tap-bounce disabled:opacity-50"
+            className="flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 py-3.5 px-2 sm:px-4 rounded-2xl bg-[#1464F4] text-white hover:bg-blue-600 transition-all font-bold text-xs sm:text-sm shadow-xs disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] tap-bounce min-h-[48px]"
           >
-            <div className="flex items-center gap-1">
-              <Phone className="w-3.5 h-3.5 fill-current" />
-              <span className="text-xs font-bold">Call</span>
-            </div>
-            <span className="text-[9px] font-semibold text-slate-500 truncate max-w-[80px]">
-              {phone || 'Hidden'}
-            </span>
+            <Phone className="w-4 h-4 fill-white shrink-0" />
+            <span>Call</span>
+          </button>
+
+          {/* Chat */}
+          <button
+            type="button"
+            onClick={onSendMessage}
+            className="flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 py-3.5 px-2 sm:px-4 rounded-2xl bg-[#1464F4] text-white hover:bg-blue-600 transition-all font-bold text-xs sm:text-sm shadow-xs active:scale-[0.98] tap-bounce min-h-[48px]"
+          >
+            <MessageSquare className="w-4 h-4 fill-white shrink-0" />
+            <span>Chat</span>
           </button>
 
           {/* WhatsApp */}
           <button
+            type="button"
             onClick={onWhatsApp}
             disabled={(!whatsappNumber && !phone) || !onWhatsApp}
-            className="flex flex-col items-center justify-center p-2 rounded-xl bg-[#08A34F] text-white hover:bg-emerald-600 transition-all tap-bounce shadow-xs disabled:opacity-50"
+            className="flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 py-3.5 px-2 sm:px-4 rounded-2xl bg-[#1464F4] text-white hover:bg-blue-600 transition-all font-bold text-xs sm:text-sm shadow-xs disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] tap-bounce min-h-[48px]"
           >
-            <div className="flex items-center gap-1">
-              <MessageCircle className="w-3.5 h-3.5 fill-white" />
-              <span className="text-xs font-bold">WhatsApp</span>
-            </div>
-            <span className="text-[9px] font-medium text-emerald-100">
-              Chat Now
-            </span>
-          </button>
-
-          {/* Message */}
-          <button
-            onClick={onSendMessage}
-            className="flex flex-col items-center justify-center p-2 rounded-xl bg-[#1464F4] text-white hover:bg-blue-700 transition-all tap-bounce shadow-xs"
-          >
-            <div className="flex items-center gap-1">
-              <Send className="w-3.5 h-3.5" />
-              <span className="text-xs font-bold">Message</span>
-            </div>
-            <span className="text-[9px] font-medium text-blue-100">
-              Send Message
-            </span>
+            <MessageCircle className="w-4 h-4 fill-white shrink-0" />
+            <span>WhatsApp</span>
           </button>
 
           {/* Save */}
           <button
+            type="button"
             onClick={onToggleSave}
-            className={`flex flex-col items-center justify-center p-2 rounded-xl border transition-all tap-bounce ${
-              isSaved 
-                ? 'bg-rose-50 border-rose-200 text-rose-600' 
-                : 'bg-white border-blue-200/80 text-[#1464F4] hover:bg-slate-50'
+            className={`flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 py-3.5 px-2 sm:px-4 rounded-2xl border transition-all font-bold text-xs sm:text-sm shadow-xs active:scale-[0.98] tap-bounce min-h-[48px] ${
+              isSaved
+                ? 'bg-rose-500 border-rose-500 text-white hover:bg-rose-600'
+                : 'bg-slate-50 border-slate-200 text-slate-800 hover:bg-slate-100'
             }`}
           >
-            <div className="flex items-center gap-1">
-              <Heart className={`w-3.5 h-3.5 ${isSaved ? 'fill-rose-500 text-rose-500' : ''}`} />
-              <span className="text-xs font-bold">{isSaved ? 'Saved' : 'Save'}</span>
-            </div>
-            <span className="text-[9px] font-semibold text-slate-400">
-              {isSaved ? 'In Favorites' : 'Add to Saved'}
-            </span>
+            <Heart className={`w-4 h-4 shrink-0 ${isSaved ? 'fill-white text-white' : 'text-slate-600'}`} />
+            <span>{isSaved ? 'Saved' : 'Save'}</span>
           </button>
         </div>
       </div>
     );
   }
 
-  // ---------------- JOB ACTIONS ----------------
+  // ---------------- JOBS ACTIONS ----------------
   if (module === 'jobs') {
     return (
-      <div className="bg-white border-t border-slate-100 p-2.5 shadow-lg">
-        <div className="grid grid-cols-5 gap-1.5 max-w-lg mx-auto">
+      <div className={containerClasses}>
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 sm:gap-3">
           {/* Apply Now */}
           <button
+            type="button"
             onClick={onApplyNow}
             disabled={!onApplyNow}
-            className="col-span-1 flex items-center justify-center gap-1 py-2.5 px-1 rounded-xl bg-[#08A34F] text-white font-bold text-[11px] hover:bg-emerald-700 transition-all tap-bounce shadow-xs disabled:opacity-50 disabled:cursor-not-allowed"
+            className="col-span-2 sm:col-span-1 flex items-center justify-center gap-1.5 sm:gap-2 py-3.5 px-3 rounded-2xl bg-[#08A34F] text-white font-bold text-xs sm:text-sm hover:bg-emerald-600 transition-all shadow-xs disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] tap-bounce min-h-[48px]"
           >
-            <Send className="w-3 h-3 shrink-0" />
-            <span className="truncate">Apply</span>
-          </button>
-
-          {/* Message Employer */}
-          <button
-            onClick={onSendMessage}
-            className="col-span-1 flex items-center justify-center gap-1 py-2.5 px-1 rounded-xl bg-[#1464F4] text-white font-bold text-[11px] hover:bg-blue-700 transition-all tap-bounce shadow-xs"
-          >
-            <MessageSquare className="w-3 h-3 shrink-0" />
-            <span className="truncate">Message</span>
-          </button>
-
-          {/* WhatsApp */}
-          <button
-            onClick={onWhatsApp}
-            disabled={(!whatsappNumber && !phone) || !onWhatsApp}
-            className="col-span-1 flex items-center justify-center gap-1 py-2.5 px-1 rounded-xl bg-emerald-50 border border-emerald-200 text-[#08A34F] font-bold text-[11px] hover:bg-emerald-100 transition-all tap-bounce disabled:opacity-50"
-          >
-            <MessageCircle className="w-3 h-3 fill-[#08A34F] shrink-0" />
-            <span className="truncate">WhatsApp</span>
+            <Send className="w-4 h-4 shrink-0" />
+            <span>Apply Now</span>
           </button>
 
           {/* Call HR */}
           <button
+            type="button"
             onClick={onCall}
             disabled={!phone || !onCall}
-            className="col-span-1 flex items-center justify-center gap-1 py-2.5 px-1 rounded-xl bg-slate-50 border border-slate-200 text-slate-800 font-bold text-[11px] hover:bg-slate-100 transition-all tap-bounce disabled:opacity-50"
+            className="flex items-center justify-center gap-1.5 sm:gap-2 py-3.5 px-2 sm:px-3 rounded-2xl bg-[#08A34F] text-white hover:bg-emerald-600 transition-all font-bold text-xs sm:text-sm shadow-xs disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] tap-bounce min-h-[48px]"
           >
-            <Phone className="w-3 h-3 text-slate-700 shrink-0" />
-            <span className="truncate">Call HR</span>
+            <Phone className="w-4 h-4 fill-white shrink-0" />
+            <span>Call HR</span>
+          </button>
+
+          {/* Chat */}
+          <button
+            type="button"
+            onClick={onSendMessage}
+            className="flex items-center justify-center gap-1.5 sm:gap-2 py-3.5 px-2 sm:px-3 rounded-2xl bg-[#08A34F] text-white hover:bg-emerald-600 transition-all font-bold text-xs sm:text-sm shadow-xs active:scale-[0.98] tap-bounce min-h-[48px]"
+          >
+            <MessageSquare className="w-4 h-4 fill-white shrink-0" />
+            <span>Chat</span>
+          </button>
+
+          {/* WhatsApp */}
+          <button
+            type="button"
+            onClick={onWhatsApp}
+            disabled={(!whatsappNumber && !phone) || !onWhatsApp}
+            className="flex items-center justify-center gap-1.5 sm:gap-2 py-3.5 px-2 sm:px-3 rounded-2xl bg-[#08A34F] text-white hover:bg-emerald-600 transition-all font-bold text-xs sm:text-sm shadow-xs disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] tap-bounce min-h-[48px]"
+          >
+            <MessageCircle className="w-4 h-4 fill-white shrink-0" />
+            <span>WhatsApp</span>
           </button>
 
           {/* Save Job */}
           <button
+            type="button"
             onClick={onToggleSave}
-            className={`col-span-1 flex items-center justify-center gap-1 py-2.5 px-1 rounded-xl border text-[11px] font-bold transition-all tap-bounce ${
-              isSaved 
-                ? 'bg-rose-50 border-rose-200 text-rose-600' 
-                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+            className={`flex items-center justify-center gap-1.5 sm:gap-2 py-3.5 px-2 sm:px-3 rounded-2xl border transition-all font-bold text-xs sm:text-sm shadow-xs active:scale-[0.98] tap-bounce min-h-[48px] ${
+              isSaved
+                ? 'bg-rose-500 border-rose-500 text-white hover:bg-rose-600'
+                : 'bg-slate-50 border-slate-200 text-slate-800 hover:bg-slate-100'
             }`}
           >
-            <Bookmark className={`w-3 h-3 shrink-0 ${isSaved ? 'fill-rose-500 text-rose-500' : ''}`} />
-            <span className="truncate">{isSaved ? 'Saved' : 'Save'}</span>
+            <Bookmark className={`w-4 h-4 shrink-0 ${isSaved ? 'fill-white text-white' : 'text-slate-600'}`} />
+            <span>{isSaved ? 'Saved' : 'Save'}</span>
           </button>
         </div>
       </div>
     );
   }
 
-  // ---------------- SERVICE ACTIONS (Image 3) ----------------
+  // ---------------- SERVICES ACTIONS ----------------
   return (
-    <div className="bg-white border-t border-slate-100 p-2.5 shadow-lg">
-      <div className="grid grid-cols-3 gap-2.5 max-w-lg mx-auto">
+    <div className={containerClasses}>
+      <div className="grid grid-cols-4 gap-2 sm:gap-3">
+        {/* Call Now */}
+        <button
+          type="button"
+          onClick={onCall}
+          disabled={!phone || !onCall}
+          className="flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 py-3.5 px-2 sm:px-4 rounded-2xl bg-[#FF650A] text-white hover:bg-orange-600 transition-all font-bold text-xs sm:text-sm shadow-xs disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] tap-bounce min-h-[48px]"
+        >
+          <Phone className="w-4 h-4 fill-white shrink-0" />
+          <span>Call</span>
+        </button>
+
+        {/* Chat / Message */}
+        <button
+          type="button"
+          onClick={onSendMessage}
+          className="flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 py-3.5 px-2 sm:px-4 rounded-2xl bg-[#FF650A] text-white hover:bg-orange-600 transition-all font-bold text-xs sm:text-sm shadow-xs active:scale-[0.98] tap-bounce min-h-[48px]"
+        >
+          <MessageSquare className="w-4 h-4 fill-white shrink-0" />
+          <span>Chat</span>
+        </button>
+
         {/* WhatsApp */}
         <button
+          type="button"
           onClick={onWhatsApp}
           disabled={(!whatsappNumber && !phone) || !onWhatsApp}
-          className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-[#08A34F] text-white font-bold text-xs hover:bg-emerald-600 transition-all tap-bounce shadow-xs disabled:opacity-50"
+          className="flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 py-3.5 px-2 sm:px-4 rounded-2xl bg-[#FF650A] text-white hover:bg-orange-600 transition-all font-bold text-xs sm:text-sm shadow-xs disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] tap-bounce min-h-[48px]"
         >
-          <MessageCircle className="w-4 h-4 fill-white" />
+          <MessageCircle className="w-4 h-4 fill-white shrink-0" />
           <span>WhatsApp</span>
         </button>
 
-        {/* Call Now */}
+        {/* Save */}
         <button
-          onClick={onCall}
-          disabled={!phone || !onCall}
-          className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-[#FF650A] text-white font-bold text-xs hover:bg-orange-600 transition-all tap-bounce shadow-xs disabled:opacity-50"
+          type="button"
+          onClick={onToggleSave}
+          className={`flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 py-3.5 px-2 sm:px-4 rounded-2xl border transition-all font-bold text-xs sm:text-sm shadow-xs active:scale-[0.98] tap-bounce min-h-[48px] ${
+            isSaved
+              ? 'bg-rose-500 border-rose-500 text-white hover:bg-rose-600'
+              : 'bg-slate-50 border-slate-200 text-slate-800 hover:bg-slate-100'
+          }`}
         >
-          <Phone className="w-4 h-4 fill-white" />
-          <span>Call Now</span>
-        </button>
-
-        {/* Message */}
-        <button
-          onClick={onSendMessage}
-          className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-white border border-[#FF650A] text-[#FF650A] font-bold text-xs hover:bg-orange-50 transition-all tap-bounce"
-        >
-          <Send className="w-4 h-4" />
-          <span>Message</span>
+          <Heart className={`w-4 h-4 shrink-0 ${isSaved ? 'fill-white text-white' : 'text-slate-600'}`} />
+          <span>{isSaved ? 'Saved' : 'Save'}</span>
         </button>
       </div>
     </div>
   );
 };
+
+export const ListingActionBar = StickyActionBar;

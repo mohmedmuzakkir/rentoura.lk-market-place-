@@ -19,6 +19,7 @@ export interface MarketplaceHeroSlide {
   glowColor?: string;
   imageFit?: 'cover' | 'contain';
   imagePosition?: string;
+  autoplayDurationMs?: number;
 }
 
 export interface MarketplaceHeroTheme {
@@ -96,9 +97,12 @@ export const MarketplaceHeroCarousel: React.FC<MarketplaceHeroCarouselProps> = (
       || window.matchMedia('(prefers-reduced-motion: reduce)').matches
     ) return;
 
-    const timer = window.setTimeout(() => advance(1, false), autoplayMs);
+    const safeIdx = currentIndex >= 0 && currentIndex < slideCount ? currentIndex : 0;
+    const slideDuration = slides[safeIdx]?.autoplayDurationMs || autoplayMs || DEFAULT_AUTOPLAY_MS;
+
+    const timer = window.setTimeout(() => advance(1, false), slideDuration);
     return () => window.clearTimeout(timer);
-  }, [advance, autoplayMs, autoplayReset, currentIndex, isPaused, slideCount]);
+  }, [advance, autoplayMs, autoplayReset, currentIndex, isPaused, slideCount, slides]);
 
   const resetPointer = () => {
     pointerStartX.current = null;
@@ -129,11 +133,14 @@ export const MarketplaceHeroCarousel: React.FC<MarketplaceHeroCarouselProps> = (
     resetPointer();
   };
 
-  if (slideCount === 0) return null;
+  if (!slides || slides.length === 0) return null;
 
-  const activeSlide = slides[currentIndex];
-  const accentColor = activeSlide.accentColor ?? theme.accentColor;
-  const glowColor = activeSlide.glowColor ?? theme.glowColor;
+  const safeIndex = currentIndex >= 0 && currentIndex < slides.length ? currentIndex : 0;
+  const activeSlide = slides[safeIndex];
+  if (!activeSlide) return null;
+
+  const accentColor = activeSlide.accentColor ?? theme?.accentColor ?? '#1464F4';
+  const glowColor = activeSlide.glowColor ?? theme?.glowColor ?? 'rgba(20, 100, 244, 0.42)';
 
   const invokeAction = (action: MarketplaceHeroAction) => {
     setAutoplayReset((value) => value + 1);
@@ -148,8 +155,6 @@ export const MarketplaceHeroCarousel: React.FC<MarketplaceHeroCarouselProps> = (
       aria-label={ariaLabel}
       data-hero-carousel={moduleName.toLowerCase()}
       data-active-slide={activeSlide.id}
-      onMouseEnter={() => setIsPaused(true)}
-      onMouseLeave={() => setIsPaused(false)}
     >
       <div
         className="pointer-events-none absolute inset-0 transition-colors duration-700 motion-reduce:transition-none"
@@ -175,7 +180,7 @@ export const MarketplaceHeroCarousel: React.FC<MarketplaceHeroCarouselProps> = (
             onPointerCancel={resetPointer}
           >
             {slides.map((slide, index) => {
-              const isActive = index === currentIndex;
+              const isActive = index === safeIndex;
               const imageFitClass = slide.imageFit === 'contain' ? 'object-contain' : 'object-cover';
 
               return (

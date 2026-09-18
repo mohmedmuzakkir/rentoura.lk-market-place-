@@ -136,7 +136,6 @@ export const AdminCompaniesView: React.FC<AdminCompaniesViewProps> = ({ staff })
   };
 
   const handleDeleteCompany = async (companyId: string) => {
-    if (!window.confirm('Are you sure you want to delete this company?')) return;
     setActionLoading(true);
     try {
       const res = await AdminService.deleteJobCompanyAsync(companyId, staff);

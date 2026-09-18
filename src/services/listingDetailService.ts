@@ -35,18 +35,27 @@ export class ListingDetailService {
     }
 
     try {
-      // 1. Fetch user, listing row, and media in parallel for maximum speed!
-      const [userRes, listingRes, mediaRes] = await Promise.all([
-        supabase.auth.getUser(),
-        supabase.from('listings').select('*').eq('id', id).maybeSingle(),
-        supabase.from('listing_media')
+      // 1. Fetch listing (with location & category joins) and media in parallel for maximum speed!
+      const [listingRes, mediaRes] = await Promise.all([
+        supabase
+          .from('listings')
+          .select(`
+            *,
+            categories:category_id ( id, name, parent_id ),
+            city:city_id ( id, name ),
+            district:district_id ( id, name ),
+            province:province_id ( id, name )
+          `)
+          .eq('id', id)
+          .maybeSingle(),
+        supabase
+          .from('listing_media')
           .select('id, storage_path, position, is_cover, media_type')
           .eq('listing_id', id)
           .order('is_cover', { ascending: false })
           .order('position', { ascending: true })
       ]);
 
-      const user = userRes.data?.user;
       const listingRow = listingRes.data;
       const listingErr = listingRes.error;
       const mediaRows = mediaRes.data;
@@ -56,22 +65,22 @@ export class ListingDetailService {
         return null;
       }
 
-      // RLS handles visibility (active only for public, all for owners/staff)
+      // 2. Parallelize secondary queries: owner profile & parent category name
+      const ownerId = listingRow.owner_id;
+      const parentCatId = (listingRow.categories as any)?.parent_id;
 
-      // 3. Parallelize subsequent queries to dramatically improve load times
-      const locIds = [listingRow.city_id, listingRow.district_id, listingRow.province_id].filter(Boolean);
-
-      const [locRes, catRes, profRes] = await Promise.all([
-        locIds.length > 0 
-          ? supabase.from('locations').select('id, name').in('id', locIds)
-          : Promise.resolve({ data: [] }),
-        listingRow.category_id 
-          ? supabase.from('categories').select('id, name, parent_id').eq('id', listingRow.category_id).maybeSingle()
+      const [profRes, parentCatRes] = await Promise.all([
+        ownerId 
+          ? supabase.from('profiles').select('id, full_name, phone_normalized, avatar_url, created_at').eq('id', ownerId).maybeSingle()
           : Promise.resolve({ data: null }),
-        listingRow.owner_id 
-          ? supabase.from('profiles').select('id, full_name, phone_normalized, avatar_url, created_at').eq('id', listingRow.owner_id).maybeSingle()
+        parentCatId 
+          ? supabase.from('categories').select('name').eq('id', parentCatId).maybeSingle()
           : Promise.resolve({ data: null })
       ]);
+
+      if (mediaRes.error) {
+        console.warn(`[ListingDetailService] Error fetching media for ${id}:`, mediaRes.error.message);
+      }
 
       if (mediaRes.error) {
         console.warn(`[ListingDetailService] Error fetching media for ${id}:`, mediaRes.error.message);
@@ -123,36 +132,20 @@ export class ListingDetailService {
       }
 
       // 4. Map Location details
-      let locationCity = '';
-      let locationDistrict = '';
-      let locationProvince = '';
-
-      if (locRes.data) {
-        locRes.data.forEach(loc => {
-          if (loc.id === listingRow.city_id) locationCity = loc.name;
-          if (loc.id === listingRow.district_id) locationDistrict = loc.name;
-          if (loc.id === listingRow.province_id) locationProvince = loc.name;
-        });
-      }
+      const locationCity = (listingRow.city as any)?.name || '';
+      const locationDistrict = (listingRow.district as any)?.name || '';
+      const locationProvince = (listingRow.province as any)?.name || '';
 
       // 5. Map Category details
       let categoryName = 'Rentals';
       let categoryPath = 'Rentals';
-      const catRow = catRes.data;
+      const catObj = (listingRow.categories as any);
       
-      if (catRow?.name) {
-        categoryName = catRow.name;
-        categoryPath = catRow.name;
-        if (catRow.parent_id) {
-          const { data: parentCat } = await supabase
-            .from('categories')
-            .select('name')
-            .eq('id', catRow.parent_id)
-            .maybeSingle();
-          if (parentCat?.name) {
-            categoryPath = `${parentCat.name} > ${catRow.name}`;
-          }
-        }
+      if (catObj?.name) {
+        categoryName = catObj.name;
+        categoryPath = parentCatRes.data?.name 
+          ? `${parentCatRes.data.name} > ${catObj.name}` 
+          : catObj.name;
       }
 
       // 6. Map Owner Profile

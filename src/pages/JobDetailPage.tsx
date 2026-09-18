@@ -148,7 +148,7 @@ export const JobDetailPage: React.FC<JobDetailPageProps> = ({
   }
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] pb-24 text-slate-900">
+    <div className="min-h-screen bg-[#F8FAFC] pb-12 text-slate-900">
       {/* Top Sticky Header */}
       <ListingHeader
         onBack={onBack}
@@ -182,6 +182,21 @@ export const JobDetailPage: React.FC<JobDetailPageProps> = ({
           onViewCompany={handleViewCompany}
         />
 
+        {/* Action Buttons Section (Apply / Call HR / Chat / WhatsApp / Save in document flow) */}
+        <div>
+          <StickyActionBar
+            module="jobs"
+            phone={detail.contact?.phone}
+            whatsappNumber={detail.contact?.whatsappNumber}
+            isSaved={isSaved}
+            onToggleSave={onToggleSave}
+            onSendMessage={() => onProtectedAction({ type: 'message', returnRoute: `/jobs/${detail.id}`, execute: () => onNavigate('/messages') })}
+            onApplyNow={deadlinePassed ? undefined : () => onProtectedAction({ type: 'apply', returnRoute: `/jobs/${detail.id}`, execute: handleApplyNow })}
+            onCall={detail.contact?.phone ? () => onProtectedAction({ type: 'call', returnRoute: `/jobs/${detail.id}`, execute: () => { window.location.href = `tel:${detail.contact.phone}`; } }) : undefined}
+            onWhatsApp={(detail.contact?.whatsappNumber || detail.contact?.phone) ? () => onProtectedAction({ type: 'whatsapp', returnRoute: `/jobs/${detail.id}`, execute: () => { const url = buildOwnerWhatsAppUrl(detail.contact?.whatsappNumber || detail.contact?.phone, `${detail.title} at ${detail.company.name}`); if (url) window.location.href = url; } }) : undefined}
+          />
+        </div>
+
         {/* Dynamic Job Content Sections */}
         <JobContentSections job={detail} />
 
@@ -200,21 +215,6 @@ export const JobDetailPage: React.FC<JobDetailPageProps> = ({
         themeColor="#08A34F"
         onNavigate={onNavigate}
       />
-
-      {/* Sticky Bottom Action Bar */}
-      <div className="w-full max-w-2xl mx-auto mt-6 mb-20 px-4">
-        <StickyActionBar
-          module="jobs"
-          phone={detail.contact?.phone}
-          whatsappNumber={detail.contact?.whatsappNumber}
-          isSaved={isSaved}
-          onToggleSave={onToggleSave}
-          onSendMessage={() => onProtectedAction({ type: 'message', returnRoute: `/jobs/${detail.id}`, execute: () => onNavigate('/messages') })}
-          onApplyNow={deadlinePassed ? undefined : () => onProtectedAction({ type: 'apply', returnRoute: `/jobs/${detail.id}`, execute: handleApplyNow })}
-          onCall={detail.contact?.phone ? () => onProtectedAction({ type: 'call', returnRoute: `/jobs/${detail.id}`, execute: () => { window.location.href = `tel:${detail.contact.phone}`; } }) : undefined}
-          onWhatsApp={(detail.contact?.whatsappNumber || detail.contact?.phone) ? () => onProtectedAction({ type: 'whatsapp', returnRoute: `/jobs/${detail.id}`, execute: () => { const url = buildOwnerWhatsAppUrl(detail.contact?.whatsappNumber || detail.contact?.phone, `${detail.title} at ${detail.company.name}`); if (url) window.location.href = url; } }) : undefined}
-        />
-      </div>
 
       {/* Job Application Modal */}
       {!deadlinePassed && (

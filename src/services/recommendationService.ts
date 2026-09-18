@@ -163,100 +163,46 @@ export class RecommendationService {
     `;
 
     try {
-      // -------------------------------------------------------------
-      // LEVEL 1: Same Module + Same Category
-      // -------------------------------------------------------------
-      if (categoryId) {
-        const { data: level1Data, error: level1Error } = await supabase
+      // Fetch same-module candidates and fallback candidates in ONE parallel request!
+      const [sameModuleRes, fallbackRes] = await Promise.all([
+        supabase
           .from('listings')
           .select(selectQuery)
           .eq('status', 'active')
           .neq('id', currentListingId)
           .eq('module', norm.singular)
-          .eq('category_id', categoryId)
           .order('created_at', { ascending: false })
-          .limit(limit);
-
-        if (level1Error) {
-          console.warn('[RecommendationService] Level 1 query notice:', level1Error.message);
-        }
-
-        if (level1Data && level1Data.length > 0) {
-          for (const row of level1Data) {
-            if (!collectedIds.has(row.id)) {
-              collectedIds.add(row.id);
-              collectedRows.push(row);
-            }
-          }
-        }
-      }
-
-      // -------------------------------------------------------------
-      // LEVEL 2: Same Module + Other Categories
-      // -------------------------------------------------------------
-      if (collectedRows.length < limit) {
-        const remaining = limit - collectedRows.length;
-        const excludeArray = Array.from(collectedIds);
-
-        let level2Query = supabase
+          .limit(limit * 2),
+        supabase
           .from('listings')
           .select(selectQuery)
           .eq('status', 'active')
-          .eq('module', norm.singular);
-
-        if (excludeArray.length > 0) {
-          level2Query = level2Query.not('id', 'in', `(${excludeArray.join(',')})`);
-        }
-
-        const { data: level2Data, error: level2Error } = await level2Query
+          .neq('id', currentListingId)
+          .neq('module', norm.singular)
           .order('created_at', { ascending: false })
-          .limit(remaining);
+          .limit(limit)
+      ]);
 
-        if (level2Error) {
-          console.warn('[RecommendationService] Level 2 query notice:', level2Error.message);
-        }
+      const sameModuleRows = sameModuleRes.data || [];
+      const fallbackRows = fallbackRes.data || [];
 
-        if (level2Data && level2Data.length > 0) {
-          for (const row of level2Data) {
-            if (!collectedIds.has(row.id)) {
-              collectedIds.add(row.id);
-              collectedRows.push(row);
-            }
-          }
+      // Sort into Priority 1 (Same category), Priority 2 (Same module), Priority 3 (Other modules)
+      const level1Rows: any[] = [];
+      const level2Rows: any[] = [];
+
+      for (const row of sameModuleRows) {
+        if (categoryId && row.category_id === categoryId) {
+          level1Rows.push(row);
+        } else {
+          level2Rows.push(row);
         }
       }
 
-      // -------------------------------------------------------------
-      // LEVEL 3: Other Active Modules Fallback
-      // -------------------------------------------------------------
-      if (collectedRows.length < limit) {
-        const remaining = limit - collectedRows.length;
-        const excludeArray = Array.from(collectedIds);
-
-        let level3Query = supabase
-          .from('listings')
-          .select(selectQuery)
-          .eq('status', 'active');
-
-        if (excludeArray.length > 0) {
-          level3Query = level3Query.not('id', 'in', `(${excludeArray.join(',')})`);
-        }
-
-        const { data: level3Data, error: level3Error } = await level3Query
-          .order('created_at', { ascending: false })
-          .limit(remaining);
-
-        if (level3Error) {
-          console.warn('[RecommendationService] Level 3 query notice:', level3Error.message);
-        }
-
-        if (level3Data && level3Data.length > 0) {
-          for (const row of level3Data) {
-            if (!collectedIds.has(row.id)) {
-              collectedIds.add(row.id);
-              collectedRows.push(row);
-            }
-          }
+      // Combine by priority up to limit
+      for (const row of [...level1Rows, ...level2Rows, ...fallbackRows]) {
+        if (!collectedIds.has(row.id) && collectedRows.length < limit) {
+          collectedIds.add(row.id);
+          collectedRows.push(row);
         }
       }
 

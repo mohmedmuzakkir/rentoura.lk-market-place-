@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Briefcase, Building2, PlusCircle, Wrench } from 'lucide-react';
 import { AppRoute } from '../types';
+import { HomeService } from '../services/homeService';
 import {
   MarketplaceHeroCarousel,
   MarketplaceHeroSlide,
@@ -75,7 +76,40 @@ const HOME_THEME: MarketplaceHeroTheme = {
 };
 
 export const HomeHeroCarousel: React.FC<HomeHeroCarouselProps> = ({ onNavigate }) => {
-  const slides: MarketplaceHeroSlide[] = HOME_HERO_SLIDES.map((slide) => ({
+  const [dbSlides, setDbSlides] = useState<MarketplaceHeroSlide[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    HomeService.getHeroSlides().then((raw) => {
+      if (!active || !raw || raw.length === 0) return;
+      const mapped: MarketplaceHeroSlide[] = raw.map((s) => ({
+        id: s.id,
+        image: s.imageUrl,
+        alt: s.title || 'Marketplace hero banner',
+        width: 1672,
+        height: 941,
+        imageFit: 'cover',
+        accentColor: s.themeColor || '#1464F4',
+        glowColor: 'rgba(20, 100, 244, 0.42)',
+        primaryAction: {
+          label: s.ctaLabel || 'Explore Now',
+          icon: <Building2 className="h-4 w-4 shrink-0" />,
+          onClick: () => onNavigate((s.ctaRoute as AppRoute) || '/'),
+        },
+        secondaryAction: {
+          label: 'Post an Ad',
+          icon: <PlusCircle className="h-4 w-4 shrink-0" />,
+          onClick: () => onNavigate('/post/rental'),
+        },
+      }));
+      setDbSlides(mapped);
+    });
+    return () => {
+      active = false;
+    };
+  }, [onNavigate]);
+
+  const defaultSlides: MarketplaceHeroSlide[] = HOME_HERO_SLIDES.map((slide) => ({
     id: slide.id,
     image: slide.image,
     alt: `${slide.label} marketplace hero in English, Sinhala and Tamil`,
@@ -95,6 +129,8 @@ export const HomeHeroCarousel: React.FC<HomeHeroCarouselProps> = ({ onNavigate }
       onClick: () => onNavigate(slide.postRoute),
     },
   }));
+
+  const slides = [...dbSlides, ...defaultSlides];
 
   return (
     <MarketplaceHeroCarousel

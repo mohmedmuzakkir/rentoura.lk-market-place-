@@ -9,6 +9,7 @@ import {
   Upload, 
   CheckCircle2, 
   AlertCircle, 
+  AlertTriangle,
   Loader2, 
   MoveUp, 
   MoveDown, 
@@ -35,6 +36,7 @@ export const AdminSlidesView: React.FC<AdminSlidesViewProps> = ({ staff }) => {
   // Modal / Form state
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [editingSlide, setEditingSlide] = useState<Partial<HomeSlideItem> | null>(null);
+  const [slideToDelete, setSlideToDelete] = useState<HomeSlideItem | null>(null);
   const [uploadingImage, setUploadingImage] = useState<boolean>(false);
 
   const fetchSlides = async () => {
@@ -143,12 +145,14 @@ export const AdminSlidesView: React.FC<AdminSlidesViewProps> = ({ staff }) => {
   };
 
   const handleDeleteSlide = async (slideId: string) => {
-    if (!window.confirm('Are you sure you want to delete this marketplace slide?')) return;
     setActionLoading(true);
+    setErrorMsg(null);
+    setSuccessMsg(null);
     try {
       const res = await AdminService.deleteHomeSlideAsync(slideId, staff);
       if (res.success) {
         setSuccessMsg('Slide deleted successfully.');
+        setSlides(prev => prev.filter(s => s.id !== slideId));
         await fetchSlides();
       } else {
         setErrorMsg(res.error || 'Failed to delete slide.');
@@ -328,7 +332,7 @@ export const AdminSlidesView: React.FC<AdminSlidesViewProps> = ({ staff }) => {
                     </button>
 
                     <button
-                      onClick={() => handleDeleteSlide(slide.id)}
+                      onClick={() => setSlideToDelete(slide)}
                       className="p-1.5 rounded-lg bg-rose-950/60 hover:bg-rose-900 text-rose-400 border border-rose-800/60 transition-all"
                       title="Delete slide"
                     >
@@ -339,6 +343,43 @@ export const AdminSlidesView: React.FC<AdminSlidesViewProps> = ({ staff }) => {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {slideToDelete && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center gap-3 text-rose-400">
+              <AlertTriangle className="w-6 h-6 shrink-0" />
+              <h3 className="text-lg font-black text-white">Delete Marketplace Slide?</h3>
+            </div>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Are you sure you want to delete <span className="font-bold text-white">"{slideToDelete.title || 'this slide'}"</span>? This action will remove it from the hero carousel.
+            </p>
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setSlideToDelete(null)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const id = slideToDelete.id;
+                  setSlideToDelete(null);
+                  void handleDeleteSlide(id);
+                }}
+                disabled={actionLoading}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-rose-600/20 transition-all flex items-center gap-2"
+              >
+                {actionLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                <span>Delete Slide</span>
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

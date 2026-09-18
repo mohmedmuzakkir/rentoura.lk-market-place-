@@ -123,7 +123,7 @@ export class ServiceService {
         .from('home_slides')
         .select('*')
         .eq('is_active', true)
-        .eq('placement', 'services')
+        .or('placement.eq.services,placement.eq.all,module.eq.services')
         .order('display_order', { ascending: true });
 
       if (error || !data || data.length === 0) {

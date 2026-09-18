@@ -113,6 +113,13 @@ export default function App() {
     return resolved.route;
   });
 
+  // Pre-warm listing detail page bundles in background so opening a listing is instantaneous
+  useEffect(() => {
+    import('./pages/RentalDetailPage');
+    import('./pages/JobDetailPage');
+    import('./pages/ServiceDetailPage');
+  }, []);
+
   useEffect(() => {
     const section = currentRoute.startsWith('/rentals') ? 'Rentals' : currentRoute.startsWith('/jobs') ? 'Jobs' : currentRoute.startsWith('/services') ? 'Services' : currentRoute === '/404' ? 'Page Not Found' : isStaffRoute(currentRoute) ? 'Administration' : currentRoute === '/' ? 'Rentals, Jobs & Services in Sri Lanka' : currentRoute.slice(1).replaceAll('-', ' ').replace(/\b\w/g, letter => letter.toUpperCase());
     document.title = `RENTOURA.LK — ${section}`;
