@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { sanitizeListingImageUrl } from '../utils/cleanImageResolver';
 import { 
   RentalListingDetail, 
   JobListingDetail, 
@@ -122,12 +123,24 @@ export class ListingDetailService {
 
         for (const m of mediaRows) {
           if (!m.storage_path) continue;
+          let imgUrl: string | null = null;
           if (m.storage_path.startsWith('http://') || m.storage_path.startsWith('https://')) {
-            images.push(m.storage_path);
+            imgUrl = m.storage_path;
           } else {
-            const signedUrl = signedMap.get(m.storage_path);
-            if (signedUrl) images.push(signedUrl);
+            imgUrl = signedMap.get(m.storage_path) || null;
           }
+          if (imgUrl) {
+            images.push(imgUrl);
+          }
+        }
+      }
+
+      const cleanForListingId = sanitizeListingImageUrl(id);
+      if (cleanForListingId && cleanForListingId.startsWith('http')) {
+        if (images.length === 0) {
+          images.push(cleanForListingId);
+        } else {
+          images[0] = cleanForListingId;
         }
       }
 

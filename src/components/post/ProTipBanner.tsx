@@ -56,7 +56,7 @@ export const ProTipBanner: React.FC = () => {
                 <Image className="w-4 h-4 text-[#1464F4] mt-0.5 flex-shrink-0" />
                 <div>
                   <h4 className="font-bold text-slate-900 mb-0.5">High Quality Real Photos</h4>
-                  <p>Upload at least 3-5 real photos showing different angles and real lighting. Listings with watermarked stock photos may be rejected.</p>
+                  <p>Upload at least 3-5 real photos showing different angles and real lighting. Listings with clear, high quality photos receive up to 5x more inquiries.</p>
                 </div>
               </div>
 

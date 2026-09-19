@@ -5,6 +5,7 @@ import { FeedListingItem } from '../components/HomeListingFeed';
 import { LocationService } from './locationService';
 import { getLocationImage } from '../data/locationImages';
 import { SearchService } from './searchService';
+import { sanitizeListingImageUrl } from '../utils/cleanImageResolver';
 
 export interface MarketplaceStats {
   totalActiveListings: number;
@@ -20,6 +21,10 @@ export class HomeService {
    */
   public static async resolveSignedMediaUrl(storagePath: string | null | undefined): Promise<string> {
     if (!storagePath) return SearchService.NEUTRAL_PLACEHOLDER;
+    const cleanOverride = sanitizeListingImageUrl(storagePath);
+    if (cleanOverride && cleanOverride.startsWith('http')) {
+      return cleanOverride;
+    }
     if (storagePath.startsWith('http://') || storagePath.startsWith('https://')) {
       return storagePath;
     }
@@ -30,7 +35,7 @@ export class HomeService {
         .createSignedUrl(storagePath, 3600);
 
       if (!error && data?.signedUrl) {
-        return data.signedUrl;
+        return sanitizeListingImageUrl(data.signedUrl) || data.signedUrl;
       }
     } catch (e) {
       console.warn('Error signing listing image URL:', e);
@@ -51,7 +56,10 @@ export class HomeService {
 
     for (const path of storagePaths) {
       if (!path) continue;
-      if (path.startsWith('http://') || path.startsWith('https://')) {
+      const cleanOverride = sanitizeListingImageUrl(path);
+      if (cleanOverride && cleanOverride.startsWith('http')) {
+        urlMap.set(path, cleanOverride);
+      } else if (path.startsWith('http://') || path.startsWith('https://')) {
         urlMap.set(path, path);
       } else if (!pathsToSign.includes(path)) {
         pathsToSign.push(path);
@@ -67,7 +75,8 @@ export class HomeService {
         if (!error && Array.isArray(data)) {
           data.forEach((item) => {
             if (item.path && item.signedUrl) {
-              urlMap.set(item.path, item.signedUrl);
+              const cleanUrl = sanitizeListingImageUrl(item.signedUrl) || item.signedUrl;
+              urlMap.set(item.path, cleanUrl);
             }
           });
         }

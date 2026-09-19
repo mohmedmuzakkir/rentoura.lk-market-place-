@@ -162,7 +162,7 @@ export const RecommendedListings: React.FC<RecommendedListingsProps> = ({
               onClick={() => handleCardClick(item)}
               className="bg-white rounded-2xl overflow-hidden border border-slate-200/90 shadow-2xs hover:shadow-md transition-all duration-300 flex flex-col group cursor-pointer tap-bounce"
             >
-              {/* Image Container with Watermark Overlay */}
+              {/* Image Container */}
               <div className="relative h-[120px] sm:h-[135px] w-full overflow-hidden bg-slate-100">
                 <img
                   src={item.imageUrl}
@@ -177,13 +177,6 @@ export const RecommendedListings: React.FC<RecommendedListingsProps> = ({
                       'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="600" height="400" fill="%23F1F5F9"><rect width="600" height="400"/><g fill="%2394A3B8" transform="translate(260,160)"><path d="M40 0C17.9 0 0 17.9 0 40s17.9 40 40 40 40-17.9 40-40S62.1 0 40 0zm0 15c13.8 0 25 11.2 25 25S53.8 65 40 65 15 53.8 15 40s11.2-25 25-25z"/></g></svg>';
                   }}
                 />
-
-                {/* Central Brand Watermark Overlay */}
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
-                  <span className="text-[10px] sm:text-[11px] font-black text-white uppercase tracking-widest drop-shadow-md">
-                    RENTOURA.LK
-                  </span>
-                </div>
 
                 {/* Module Badge */}
                 <div className="absolute top-2 left-2 z-10">

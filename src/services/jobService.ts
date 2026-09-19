@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { sanitizeListingImageUrl } from '../utils/cleanImageResolver';
 import { JobHeroSlide } from '../data/jobHeroSlidesData';
 import { JobItem, CompanyPartner } from '../types';
 import { LocationValueModel } from './locationService';
@@ -33,6 +34,10 @@ export class JobService {
   public static async resolveMediaUrl(storagePath: string | null | undefined): Promise<string> {
     const fallbackImage = SearchService.NEUTRAL_PLACEHOLDER;
     if (!storagePath) return fallbackImage;
+    const cleanOverride = sanitizeListingImageUrl(storagePath);
+    if (cleanOverride && cleanOverride.startsWith('http')) {
+      return cleanOverride;
+    }
     if (storagePath.startsWith('http://') || storagePath.startsWith('https://')) {
       return storagePath;
     }
@@ -43,7 +48,7 @@ export class JobService {
         .createSignedUrl(storagePath, 3600);
 
       if (!error && data?.signedUrl) {
-        return data.signedUrl;
+        return sanitizeListingImageUrl(data.signedUrl) || data.signedUrl;
       }
     } catch (e) {
       console.warn('Error signing job image URL:', e);
@@ -64,7 +69,10 @@ export class JobService {
 
     for (const path of storagePaths) {
       if (!path) continue;
-      if (path.startsWith('http://') || path.startsWith('https://')) {
+      const cleanOverride = sanitizeListingImageUrl(path);
+      if (cleanOverride && cleanOverride.startsWith('http')) {
+        urlMap.set(path, cleanOverride);
+      } else if (path.startsWith('http://') || path.startsWith('https://')) {
         urlMap.set(path, path);
       } else if (!pathsToSign.includes(path)) {
         pathsToSign.push(path);
@@ -80,7 +88,8 @@ export class JobService {
         if (!error && Array.isArray(data)) {
           data.forEach((item) => {
             if (item.path && item.signedUrl) {
-              urlMap.set(item.path, item.signedUrl);
+              const cleanUrl = sanitizeListingImageUrl(item.signedUrl) || item.signedUrl;
+              urlMap.set(item.path, cleanUrl);
             }
           });
         }

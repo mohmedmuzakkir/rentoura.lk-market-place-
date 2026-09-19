@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { sanitizeListingImageUrl } from '../utils/cleanImageResolver';
 
 export interface SearchParams {
   query?: string;
@@ -80,6 +81,10 @@ export class SearchService {
    */
   public static async resolveCoverUrl(storagePath: string | null | undefined): Promise<string> {
     if (!storagePath) return SearchService.NEUTRAL_PLACEHOLDER;
+    const cleanOverride = sanitizeListingImageUrl(storagePath);
+    if (cleanOverride && cleanOverride.startsWith('http')) {
+      return cleanOverride;
+    }
     if (storagePath.startsWith('http://') || storagePath.startsWith('https://')) {
       return storagePath;
     }
@@ -90,7 +95,7 @@ export class SearchService {
         .createSignedUrl(storagePath, 3600);
 
       if (!error && data?.signedUrl) {
-        return data.signedUrl;
+        return sanitizeListingImageUrl(data.signedUrl) || data.signedUrl;
       }
     } catch (e) {
       console.warn('Error signing cover image URL:', e);
@@ -113,7 +118,10 @@ export class SearchService {
 
     for (const path of storagePaths) {
       if (!path) continue;
-      if (path.startsWith('http://') || path.startsWith('https://')) {
+      const cleanOverride = sanitizeListingImageUrl(path);
+      if (cleanOverride && cleanOverride.startsWith('http')) {
+        urlMap.set(path, cleanOverride);
+      } else if (path.startsWith('http://') || path.startsWith('https://')) {
         urlMap.set(path, path);
       } else if (!pathsToSign.includes(path)) {
         pathsToSign.push(path);
@@ -129,7 +137,8 @@ export class SearchService {
         if (!error && Array.isArray(data)) {
           data.forEach((item) => {
             if (item.path && item.signedUrl) {
-              urlMap.set(item.path, item.signedUrl);
+              const cleanUrl = sanitizeListingImageUrl(item.signedUrl) || item.signedUrl;
+              urlMap.set(item.path, cleanUrl);
             }
           });
         }

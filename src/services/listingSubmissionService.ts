@@ -223,7 +223,7 @@ export class ListingSubmissionService {
            await supabase.from('listing_media').update({ position: index, is_cover: source.isCover || index === 0 }).eq('id', source.id);
            continue;
         }
-        const processed = await applyRentouraWatermark(source.file);
+        const processed = await applyRentouraWatermark(source.file, draft.module, draft.categoryId);
         const storagePath = `${ownerId}/${listingId}/${crypto.randomUUID()}.webp`;
         const { data: stored, error: uploadError } = await supabase.storage.from('listing-images').upload(
           storagePath, processed.file, { cacheControl: '3600', upsert: false, contentType: processed.mimeType });
@@ -238,7 +238,7 @@ export class ListingSubmissionService {
       }
 
       if (logoFile instanceof File) {
-        const processedLogo = await applyRentouraWatermark(logoFile);
+        const processedLogo = await applyRentouraWatermark(logoFile, draft.module, draft.categoryId);
         const logoPath = `${ownerId}/${listingId}/logo-${crypto.randomUUID()}.webp`;
         const { data: storedLogo, error: logoError } = await supabase.storage.from('listing-images').upload(
           logoPath, processedLogo.file, { cacheControl: '3600', upsert: false, contentType: processedLogo.mimeType });
