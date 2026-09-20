@@ -402,9 +402,12 @@ export class RentalService {
         }
       }
 
-      // Text search in title
+      // Text search in title, description, and short_summary
       if (searchQuery.trim()) {
-        query = query.ilike('title', `%${searchQuery.trim()}%`);
+        const tokens = searchQuery.trim().toLowerCase().split(/\s+/).filter(Boolean);
+        for (const token of tokens) {
+          query = query.or(`title.ilike.%${token}%,description.ilike.%${token}%,short_summary.ilike.%${token}%`);
+        }
       }
 
       // Ordering with stable tie-breaker by id

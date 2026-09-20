@@ -155,7 +155,16 @@ export const HomePage: React.FC<HomePageProps> = ({
   };
 
   const handlePerformSearch = () => {
-    onNavigate('/search');
+    const params = new URLSearchParams();
+    if (filterState.searchQuery.trim()) params.set('q', filterState.searchQuery.trim());
+    if (filterState.selectedLocation && filterState.selectedLocation !== 'All Sri Lanka') {
+      params.set('locName', filterState.selectedLocation);
+    }
+    if (filterState.selectedCategory && filterState.selectedCategory !== 'All Categories') {
+      params.set('catName', filterState.selectedCategory);
+    }
+    const qStr = params.toString();
+    onNavigate((`/search${qStr ? `?${qStr}` : ''}`) as AppRoute);
   };
 
   const handleToggleSaveLocal = async (listingId: string) => {

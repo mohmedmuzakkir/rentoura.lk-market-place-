@@ -70,7 +70,7 @@ export const RentalBasicInfoStep: React.FC<RentalBasicInfoStepProps> = ({
             <span className="text-rose-500">*</span>
           </span>
           <span className="text-[10px] text-slate-400 font-normal">
-            {title.length} / 80 characters (min 10)
+            {title.length} / 80 characters (min 3)
           </span>
         </label>
 

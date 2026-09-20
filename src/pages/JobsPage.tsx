@@ -228,6 +228,11 @@ export const JobsPage: React.FC<JobsPageProps> = ({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  scrollToFeed();
+                }
+              }}
               placeholder="Search job title, company, skills, or keywords..."
               className="flex-1 bg-transparent text-xs sm:text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none py-1 font-medium min-w-0"
             />

@@ -168,12 +168,8 @@ export const JobPostFlow: React.FC<JobPostFlowProps> = ({
         errors.category = 'Please select a job category';
       }
       const title = draft.formValues.title || '';
-      if (!title.trim() || title.trim().length < 5) {
-        errors.title = 'Job title must be at least 5 characters long';
-      }
-      const desc = draft.formValues.description || '';
-      if (!desc.trim() || desc.trim().length < 20) {
-        errors.description = 'Please provide a detailed job description (min 20 characters)';
+      if (!title.trim() || title.trim().length < 3) {
+        errors.title = 'Job title must be at least 3 characters long';
       }
     }
 

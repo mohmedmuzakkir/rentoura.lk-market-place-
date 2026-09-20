@@ -195,6 +195,41 @@ export class ListingDetailService {
       const realPhone = ownerInfo.phone || modData.contact_phone || modData.phone || listingRow.contact_phone || undefined;
       const realWhatsapp = modData.whatsapp || modData.whatsapp_number || (modData.allow_whatsapp && realPhone ? realPhone : undefined);
 
+      const contactPrefs = modData.contact_preferences || modData.contactPreferences || {};
+      let parsedPhones: any[] = [];
+
+      if (Array.isArray(contactPrefs.phones) && contactPrefs.phones.length > 0) {
+        parsedPhones = contactPrefs.phones.map((p: any, idx: number) => ({
+          id: p.id || `p-${idx}`,
+          phone: p.phone || '',
+          normalized: p.normalized || p.phone || '',
+          label: p.label || (idx === 0 ? 'Primary' : 'Contact'),
+          isWhatsApp: Boolean(p.isWhatsApp),
+          isPrimary: idx === 0 || Boolean(p.isPrimary)
+        })).filter((p: any) => p.phone && p.phone.trim());
+      }
+
+      if (parsedPhones.length === 0 && realPhone) {
+        parsedPhones = [{
+          id: 'p-legacy-1',
+          phone: realPhone,
+          normalized: realPhone,
+          label: 'Primary',
+          isWhatsApp: Boolean(realWhatsapp),
+          isPrimary: true
+        }];
+      }
+
+      const contactPhone = parsedPhones[0]?.phone || realPhone || undefined;
+      const contactWa = (parsedPhones.find(p => p.isWhatsApp)?.phone) || realWhatsapp || undefined;
+
+      const contactObject = {
+        phone: contactPhone,
+        whatsappNumber: contactWa,
+        phones: parsedPhones,
+        allowInternalMessage: Boolean(listingRow.owner_id)
+      };
+
       let detailResult: AnyListingDetail;
 
       if (moduleType === 'jobs') {
@@ -285,11 +320,7 @@ export class ListingDetailService {
           description: listingRow.description || '',
           ownerId: listingRow.owner_id,
           attributes,
-          contact: {
-            phone: realPhone,
-            whatsappNumber: realWhatsapp,
-            allowInternalMessage: Boolean(listingRow.owner_id)
-          }
+          contact: contactObject
         } as JobListingDetail;
       } else if (moduleType === 'services') {
         const portImgs = Array.isArray(modData.portfolio_images) 
@@ -373,11 +404,7 @@ export class ListingDetailService {
           description: listingRow.description || '',
           ownerId: listingRow.owner_id,
           attributes,
-          contact: {
-            phone: realPhone,
-            whatsappNumber: realWhatsapp,
-            allowInternalMessage: Boolean(listingRow.owner_id)
-          }
+          contact: contactObject
         } as ServiceListingDetail;
       } else {
         // Default Rental
@@ -473,12 +500,7 @@ export class ListingDetailService {
           attributes,
           specs,
           rules: Array.isArray(modData.rules) ? modData.rules : [],
-          contact: {
-            phone: realPhone,
-            whatsapp: realWhatsapp,
-            allowDirectChat: Boolean(listingRow.owner_id),
-            allowInternalMessage: Boolean(listingRow.owner_id)
-          }
+          contact: contactObject
         } as unknown as RentalListingDetail;
       }
 

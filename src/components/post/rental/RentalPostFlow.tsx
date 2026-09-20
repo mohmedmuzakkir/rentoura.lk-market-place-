@@ -138,8 +138,8 @@ export const RentalPostFlow: React.FC<RentalPostFlowProps> = ({
         errors.category = 'Please select a rental category';
       }
       const title = draft.formValues.title || '';
-      if (!title.trim() || title.trim().length < 10) {
-        errors.title = 'Title must be at least 10 characters long';
+      if (!title.trim() || title.trim().length < 3) {
+        errors.title = 'Title must be at least 3 characters long';
       }
     }
 
@@ -163,10 +163,7 @@ export const RentalPostFlow: React.FC<RentalPostFlowProps> = ({
     }
 
     if (stepNumber === 4) {
-      const desc = draft.formValues.description || '';
-      if (!desc.trim() || desc.trim().length < 20) {
-        errors.description = 'Please provide a detailed description (min 20 characters)';
-      }
+      // Description is optional
     }
 
     if (stepNumber === 5) {
@@ -178,13 +175,13 @@ export const RentalPostFlow: React.FC<RentalPostFlowProps> = ({
 
     if (stepNumber === 6) {
       const contact = draft.contactPreferences;
-      if (!contact.showPhone && !contact.showWhatsApp && !contact.allowDirectChat) {
-        errors.phone = 'Select at least one contact method';
-      } else if (contact.showPhone && !validateSriLankanPhone(contact.phone).isValid) {
-        const phoneCheck = validateSriLankanPhone(contact.phone);
-        errors.phone = phoneCheck.error || 'Please enter a valid Sri Lankan mobile number (e.g. 077 123 4567)';
-      } else if (contact.showWhatsApp && !validateSriLankanPhone(contact.whatsappNumber).isValid) {
-        errors.phone = 'Enter a valid Sri Lankan WhatsApp number';
+      const phones = contact.phones || [];
+      const primaryPhone = phones[0]?.phone || contact.phone || '';
+      if (!primaryPhone || !primaryPhone.trim()) {
+        errors.phone = 'At least one contact phone number is required';
+      } else if (!validateSriLankanPhone(primaryPhone).isValid) {
+        const phoneCheck = validateSriLankanPhone(primaryPhone);
+        errors.phone = phoneCheck.error || 'Please enter a valid Sri Lankan phone number (e.g. 077 123 4567)';
       }
     }
 

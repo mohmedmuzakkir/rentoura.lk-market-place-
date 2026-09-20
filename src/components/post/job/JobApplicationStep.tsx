@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Mail, Phone, Globe, MessageSquare, Calendar, FileText, CheckCircle2, AlertCircle, Plus, Trash2 } from 'lucide-react';
-import { ListingDraft, validateSriLankanPhone } from '../../../types/postFormTypes';
+import { ListingDraft, ContactPhoneItem } from '../../../types/postFormTypes';
+import { PhoneContactManager } from '../PhoneContactManager';
 
 interface JobApplicationStepProps {
   draft: ListingDraft;
@@ -15,7 +16,6 @@ export const JobApplicationStep: React.FC<JobApplicationStepProps> = ({
   errors,
   accentColor = '#08A34F'
 }) => {
-  const [phoneError, setPhoneError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const contactPrefs = draft.contactPreferences || {
@@ -53,15 +53,23 @@ export const JobApplicationStep: React.FC<JobApplicationStepProps> = ({
   };
 
   const updateContactPrefs = (updates: Partial<typeof contactPrefs>) => {
-    const finalUpdates = { ...updates };
-    if (updates.phone !== undefined) {
-      finalUpdates.whatsappNumber = updates.phone;
-    }
     onChange({
       contactPreferences: {
         ...contactPrefs,
-        ...finalUpdates
+        ...updates
       }
+    });
+  };
+
+  const handlePhonesChange = (newPhones: ContactPhoneItem[]) => {
+    const primaryPhone = newPhones[0]?.phone || '';
+    const primaryWa = newPhones.find(p => p.isWhatsApp)?.phone || '';
+    updateContactPrefs({
+      phones: newPhones,
+      phone: primaryPhone,
+      whatsappNumber: primaryWa,
+      showPhone: newPhones.some(p => p.phone.trim().length > 0),
+      showWhatsApp: newPhones.some(p => p.isWhatsApp && p.phone.trim().length > 0)
     });
   };
 
@@ -75,17 +83,6 @@ export const JobApplicationStep: React.FC<JobApplicationStepProps> = ({
       updateFormValue('appMethods', appMethods.filter(m => m !== method));
     } else {
       updateFormValue('appMethods', [...appMethods, method]);
-    }
-  };
-
-  const handlePhoneBlur = (phoneVal: string) => {
-    if (!phoneVal) return;
-    const res = validateSriLankanPhone(phoneVal);
-    if (!res.isValid) {
-      setPhoneError(res.error || 'Invalid Sri Lankan mobile number');
-    } else {
-      setPhoneError(null);
-      updateContactPrefs({ phone: res.formatted });
     }
   };
 
@@ -240,30 +237,25 @@ export const JobApplicationStep: React.FC<JobApplicationStepProps> = ({
 
         {/* Contact Input Fields */}
         <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/90 space-y-3">
-          <h4 className="text-xs font-bold text-slate-800">Recruitment Contact Information</h4>
+          <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wide">Recruitment Contact Information</h4>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {/* Phone Number */}
-            {(appMethods.includes('phone') || appMethods.includes('whatsapp')) && (
-              <div>
-                <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                  Sri Lankan Mobile Number *
-                </label>
-                <div className="relative">
-                  <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-                  <input
-                    type="text"
-                    value={contactPrefs.phone}
-                    onChange={(e) => updateContactPrefs({ phone: e.target.value })}
-                    onBlur={(e) => handlePhoneBlur(e.target.value)}
-                    placeholder="e.g. 077 123 4567"
-                    className="w-full pl-9 pr-3.5 py-2 rounded-xl bg-white border border-slate-200 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  />
-                </div>
-                {phoneError && <p className="text-[10px] text-rose-600 font-medium mt-0.5">{phoneError}</p>}
-              </div>
-            )}
+          {(appMethods.includes('phone') || appMethods.includes('whatsapp')) && (
+            <PhoneContactManager
+              phones={contactPrefs.phones || (contactPrefs.phone ? [{
+                id: 'p-job-1',
+                phone: contactPrefs.phone,
+                normalized: contactPrefs.phone,
+                label: 'Primary',
+                isWhatsApp: Boolean(contactPrefs.showWhatsApp),
+                isPrimary: true
+              }] : [])}
+              onChangePhones={handlePhonesChange}
+              accentColor={accentColor}
+              error={errors.phone}
+            />
+          )}
 
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
             {/* Email */}
             {appMethods.includes('email') && (
               <div>

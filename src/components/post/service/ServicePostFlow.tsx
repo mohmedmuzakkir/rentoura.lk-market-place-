@@ -172,14 +172,11 @@ export const ServicePostFlow: React.FC<ServicePostFlowProps> = ({
     const newErrors: Record<string, string> = {};
 
     if (step === 1) {
-      if (!draft.formValues.title || draft.formValues.title.trim().length < 8) {
-        newErrors.title = 'Please enter a clear title (at least 8 characters)';
+      if (!draft.formValues.title || draft.formValues.title.trim().length < 3) {
+        newErrors.title = 'Please enter a clear title (at least 3 characters)';
       }
       if (!draft.categoryId) {
         newErrors.category = 'Please select a service category';
-      }
-      if (!draft.formValues.description || draft.formValues.description.trim().length < 20) {
-        newErrors.description = 'Please enter a detailed service description (at least 20 characters)';
       }
     }
 
@@ -206,12 +203,12 @@ export const ServicePostFlow: React.FC<ServicePostFlowProps> = ({
 
     if (step === 7) {
       const contact = draft.contactPreferences;
-      if (!contact.showPhone && !contact.showWhatsApp && !contact.allowDirectChat) {
-        newErrors.phone = 'Select at least one contact method';
-      } else if (contact.showPhone && !validateSriLankanPhone(contact.phone).isValid) {
-        newErrors.phone = 'Please enter a valid Sri Lankan mobile phone number';
-      } else if (contact.showWhatsApp && !validateSriLankanPhone(contact.whatsappNumber).isValid) {
-        newErrors.phone = 'Please enter a valid Sri Lankan WhatsApp number';
+      const phones = contact.phones || [];
+      const primaryPhone = phones[0]?.phone || contact.phone || '';
+      if (!primaryPhone || !primaryPhone.trim()) {
+        newErrors.phone = 'At least one contact phone number is required';
+      } else if (!validateSriLankanPhone(primaryPhone).isValid) {
+        newErrors.phone = 'Please enter a valid Sri Lankan phone number';
       }
     }
 

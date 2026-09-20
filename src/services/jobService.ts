@@ -218,9 +218,11 @@ export class JobService {
         } else if (selectedLocationObj.provinceId) {
           query = query.eq('province_id', selectedLocationObj.provinceId);
         }
-      } else if (selectedLocation && selectedLocation !== 'All Sri Lanka') {
-        const locToken = selectedLocation.trim().toLowerCase();
-        query = query.ilike('job_search_text', `%${locToken}%`);
+      } else if (selectedLocation && selectedLocation !== 'All Sri Lanka' && selectedLocation !== 'All') {
+        const locToken = selectedLocation.split(',')[0].trim().toLowerCase();
+        if (locToken) {
+          query = query.ilike('job_search_text', `%${locToken}%`);
+        }
       }
 
       // 3. Category Filter

@@ -139,6 +139,27 @@ export interface RentalRulesState {
   customRules?: string;
 }
 
+export interface ContactPhoneItem {
+  id: string;
+  phone: string;
+  normalized?: string;
+  label?: string;
+  isWhatsApp: boolean;
+  isPrimary?: boolean;
+}
+
+export interface ContactPreferences {
+  contactName?: string;
+  phones?: ContactPhoneItem[];
+  showPhone: boolean;
+  phone: string;
+  showWhatsApp: boolean;
+  whatsappNumber: string;
+  allowDirectChat: boolean;
+  email?: string;
+  externalUrl?: string;
+}
+
 export interface ListingDraft {
   id: string;
   ownerId: string;
@@ -157,14 +178,7 @@ export interface ListingDraft {
   formValues: Record<string, any>;
   location: LocationDataState;
   images: UploadedImage[];
-  contactPreferences: {
-    contactName?: string;
-    showPhone: boolean;
-    phone: string;
-    showWhatsApp: boolean;
-    whatsappNumber: string;
-    allowDirectChat: boolean;
-  };
+  contactPreferences: ContactPreferences;
   lastSavedAt: number;
 }
 

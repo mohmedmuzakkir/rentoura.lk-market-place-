@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 560" width="1000" height="560">
+  <g fill="#FFFFFF">
+    <!-- 5 Speed Pills on the left -->
+    <rect x="205" y="105" width="60" height="22" rx="11" />
+    <rect x="175" y="148" width="120" height="26" rx="13" />
+    <rect x="130" y="192" width="185" height="30" rx="15" />
+    <rect x="160" y="242" width="145" height="26" rx="13" />
+    <rect x="180" y="288" width="85" height="22" rx="11" />
+
+    <!-- Main 'R' Emblem with fill-rule='evenodd' -->
+    <path fill-rule="evenodd" d="
+      M 310 28 
+      L 580 28 
+      C 725 28 790 75 790 162 
+      C 790 235 730 280 635 292 
+      L 805 425 
+      L 670 425 
+      L 525 295 
+      L 450 220 
+      L 270 425 
+      L 190 425 
+      L 375 185 
+      L 310 28 
+      Z
+      M 395 82 
+      L 565 82 
+      C 645 82 695 108 695 158 
+      C 695 208 645 228 565 228 
+      L 395 228 
+      Z
+    " />
+
+    <!-- 'RENTOURA.LK' Typography -->
+    <text x="500" y="515" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Montserrat', 'Inter', 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="88" text-anchor="middle" letter-spacing="2px">RENTOURA.LK</text>
+  </g>
+</svg>

@@ -163,6 +163,7 @@ export const ServiceDetailPage: React.FC<ServiceDetailPageProps> = ({
         <div>
           <StickyActionBar
             module="services"
+            phones={detail.contact?.phones}
             phone={detail.contact?.phone}
             whatsappNumber={detail.contact?.whatsappNumber}
             isSaved={isSaved}

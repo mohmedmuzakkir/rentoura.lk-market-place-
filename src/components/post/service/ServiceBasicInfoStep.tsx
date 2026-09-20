@@ -388,7 +388,7 @@ export const ServiceBasicInfoStep: React.FC<ServiceBasicInfoStepProps> = ({
 
           <DynamicFieldRenderer
             fields={dynamicSchema.fields}
-            values={draft.formValues}
+            formValues={draft.formValues}
             onChange={updateFormValue}
             errors={errors}
             accentColor={accentColor}

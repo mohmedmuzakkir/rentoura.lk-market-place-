@@ -1,10 +1,12 @@
 import React from 'react';
-import { RentalRulesState, validateSriLankanPhone } from '../../../types/postFormTypes';
-import { PhoneCall, MessageSquare, FileCheck, Shield, Truck, AlertCircle } from 'lucide-react';
+import { RentalRulesState, ContactPhoneItem } from '../../../types/postFormTypes';
+import { PhoneCall, MessageSquare, FileCheck, Shield, AlertCircle } from 'lucide-react';
+import { PhoneContactManager } from '../PhoneContactManager';
 
 interface RentalRulesContactStepProps {
   contactPreferences: {
     contactName?: string;
+    phones?: ContactPhoneItem[];
     showPhone: boolean;
     phone: string;
     showWhatsApp: boolean;
@@ -34,12 +36,16 @@ export const RentalRulesContactStep: React.FC<RentalRulesContactStepProps> = ({
     { id: 'br_copy', label: 'Business Registration / Company Letterhead' }
   ];
 
-  const handlePhoneChange = (val: string) => {
-    const { formatted } = validateSriLankanPhone(val);
+  const handlePhonesChange = (newPhones: ContactPhoneItem[]) => {
+    const primaryPhone = newPhones[0]?.phone || '';
+    const primaryWa = newPhones.find(p => p.isWhatsApp)?.phone || '';
     onChangeContact({
       ...contactPreferences,
-      phone: val,
-      whatsappNumber: contactPreferences.showWhatsApp ? val : contactPreferences.whatsappNumber
+      phones: newPhones,
+      phone: primaryPhone,
+      whatsappNumber: primaryWa,
+      showPhone: newPhones.some(p => p.phone.trim().length > 0),
+      showWhatsApp: newPhones.some(p => p.isWhatsApp && p.phone.trim().length > 0)
     });
   };
 
@@ -84,59 +90,23 @@ export const RentalRulesContactStep: React.FC<RentalRulesContactStepProps> = ({
           />
         </div>
 
-        {/* Phone Number Input */}
-        <div className="space-y-1.5">
-          <label className="text-xs font-bold text-slate-800 flex items-center justify-between">
-            <span className="flex items-center gap-1">
-              <span>Primary Phone Number</span>
-              <span className="text-rose-500">*</span>
-            </span>
-            <span className="text-[10px] text-slate-400 font-normal">Format: 07X XXX XXXX</span>
-          </label>
-          <input
-            type="tel"
-            value={contactPreferences.phone}
-            onChange={(e) => handlePhoneChange(e.target.value)}
-            placeholder="077 123 4567"
-            className={`w-full px-3.5 py-2.5 rounded-xl bg-white border text-xs font-bold text-slate-900 focus:ring-2 focus:ring-blue-500 focus:outline-none shadow-xs ${
-              errors.phone ? 'border-rose-300 ring-1 ring-rose-300' : 'border-slate-200'
-            }`}
-          />
-          {errors.phone && (
-            <p className="text-[10px] text-rose-600 font-medium flex items-center gap-1">
-              <AlertCircle className="w-3.5 h-3.5" /> {errors.phone}
-            </p>
-          )}
-        </div>
+        {/* Phone Numbers Manager (Up to 3) */}
+        <PhoneContactManager
+          phones={contactPreferences.phones || (contactPreferences.phone ? [{
+            id: 'p-init-1',
+            phone: contactPreferences.phone,
+            normalized: contactPreferences.phone,
+            label: 'Primary',
+            isWhatsApp: Boolean(contactPreferences.showWhatsApp),
+            isPrimary: true
+          }] : [])}
+          onChangePhones={handlePhonesChange}
+          accentColor={accentColor}
+          error={errors.phone}
+        />
 
         {/* Channels Toggles */}
         <div className="space-y-2.5 pt-2 border-t border-slate-100">
-          {/* WhatsApp Direct Chat */}
-          <label className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200 cursor-pointer">
-            <div className="flex items-center gap-2.5">
-              <div className="w-7 h-7 rounded-lg bg-emerald-500 text-white flex items-center justify-center text-xs font-bold">
-                WA
-              </div>
-              <div>
-                <p className="text-xs font-bold text-slate-800">Enable WhatsApp Direct Chat</p>
-                <p className="text-[10px] text-slate-500">Renters can initiate instant WhatsApp conversation</p>
-              </div>
-            </div>
-            <input
-              type="checkbox"
-              checked={contactPreferences.showWhatsApp}
-              onChange={(e) => {
-                const isChecked = e.target.checked;
-                onChangeContact({ 
-                  ...contactPreferences, 
-                  showWhatsApp: isChecked,
-                  whatsappNumber: isChecked ? (contactPreferences.whatsappNumber || contactPreferences.phone) : contactPreferences.whatsappNumber
-                });
-              }}
-              className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-slate-300"
-            />
-          </label>
-
           {/* In-App Direct Chat */}
           <label className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200 cursor-pointer">
             <div className="flex items-center gap-2.5">

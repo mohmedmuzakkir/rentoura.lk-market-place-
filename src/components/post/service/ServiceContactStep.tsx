@@ -1,6 +1,7 @@
 import React from 'react';
 import { Phone, MessageSquare, ShieldCheck, User, Eye, EyeOff, AlertCircle, CheckCircle2 } from 'lucide-react';
-import { ListingDraft, validateSriLankanPhone } from '../../../types/postFormTypes';
+import { ListingDraft, ContactPhoneItem } from '../../../types/postFormTypes';
+import { PhoneContactManager } from '../PhoneContactManager';
 
 interface ServiceContactStepProps {
   draft: ListingDraft;
@@ -33,10 +34,20 @@ export const ServiceContactStep: React.FC<ServiceContactStepProps> = ({
     });
   };
 
-  const phoneValidation = validateSriLankanPhone(contact.phone || '');
+  const handlePhonesChange = (newPhones: ContactPhoneItem[]) => {
+    const primaryPhone = newPhones[0]?.phone || '';
+    const primaryWa = newPhones.find(p => p.isWhatsApp)?.phone || '';
+    updateContact({
+      phones: newPhones,
+      phone: primaryPhone,
+      whatsappNumber: primaryWa,
+      showPhone: newPhones.some(p => p.phone.trim().length > 0),
+      showWhatsApp: newPhones.some(p => p.isWhatsApp && p.phone.trim().length > 0)
+    });
+  };
 
   return (
-    <div className="space-y-6 animate-fadeIn">
+    <div className="space-y-6 animate-fadeIn text-left">
       {/* Intro Header */}
       <div className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/80 shadow-xs">
         <div className="flex items-center gap-2 mb-1">
@@ -61,73 +72,24 @@ export const ServiceContactStep: React.FC<ServiceContactStepProps> = ({
             value={contact.contactName || ''}
             onChange={e => updateContact({ contactName: e.target.value })}
             placeholder="e.g. Sahan Perera"
-            className="w-full px-3.5 py-2.5 text-xs bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all"
+            className="w-full px-3.5 py-2.5 text-xs bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all font-semibold text-slate-800"
           />
         </div>
 
-        {/* Primary Mobile Number */}
-        <div>
-          <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-1.5 flex items-center justify-between">
-            <span>Primary Sri Lankan Phone Number <span className="text-rose-500">*</span></span>
-            {phoneValidation.isValid && (
-              <span className="text-[10px] text-emerald-600 font-bold flex items-center gap-1">
-                <CheckCircle2 className="w-3 h-3" /> Valid LK Format ({phoneValidation.normalized})
-              </span>
-            )}
-          </label>
-          <div className="relative">
-            <Phone className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={contact.phone || ''}
-              onChange={e => updateContact({ phone: e.target.value })}
-              placeholder="077 123 4567"
-              className={`w-full pl-10 pr-4 py-2.5 text-xs font-bold bg-white border rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all ${
-                errors.phone || (contact.phone && !phoneValidation.isValid) ? 'border-rose-400 bg-rose-50/20' : 'border-slate-200'
-              }`}
-            />
-          </div>
-          {errors.phone && (
-            <p className="text-xs text-rose-600 font-medium mt-1 flex items-center gap-1">
-              <AlertCircle className="w-3.5 h-3.5" /> {errors.phone}
-            </p>
-          )}
-        </div>
-
-        {/* WhatsApp Number */}
-        <div>
-          <div className="flex items-center justify-between mb-1.5">
-            <label className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-              <MessageSquare className="w-3.5 h-3.5 text-emerald-600" /> WhatsApp Number
-            </label>
-            <label className="text-xs text-slate-600 flex items-center gap-1.5 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={contact.whatsappNumber === contact.phone}
-                onChange={e => {
-                  if (e.target.checked) {
-                    updateContact({ whatsappNumber: contact.phone, showWhatsApp: !!contact.phone });
-                  } else {
-                    updateContact({ whatsappNumber: '', showWhatsApp: false });
-                  }
-                }}
-                className="rounded text-amber-500 focus:ring-amber-500"
-              />
-              Same as phone
-            </label>
-          </div>
-
-          <input
-            type="text"
-            value={contact.whatsappNumber || ''}
-            onChange={e => {
-              const val = e.target.value;
-              updateContact({ whatsappNumber: val, showWhatsApp: !!val.trim() });
-            }}
-            placeholder="077 123 4567"
-            className="w-full px-3.5 py-2.5 text-xs font-bold bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all"
-          />
-        </div>
+        {/* Phone Numbers Manager */}
+        <PhoneContactManager
+          phones={contact.phones || (contact.phone ? [{
+            id: 'p-srv-1',
+            phone: contact.phone,
+            normalized: contact.phone,
+            label: 'Primary',
+            isWhatsApp: Boolean(contact.showWhatsApp),
+            isPrimary: true
+          }] : [])}
+          onChangePhones={handlePhonesChange}
+          accentColor={accentColor}
+          error={errors.phone}
+        />
       </div>
 
       {/* Privacy & Communication Settings */}
@@ -135,27 +97,6 @@ export const ServiceContactStep: React.FC<ServiceContactStepProps> = ({
         <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">
           Communication Preferences
         </label>
-
-        {/* Show Phone Publicly */}
-        <div className="flex items-center justify-between p-3.5 bg-slate-50 rounded-xl border border-slate-200">
-          <div>
-            <span className="text-xs font-bold text-slate-800 block">Show Phone Number Publicly</span>
-            <span className="text-[11px] text-slate-500 block">Allow customers to call your phone directly from the listing page</span>
-          </div>
-          <button
-            type="button"
-            onClick={() => updateContact({ showPhone: !contact.showPhone })}
-            className={`w-11 h-6 rounded-full transition-colors relative ${
-              contact.showPhone ? 'bg-amber-500' : 'bg-slate-300'
-            }`}
-          >
-            <span
-              className={`w-5 h-5 bg-white rounded-full absolute top-0.5 transition-transform shadow-xs ${
-                contact.showPhone ? 'left-5.5' : 'left-0.5'
-              }`}
-            />
-          </button>
-        </div>
 
         {/* Allow RENTOURA Direct Chat */}
         <div className="flex items-center justify-between p-3.5 bg-slate-50 rounded-xl border border-slate-200">
@@ -166,7 +107,7 @@ export const ServiceContactStep: React.FC<ServiceContactStepProps> = ({
           <button
             type="button"
             onClick={() => updateContact({ allowDirectChat: !contact.allowDirectChat })}
-            className={`w-11 h-6 rounded-full transition-colors relative ${
+            className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer ${
               contact.allowDirectChat ? 'bg-amber-500' : 'bg-slate-300'
             }`}
           >

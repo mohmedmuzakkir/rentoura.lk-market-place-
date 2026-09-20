@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 650" width="1000" height="650">
+  <g fill="#FFFFFF">
+    <!-- Speed Lines / Bars on Left -->
+    <rect x="210" y="110" width="55" height="22" rx="11" />
+    <rect x="180" y="152" width="110" height="26" rx="13" />
+    <rect x="135" y="198" width="175" height="30" rx="15" />
+    <rect x="165" y="248" width="135" height="26" rx="13" />
+    <rect x="195" y="294" width="75" height="22" rx="11" />
+
+    <!-- Main 'R' Shape -->
+    <path d="
+      M 310 25 
+      L 580 25 
+      C 715 25 780 70 780 155 
+      C 780 225 725 270 635 280 
+      L 800 425 
+      L 670 425 
+      L 525 280 
+      L 450 210 
+      L 270 425 
+      L 190 425 
+      L 375 180 
+      L 310 25 
+      Z
+      M 390 80 
+      L 560 80 
+      C 640 80 690 105 690 155 
+      C 690 205 640 225 560 225 
+      L 390 225 
+      Z
+    " />
+
+    <!-- RENTOURA.LK Text -->
+    <text x="500" y="585" font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="96" text-anchor="middle" letter-spacing="4px">RENTOURA.LK</text>
+  </g>
+</svg>

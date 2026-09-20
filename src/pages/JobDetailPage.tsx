@@ -186,6 +186,7 @@ export const JobDetailPage: React.FC<JobDetailPageProps> = ({
         <div>
           <StickyActionBar
             module="jobs"
+            phones={detail.contact?.phones}
             phone={detail.contact?.phone}
             whatsappNumber={detail.contact?.whatsappNumber}
             isSaved={isSaved}

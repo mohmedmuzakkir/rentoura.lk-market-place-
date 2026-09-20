@@ -254,8 +254,10 @@ export class ServiceService {
           query = query.eq('province_id', selectedLocationObj.provinceId);
         }
       } else if (selectedLocation && selectedLocation !== 'All Sri Lanka' && selectedLocation !== 'All') {
-        const locTerm = selectedLocation.toLowerCase().trim();
-        query = query.or(`exact_address.ilike.%${locTerm}%,service_search_text.ilike.%${locTerm}%`);
+        const locTerm = selectedLocation.split(',')[0].trim().toLowerCase();
+        if (locTerm) {
+          query = query.or(`exact_address.ilike.%${locTerm}%,service_search_text.ilike.%${locTerm}%`);
+        }
       }
 
       // Search Query (Tokenized AND-style matching on service_search_text)

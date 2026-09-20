@@ -46,9 +46,19 @@ export interface ListingOwner {
   totalRentalsCompleted?: number;
 }
 
+export interface ListingContactPhoneItem {
+  id: string;
+  phone: string;
+  normalized?: string;
+  label?: string;
+  isWhatsApp: boolean;
+  isPrimary?: boolean;
+}
+
 export interface ListingContact {
   phone?: string;
   whatsappNumber?: string;
+  phones?: ListingContactPhoneItem[];
   email?: string;
   allowInternalMessage?: boolean;
 }

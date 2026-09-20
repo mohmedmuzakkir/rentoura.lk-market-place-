@@ -245,6 +245,7 @@ export const RentalDetailPage: React.FC<RentalDetailPageProps> = ({
             <div>
               <StickyActionBar
                 module="rentals"
+                phones={detail.contact?.phones}
                 phone={detail.contact?.phone}
                 whatsappNumber={detail.contact?.whatsappNumber}
                 isSaved={isSaved}

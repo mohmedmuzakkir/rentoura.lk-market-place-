@@ -247,6 +247,11 @@ export const RentalsPage: React.FC<RentalsPageProps> = ({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  scrollToFeed();
+                }
+              }}
               placeholder="Search homes, vehicles, rooms, equipment..."
               className="flex-1 bg-transparent text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none py-1.5 font-medium"
             />
