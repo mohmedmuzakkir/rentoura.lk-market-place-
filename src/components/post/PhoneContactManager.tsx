@@ -11,10 +11,12 @@ export interface PhoneContactManagerProps {
 
 const PHONE_LABEL_OPTIONS = [
   'Primary',
-  'Personal',
   'Office',
+  'Home',
+  'Personal',
   'Sales',
   'Manager',
+  'Work',
   'Other'
 ];
 

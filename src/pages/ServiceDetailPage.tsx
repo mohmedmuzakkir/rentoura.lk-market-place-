@@ -7,6 +7,7 @@ import { LocationMapCard } from '../components/listing-details/LocationMapCard';
 import { SafetyFirstCard } from '../components/listing-details/SafetyFirstCard';
 import { ReportModal } from '../components/listing-details/ReportModal';
 import { StickyActionBar } from '../components/listing-details/StickyActionBar';
+import { ListingContactNumbersCard } from '../components/listing-details/ListingContactNumbersCard';
 import { ServiceInquiryModal } from '../components/listing-details/ServiceInquiryModal';
 import { RecommendedListings } from '../components/listing-details/RecommendedListings';
 import { ServiceListingDetail } from '../types/listingDetailsTypes';
@@ -166,13 +167,27 @@ export const ServiceDetailPage: React.FC<ServiceDetailPageProps> = ({
             phones={detail.contact?.phones}
             phone={detail.contact?.phone}
             whatsappNumber={detail.contact?.whatsappNumber}
+            listingTitle={detail.title}
             isSaved={isSaved}
             onToggleSave={onToggleSave}
+            onProtectedAction={onProtectedAction}
+            currentPath={`/services/${detail.id}`}
             onSendMessage={() => onProtectedAction({ type: 'inquiry', returnRoute: `/services/${detail.id}`, execute: () => setIsInquiryModalOpen(true) })}
             onCall={detail.contact?.phone ? () => onProtectedAction({ type: 'call', returnRoute: `/services/${detail.id}`, execute: () => { window.location.href = `tel:${detail.contact.phone}`; } }) : undefined}
             onWhatsApp={(detail.contact?.whatsappNumber || detail.contact?.phone) ? () => onProtectedAction({ type: 'whatsapp', returnRoute: `/services/${detail.id}`, execute: () => { const url = buildOwnerWhatsAppUrl(detail.contact?.whatsappNumber || detail.contact?.phone, detail.title); if (url) window.location.href = url; } }) : undefined}
           />
         </div>
+
+        {/* Saved Contact Numbers Card */}
+        {detail.contact && (
+          <ListingContactNumbersCard
+            contact={detail.contact}
+            listingTitle={detail.title}
+            themeColor="#FF650A"
+            onProtectedAction={onProtectedAction}
+            currentPath={`/services/${detail.id}`}
+          />
+        )}
 
         {/* Primary Details, Matrix Specs, Pricing Packages, Provider Profile */}
         <ServiceContentSections

@@ -431,10 +431,31 @@ export class AuthService {
         throw new Error('Account registration failed. Please try again.');
       }
 
-      // Check if session exists (immediate login) or if email confirmation is required
-      if (data.session) {
-        AuthService.currentSession = data.session;
-        AuthService.currentUser = data.user;
+      // Check for duplicate account where Supabase returned empty identities list
+      if (data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+        throw new Error('An account with this email address already exists. Please login instead or reset your password.');
+      }
+
+      let activeSession = data.session;
+
+      // If session was not directly returned by signUp, attempt immediate sign-in with password
+      if (!activeSession) {
+        try {
+          const signInRes = await supabase.auth.signInWithPassword({
+            email: emailVal.normalized,
+            password
+          });
+          if (signInRes.data?.session) {
+            activeSession = signInRes.data.session;
+          }
+        } catch (signInErr) {
+          console.warn('[REGISTRATION] Immediate signInWithPassword notice:', signInErr);
+        }
+      }
+
+      if (activeSession) {
+        AuthService.currentSession = activeSession;
+        AuthService.currentUser = activeSession.user || data.user;
 
         // Fetch or create profile
         let profile = await AuthService.fetchUserProfile(data.user.id);
@@ -484,16 +505,17 @@ export class AuthService {
 
         ProfileService.saveProfile(profile);
         AuthService.currentUserProfile = profile;
+        AuthService.notifyListeners(data.user, profile);
 
-        return { user: data.user, session: data.session, profile, requiresEmailConfirmation: false };
+        return { user: data.user, session: activeSession, profile, requiresEmailConfirmation: false };
       } else {
-        // Email confirmation required by Supabase Auth configuration
+        // Fallback response if session was not returned and backend requires confirmation
         return {
           user: data.user,
           session: null,
           profile: null,
-          requiresEmailConfirmation: true,
-          message: 'Account created. Please check your email to confirm your account.'
+          requiresEmailConfirmation: false,
+          message: 'Account created successfully!'
         };
       }
     } catch (err: any) {

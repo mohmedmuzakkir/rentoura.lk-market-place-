@@ -19,6 +19,7 @@ import { LocationMapCard } from '../components/listing-details/LocationMapCard';
 import { SafetyFirstCard } from '../components/listing-details/SafetyFirstCard';
 import { ReportModal } from '../components/listing-details/ReportModal';
 import { StickyActionBar } from '../components/listing-details/StickyActionBar';
+import { ListingContactNumbersCard } from '../components/listing-details/ListingContactNumbersCard';
 import { RecommendedListings } from '../components/listing-details/RecommendedListings';
 import { RentalListingDetail, RentalPeriodUnit } from '../types/listingDetailsTypes';
 import { ListingDetailService } from '../services/listingDetailService';
@@ -248,13 +249,27 @@ export const RentalDetailPage: React.FC<RentalDetailPageProps> = ({
                 phones={detail.contact?.phones}
                 phone={detail.contact?.phone}
                 whatsappNumber={detail.contact?.whatsappNumber}
+                listingTitle={detail.title}
                 isSaved={isSaved}
                 onToggleSave={onToggleSave}
+                onProtectedAction={onProtectedAction}
+                currentPath={`/rentals/${detail.id}`}
                 onSendMessage={() => onProtectedAction({ type: 'message', returnRoute: `/rentals/${detail.id}`, execute: () => onNavigate('/messages') })}
                 onCall={detail.contact?.phone ? () => onProtectedAction({ type: 'call', returnRoute: `/rentals/${detail.id}`, execute: () => { window.location.href = `tel:${detail.contact.phone}`; } }) : undefined}
                 onWhatsApp={(detail.contact?.whatsappNumber || detail.contact?.phone) ? () => onProtectedAction({ type: 'whatsapp', returnRoute: `/rentals/${detail.id}`, execute: () => { const url = buildOwnerWhatsAppUrl(detail.contact?.whatsappNumber || detail.contact?.phone, detail.title); if (url) window.location.href = url; } }) : undefined}
               />
             </div>
+
+            {/* Saved Contact Numbers Card */}
+            {detail.contact && (
+              <ListingContactNumbersCard
+                contact={detail.contact}
+                listingTitle={detail.title}
+                themeColor="#1464F4"
+                onProtectedAction={onProtectedAction}
+                currentPath={`/rentals/${detail.id}`}
+              />
+            )}
 
             {/* Category Features */}
             {detail.features && detail.features.length > 0 && (

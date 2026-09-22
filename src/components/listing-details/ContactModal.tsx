@@ -2,6 +2,7 @@ import React from 'react';
 import { Phone, MessageCircle, X, ExternalLink } from 'lucide-react';
 import { ListingContactPhoneItem } from '../../types/listingDetailsTypes';
 import { buildOwnerWhatsAppUrl } from '../../utils/contactLinks';
+import { AuthService } from '../../services/authService';
 
 export interface ContactModalProps {
   isOpen: boolean;
@@ -9,6 +10,8 @@ export interface ContactModalProps {
   type: 'call' | 'whatsapp';
   listingTitle: string;
   phones: ListingContactPhoneItem[];
+  onProtectedAction?: (action: { type: string; returnRoute: string; execute: () => void }) => void;
+  currentPath?: string;
 }
 
 export const ContactModal: React.FC<ContactModalProps> = ({
@@ -16,10 +19,14 @@ export const ContactModal: React.FC<ContactModalProps> = ({
   onClose,
   type,
   listingTitle,
-  phones
+  phones,
+  onProtectedAction,
+  currentPath = typeof window !== 'undefined' ? window.location.pathname : '/'
 }) => {
   if (!isOpen) return null;
 
+  const currentUser = AuthService.getCurrentUser();
+  const isLoggedIn = Boolean(currentUser);
   const isCall = type === 'call';
 
   // Filter available items
@@ -28,6 +35,16 @@ export const ContactModal: React.FC<ContactModalProps> = ({
     : phones.filter(p => p && p.isWhatsApp && p.phone && p.phone.trim());
 
   const handleAction = (item: ListingContactPhoneItem) => {
+    if (!isLoggedIn) {
+      if (onProtectedAction) {
+        onProtectedAction({ type: isCall ? 'call' : 'whatsapp', returnRoute: currentPath, execute: () => {} });
+      } else {
+        window.location.href = `/login?returnUrl=${encodeURIComponent(currentPath)}`;
+      }
+      onClose();
+      return;
+    }
+
     if (isCall) {
       window.location.href = `tel:${item.phone}`;
     } else {
@@ -37,6 +54,18 @@ export const ContactModal: React.FC<ContactModalProps> = ({
       }
     }
     onClose();
+  };
+
+  const formatMaskedPhone = (phoneStr: string) => {
+    if (!phoneStr) return '07• ••• ••••';
+    const digits = phoneStr.replace(/\D/g, '');
+    if (digits.length >= 10) {
+      return `${digits.slice(0, 3)} ••• ••••`;
+    }
+    if (digits.length >= 6) {
+      return `${digits.slice(0, 3)} ••• ${digits.slice(-2)}`;
+    }
+    return `${digits.slice(0, 3)} ••• ••••`;
   };
 
   return (
@@ -93,8 +122,12 @@ export const ContactModal: React.FC<ContactModalProps> = ({
                     </span>
                   )}
                 </div>
-                <p className="text-sm font-extrabold text-slate-900 font-mono tracking-tight group-hover:text-blue-600">
-                  {item.phone}
+                <p
+                  className={`text-sm font-extrabold font-mono tracking-tight group-hover:text-blue-600 ${
+                    isLoggedIn ? 'text-slate-900' : 'text-slate-400 blur-[5px] select-none'
+                  }`}
+                >
+                  {isLoggedIn ? item.phone : formatMaskedPhone(item.phone)}
                 </p>
               </div>
 

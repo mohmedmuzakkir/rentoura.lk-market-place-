@@ -22,6 +22,8 @@ import {
   MailCheck
 } from 'lucide-react';
 import { RentouraLogo } from '../components/RentouraLogo';
+import { GoogleSignInButton } from '../components/auth/GoogleSignInButton';
+import { GoogleAuthLoadingModal } from '../components/auth/GoogleAuthLoadingModal';
 import { 
   AuthService, 
   validateAndNormalizeEmail, 
@@ -115,6 +117,7 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
   const [agreementError, setAgreementError] = useState('');
   const [generalError, setGeneralError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isGoogleAuthLoading, setIsGoogleAuthLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
 
   // Email confirmation state
@@ -150,12 +153,30 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
   const hasNumber = /[0-9]/.test(password);
   const hasSpecial = /[^A-Za-z0-9]/.test(password);
 
-  // Check if already authenticated
+  // Check if already authenticated or in OAuth callback
   useEffect(() => {
+    let isMounted = true;
+    const isOAuthCallback = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('oauth') === 'google';
+
+    if (isOAuthCallback) {
+      setIsGoogleAuthLoading(true);
+    }
+
     const user = AuthService.getCurrentUser();
     if (user) {
+      setIsGoogleAuthLoading(true);
       onNavigate(returnUrl || '/');
+    } else if (isOAuthCallback) {
+      const timeoutId = setTimeout(() => {
+        if (isMounted && !AuthService.getCurrentUser()) {
+          setIsGoogleAuthLoading(false);
+          setGeneralError('Google sign-in was cancelled or encountered a problem.');
+        }
+      }, 4000);
+      return () => { isMounted = false; clearTimeout(timeoutId); };
     }
+
+    return () => { isMounted = false; };
   }, [onNavigate, returnUrl]);
 
   const handleEmailBlur = () => {
@@ -287,16 +308,11 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
       // Clear draft on successful signup
       sessionStorage.removeItem(DRAFT_KEY);
 
-      if (res.requiresEmailConfirmation) {
-        setRequiresConfirmation(true);
-        setSuccessMsg(`Account created! A confirmation email has been sent to ${emailVal.normalized}. Please check your inbox.`);
-      } else {
-        setSuccessMsg(`Account created successfully! Welcome to Rentoura, ${res.profile?.fullName || trimmedName}.`);
-        setTimeout(() => {
-          // Redirect to returnUrl or dashboard (my-listings) after successful registration
-          onNavigate(returnUrl || '/my-listings');
-        }, 1000);
-      }
+      setSuccessMsg(`Account created successfully! Welcome to Rentoura, ${res.profile?.fullName || trimmedName}.`);
+      setTimeout(() => {
+        // Redirect to returnUrl or dashboard (my-listings) after successful registration
+        onNavigate(returnUrl || '/my-listings');
+      }, 1000);
     } catch (err: any) {
       setGeneralError(err.message || 'Account registration failed. Please check your details and try again.');
     } finally {
@@ -305,9 +321,17 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
   };
 
   const handleGoogle = async () => {
-    setGeneralError(''); setIsSubmitting(true);
-    try { await AuthService.signInWithGoogle(returnUrl || '/'); }
-    catch (err: any) { setGeneralError(err.message || 'Google sign-in could not be started.'); setIsSubmitting(false); }
+    if (isSubmitting || isGoogleAuthLoading) return;
+    setGeneralError('');
+    setIsSubmitting(true);
+    setIsGoogleAuthLoading(true);
+    try {
+      await AuthService.signInWithGoogle(returnUrl || '/');
+    } catch (err: any) {
+      setGeneralError(err.message || 'Google sign-in could not be started.');
+      setIsSubmitting(false);
+      setIsGoogleAuthLoading(false);
+    }
   };
 
   const languageLabels = {
@@ -520,11 +544,25 @@ export const RegisterPage: React.FC<RegisterPageProps> = ({
                 )}
 
                 {featureFlags.googleAuth && (
-                  <>
-                    <button type="button" onClick={handleGoogle} disabled={isSubmitting} className="mb-4 flex w-full items-center justify-center gap-3 rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-60"><span className="text-lg font-black text-[#4285F4]">G</span> Continue with Google</button>
-                    <div className="mb-4 text-center text-xs text-slate-400">or create an account with email</div>
-                  </>
+                  <div className="mb-5 space-y-4">
+                    <GoogleSignInButton
+                      onClick={handleGoogle}
+                      disabled={isSubmitting || isGoogleAuthLoading}
+                      isLoading={isGoogleAuthLoading}
+                      label="Sign up with Google"
+                    />
+                    <div className="relative text-center text-xs text-slate-400">
+                      <span className="bg-white px-3 relative z-10 font-semibold text-slate-400">or create account with email</span>
+                      <div className="absolute left-0 right-0 top-1/2 -z-0 border-t border-slate-200" />
+                    </div>
+                  </div>
                 )}
+
+                <GoogleAuthLoadingModal
+                  isOpen={isGoogleAuthLoading}
+                  message="Creating your RENTOURA account..."
+                  subtitle="Connecting securely with Google to set up your RENTOURA account"
+                />
                 <form onSubmit={handleSubmit} noValidate className="space-y-3.5">
                   {/* Full Name Field */}
                   <div>

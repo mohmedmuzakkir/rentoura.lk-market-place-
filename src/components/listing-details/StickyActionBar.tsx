@@ -3,6 +3,7 @@ import { Phone, MessageCircle, MessageSquare, Send, Heart, Bookmark } from 'luci
 import { ListingModule, ListingContactPhoneItem } from '../../types/listingDetailsTypes';
 import { ContactModal } from './ContactModal';
 import { buildOwnerWhatsAppUrl } from '../../utils/contactLinks';
+import { AuthService } from '../../services/authService';
 
 export interface StickyActionBarProps {
   module: ListingModule;
@@ -16,6 +17,8 @@ export interface StickyActionBarProps {
   onApplyNow?: () => void;
   onCall?: () => void;
   onWhatsApp?: () => void;
+  onProtectedAction?: (action: { type: string; returnRoute: string; execute: () => void }) => void;
+  currentPath?: string;
   className?: string;
 }
 
@@ -31,9 +34,14 @@ export const StickyActionBar: React.FC<StickyActionBarProps> = ({
   onApplyNow,
   onCall,
   onWhatsApp,
+  onProtectedAction,
+  currentPath = typeof window !== 'undefined' ? window.location.pathname : '/',
   className = ''
 }) => {
   const [modalType, setModalType] = useState<'call' | 'whatsapp' | null>(null);
+
+  const currentUser = AuthService.getCurrentUser();
+  const isLoggedIn = Boolean(currentUser);
 
   // Derive all available callable phone numbers
   const callablePhones: ListingContactPhoneItem[] = React.useMemo(() => {
@@ -69,29 +77,51 @@ export const StickyActionBar: React.FC<StickyActionBarProps> = ({
   }, [phones, whatsappNumber, phone]);
 
   const handleCallClick = () => {
-    if (callablePhones.length === 0) return;
-    if (onCall) {
-      onCall();
-      return;
-    }
-    if (callablePhones.length === 1) {
-      window.location.href = `tel:${callablePhones[0].phone}`;
+    const doCall = () => {
+      if (callablePhones.length > 1) {
+        setModalType('call');
+        return;
+      }
+      if (onCall) {
+        onCall();
+        return;
+      }
+      if (callablePhones.length > 0) {
+        window.location.href = `tel:${callablePhones[0].phone}`;
+      }
+    };
+
+    if (onProtectedAction) {
+      onProtectedAction({ type: 'call', returnRoute: currentPath, execute: doCall });
+    } else if (isLoggedIn) {
+      doCall();
     } else {
-      setModalType('call');
+      window.location.href = `/login?returnUrl=${encodeURIComponent(currentPath)}`;
     }
   };
 
   const handleWhatsAppClick = () => {
-    if (whatsappPhones.length === 0) return;
-    if (onWhatsApp) {
-      onWhatsApp();
-      return;
-    }
-    if (whatsappPhones.length === 1) {
-      const url = buildOwnerWhatsAppUrl(whatsappPhones[0].phone, listingTitle);
-      if (url) window.open(url, '_blank', 'noopener,noreferrer');
+    const doWhatsApp = () => {
+      if (whatsappPhones.length > 1) {
+        setModalType('whatsapp');
+        return;
+      }
+      if (onWhatsApp) {
+        onWhatsApp();
+        return;
+      }
+      if (whatsappPhones.length > 0) {
+        const url = buildOwnerWhatsAppUrl(whatsappPhones[0].phone, listingTitle);
+        if (url) window.open(url, '_blank', 'noopener,noreferrer');
+      }
+    };
+
+    if (onProtectedAction) {
+      onProtectedAction({ type: 'whatsapp', returnRoute: currentPath, execute: doWhatsApp });
+    } else if (isLoggedIn) {
+      doWhatsApp();
     } else {
-      setModalType('whatsapp');
+      window.location.href = `/login?returnUrl=${encodeURIComponent(currentPath)}`;
     }
   };
 

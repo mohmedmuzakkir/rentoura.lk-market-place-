@@ -56,6 +56,7 @@ export interface ListingContactPhoneItem {
 }
 
 export interface ListingContact {
+  contactName?: string;
   phone?: string;
   whatsappNumber?: string;
   phones?: ListingContactPhoneItem[];

@@ -17,6 +17,8 @@ import {
   Heart
 } from 'lucide-react';
 import { RentouraLogo } from '../components/RentouraLogo';
+import { GoogleSignInButton } from '../components/auth/GoogleSignInButton';
+import { GoogleAuthLoadingModal } from '../components/auth/GoogleAuthLoadingModal';
 import { AuthService, validateAndNormalizeEmail } from '../services/authService';
 import { AppRoute } from '../types';
 import { getDashboardRouteForRole, isActiveAccount } from '../utils/roleUtils';
@@ -58,13 +60,21 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   const [passwordError, setPasswordError] = useState('');
   const [generalError, setGeneralError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isGoogleAuthLoading, setIsGoogleAuthLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
 
   // Check if already authenticated and redirect to staff dashboard or returnUrl
   useEffect(() => {
     let isMounted = true;
+    const isOAuthCallback = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('oauth') === 'google';
+
+    if (isOAuthCallback) {
+      setIsGoogleAuthLoading(true);
+    }
+
     const user = AuthService.getCurrentUser();
     if (user) {
+      setIsGoogleAuthLoading(true);
       AuthService.fetchUserProfile(user.id).then((profile) => {
         if (!isMounted) return;
         if (profile) {
@@ -79,10 +89,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             } else {
               setGeneralError('Your account is inactive or disabled. Please contact platform support.');
             }
+            setIsGoogleAuthLoading(false);
             return;
           }
 
-          const cleanReturn = new URLSearchParams(window.location.search).get('oauth') === 'google'
+          const cleanReturn = isOAuthCallback
             ? sanitizeReturnUrl(AuthService.consumeOAuthReturnTo()) : sanitizeReturnUrl(returnUrl);
           const staffDash = getDashboardRouteForRole(profile.role, profile.accountStatus);
           if (cleanReturn && cleanReturn !== '/') {
@@ -93,9 +104,23 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             onNavigate('/');
           }
         } else {
+          setIsGoogleAuthLoading(false);
           onNavigate('/');
         }
+      }).catch((err) => {
+        if (isMounted) {
+          setIsGoogleAuthLoading(false);
+          setGeneralError(err.message || 'Google authentication failed. Please try again.');
+        }
       });
+    } else if (isOAuthCallback) {
+      const timeoutId = setTimeout(() => {
+        if (isMounted && !AuthService.getCurrentUser()) {
+          setIsGoogleAuthLoading(false);
+          setGeneralError('Google sign-in was cancelled or encountered a problem.');
+        }
+      }, 4000);
+      return () => { isMounted = false; clearTimeout(timeoutId); };
     }
     return () => { isMounted = false; };
   }, [onNavigate, returnUrl]);
@@ -182,9 +207,17 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   };
 
   const handleGoogle = async () => {
-    setGeneralError(''); setIsSubmitting(true);
-    try { await AuthService.signInWithGoogle(sanitizeReturnUrl(returnUrl)); }
-    catch (err: any) { setGeneralError(err.message || 'Google sign-in could not be started.'); setIsSubmitting(false); }
+    if (isSubmitting || isGoogleAuthLoading) return;
+    setGeneralError('');
+    setIsSubmitting(true);
+    setIsGoogleAuthLoading(true);
+    try {
+      await AuthService.signInWithGoogle(sanitizeReturnUrl(returnUrl));
+    } catch (err: any) {
+      setGeneralError(err.message || 'Google sign-in could not be started.');
+      setIsSubmitting(false);
+      setIsGoogleAuthLoading(false);
+    }
   };
 
   const languageLabels = {
@@ -279,13 +312,25 @@ export const LoginPage: React.FC<LoginPageProps> = ({
           )}
 
           {featureFlags.googleAuth && (
-            <>
-              <button type="button" onClick={handleGoogle} disabled={isSubmitting} className="mb-4 flex w-full items-center justify-center gap-3 rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-60">
-                <span className="text-lg font-black text-[#4285F4]">G</span> Continue with Google
-              </button>
-              <div className="relative mb-4 text-center text-xs text-slate-400"><span className="bg-white px-3">or use email</span><div className="absolute left-0 right-0 top-1/2 -z-10 border-t border-slate-200" /></div>
-            </>
+            <div className="mb-5 space-y-4">
+              <GoogleSignInButton
+                onClick={handleGoogle}
+                disabled={isSubmitting || isGoogleAuthLoading}
+                isLoading={isGoogleAuthLoading}
+                label="Continue with Google"
+              />
+              <div className="relative text-center text-xs text-slate-400">
+                <span className="bg-white px-3 relative z-10 font-semibold text-slate-400">or use email</span>
+                <div className="absolute left-0 right-0 top-1/2 -z-0 border-t border-slate-200" />
+              </div>
+            </div>
           )}
+
+          <GoogleAuthLoadingModal
+            isOpen={isGoogleAuthLoading}
+            message="Signing you in..."
+            subtitle="Connecting securely with Google to set up your RENTOURA session"
+          />
           <form onSubmit={handleSubmit} noValidate className="space-y-4">
             {/* Email Address Field */}
             <div>

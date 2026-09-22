@@ -6,6 +6,7 @@ import { JobContentSections } from '../components/listing-details/JobContentSect
 import { SafetyFirstCard } from '../components/listing-details/SafetyFirstCard';
 import { ReportModal } from '../components/listing-details/ReportModal';
 import { StickyActionBar } from '../components/listing-details/StickyActionBar';
+import { ListingContactNumbersCard } from '../components/listing-details/ListingContactNumbersCard';
 import { JobApplicationModal } from '../components/listing-details/JobApplicationModal';
 import { RecommendedListings } from '../components/listing-details/RecommendedListings';
 import { JobListingDetail } from '../types/listingDetailsTypes';
@@ -189,14 +190,28 @@ export const JobDetailPage: React.FC<JobDetailPageProps> = ({
             phones={detail.contact?.phones}
             phone={detail.contact?.phone}
             whatsappNumber={detail.contact?.whatsappNumber}
+            listingTitle={`${detail.title} at ${detail.company.name}`}
             isSaved={isSaved}
             onToggleSave={onToggleSave}
+            onProtectedAction={onProtectedAction}
+            currentPath={`/jobs/${detail.id}`}
             onSendMessage={() => onProtectedAction({ type: 'message', returnRoute: `/jobs/${detail.id}`, execute: () => onNavigate('/messages') })}
             onApplyNow={deadlinePassed ? undefined : () => onProtectedAction({ type: 'apply', returnRoute: `/jobs/${detail.id}`, execute: handleApplyNow })}
             onCall={detail.contact?.phone ? () => onProtectedAction({ type: 'call', returnRoute: `/jobs/${detail.id}`, execute: () => { window.location.href = `tel:${detail.contact.phone}`; } }) : undefined}
             onWhatsApp={(detail.contact?.whatsappNumber || detail.contact?.phone) ? () => onProtectedAction({ type: 'whatsapp', returnRoute: `/jobs/${detail.id}`, execute: () => { const url = buildOwnerWhatsAppUrl(detail.contact?.whatsappNumber || detail.contact?.phone, `${detail.title} at ${detail.company.name}`); if (url) window.location.href = url; } }) : undefined}
           />
         </div>
+
+        {/* Saved Contact Numbers Card */}
+        {detail.contact && (
+          <ListingContactNumbersCard
+            contact={detail.contact}
+            listingTitle={detail.title}
+            themeColor="#08A34F"
+            onProtectedAction={onProtectedAction}
+            currentPath={`/jobs/${detail.id}`}
+          />
+        )}
 
         {/* Dynamic Job Content Sections */}
         <JobContentSections job={detail} />
